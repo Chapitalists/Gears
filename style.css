@@ -1,0 +1,16 @@
+
+svg {
+  touch-action: none;
+}
+
+
+
+#gear {
+  transition: 5s
+}
+
+.rotate {
+  transition: 5s;
+  transform-origin: center;
+  transform: rotate(36deg);
+}

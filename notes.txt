@@ -1,0 +1,136 @@
+problème, si durées fractions les unes des autres, il doit y avoir une référence commune
+Comment la matérialiser ?
+Comment décider si les durées restent liées les unes aux autres ?
+
+Comment redimensionner ?
+C’est rond, donc pas de bord sur lequel cliquer
+Proposition, disparition du curseur et drag gauche droite
+Mais en touch screen, limité par les bords de l’écran, déséquilibré si la roue en question n’est pas au milieu de l’écran
+Redimensionner diamètre horizontal
+
+
+Tout est dessiné avec elm Svg, on attribue des id à chaque roue, qui sont les mêmes que pour le model
+Un clic sur une roue envoie dans un port un message Click id, qui permet de gérer en JS l’animation et la lecture sonore grace à l’id
+Les interactions non animée, et donc d’édition et non de jeu, son gérée directement en elm
+
+
+
+
+
+Retro planning
+
+Faire tourner une roue avec un indicateur de départ
+
+Test montée en charge nb max de roues à l'écran et quantité de mémoire et cpu
+
+Drag and resize touch test avec ipad
+
+Lecture son
+
+Montée en charge
+
+Afficher waveform
+
+Édition son
+
+
+
+Import son depuis server ou juste en local
+L’appli peut tourner juste en local
+
+
+
+Undo redo stack de 10
+Les déplacements s’annulent mais ne comptent pas dans le stack
+
+
+
+Visualisation d’une roue
+Curseur extérieur toujours à midi pour signifier que la roue est à son début
+Curseur intérieur peut se décaler pour signifier que la lecture démarre à un autre point du sample
+
+
+
+
+Publier le code sur Github Gears licence CeCILL
+
+
+
+
+
+WE Cahier des charges
+
+Interaction tactile :
+Barres d’outils sur les bords, sélection outil, puis action sur une bulle
+
+Liste d’outils
+
+
+Idées vrac
+Mode de jeu clic joue tant qu’appuyé, stop quand relache
+
+
+Scenario
+
+JOUER UNE ROUE
+Ouvrir un son (depuis une banque) sous la forme d’une roue qui fait une taille prédéfinie (pour la première roue, 1/4 de zone de travail)
+Déplacer la roue en clic & drag
+Passer à l’outil JEU
+En cliquant dessus, faire tourner la roue pour entendre le son en boucle
+Cliquer à nouveau pour faire pause, cliquer à nouveau pour faire play
+Double clic pour stoper et rembobiner au début du son (que la roue tourne ou non)
+Repasser à l’outil ÉDITION
+Double clic pour sélectionner la roue, fait apparaitre la liste des propriétés de la roue
+Clic sur supprimer dans la liste des propriétés
+
+LIER DEUX ROUES
+Ouvrir un son qui détermine l’échelle temps taille
+Ouvrir un autre son
+Passer à l’outil LIEN
+Clic & drag d’une roue à l’autre pour les lier (créé un trait de centre à centre)
+Les interactions du scenario JOUER UNE ROUE fonctionnent sur l’ensemble des deux roues comme si c’était une seule
+Double clic sur le lien pour le sélectionner, fait apparaitre la liste des propriétés du lien
+Clic sur supprimer dans la liste des propriétés
+
+COPIER ET ALGÉBRISER
+Ouvrir un son dans une roue
+Copier cette roue, qui créé une copie vide
+Lier les deux roues, qui fait apparaître une courroie double, car les roues sont en relation algébrique
+Diviser la roue vide par 2
+Survoler la courroie fait apparaître "1/2"
+Multiplier cette dernière par 3
+Survoler fait voir "3/2"
+
+REDIMMENSIONNER
+Ouvrir un son
+Copier la roue
+Lier les deux => courroie
+Redimmensionner librement la roue vide => la courroie devient un trait de centre à centre
+
+
+
+
+Choix technos
+
+Parti pour svg.js et interact.js
+
+Les autres possibles laissés ouverts sont
+
+Vanilla Web Animation API et SVG
+
+GSAP et Draggable de GreenSock
+
+Voir aussi plugins de svg.js, draggable, select, resize, mais semblent désuets
+
+
+
+
+TODO Vrac
+
+KdK test complet avec controleurs
+Prépa patch pour lire les sons bouncés de Live dans Max
+
+FT prépa truc pour lancer des boucles de mouvement sur le DMX depuis la conduite
+Columbia Son dans la cuisine en boucle sur la sortie Jack
+
+DEVIS FT !!!!!

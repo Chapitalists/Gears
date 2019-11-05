@@ -1,0 +1,17 @@
+# editors
+.idea
+
+# WIP
+ref
+
+# data
+sons
+
+# compiled
+elmApp.js
+
+# elm-package generated files
+elm-stuff
+
+# elm-repl generated files
+repl-temp-*
