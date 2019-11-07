@@ -56,6 +56,7 @@ port newSVGSize : (D.Value -> msg) -> Sub msg
 
 -- TODO refactor existing Debug.log with "key" value
 -- TODO check bug visibility hidden not emitted on window change but on tab change
+-- TODO check msg or Msg in types, if unused, maybe replace by x
 -- MAIN
 
 
@@ -348,6 +349,7 @@ update msg model =
                 Just { target, drag, pos } ->
                     let
                         newM =
+                            -- TODO this modification should be in another module, or one or another, newM smells
                             { model | click = Nothing }
                     in
                     if drag then
@@ -370,10 +372,10 @@ update msg model =
                                         )
 
                             Edit ->
-                                ( { model | details = Just target }, Cmd.none )
+                                ( { newM | details = Just target }, Cmd.none )
 
                             Link ->
-                                ( model, Cmd.none )
+                                ( newM, Cmd.none )
 
         AbortClick ->
             ( { model | click = Nothing }, Cmd.none )
