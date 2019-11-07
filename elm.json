@@ -18,13 +18,13 @@
             "elm-community/typed-svg": "5.1.0",
             "krisajenkins/remotedata": "6.0.1",
             "mdgriffith/elm-ui": "1.1.5",
+            "mpizenberg/elm-pointer-events": "4.0.1",
             "zaboco/elm-draggable": "4.0.5"
         },
         "indirect": {
             "elm/bytes": "1.0.8",
             "elm/time": "1.0.0",
-            "elm/virtual-dom": "1.0.2",
-            "mpizenberg/elm-pointer-events": "4.0.1"
+            "elm/virtual-dom": "1.0.2"
         }
     },
     "test-dependencies": {

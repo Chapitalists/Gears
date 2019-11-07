@@ -1,12 +1,13 @@
 const app = Elm.Main.init()
 
-app.ports.loadSound.subscribe(createBuffer)
-app.ports.play.subscribe(play)
+if (app.ports.loadSound) app.ports.loadSound.subscribe(createBuffer)
+if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 
 const buffers = {}
+    , playing = {}
+let deb = null
 
 function createBuffer(soundName) {
-  console.log('create '+soundName)
   if (buffers[soundName]) {
     app.ports.soundLoaded.send(soundName + ' already Loaded')
   } else {
@@ -23,13 +24,49 @@ function loadErr(err, soundName) {
   app.ports.soundLoaded.send(soundName + ' got ' + err)
 }
 
-function play(model) {
-  if (model.type == "gear") {
-    console.log('play '+ model.soundName)
-    let s = new Tone.Player(buffers[model.soundName]).toMaster()
-      , g = SVG.adopt(document.getElementById(model.gearId))
+function engine(o) {
+  if (o.action == "stopReset" && playing[o.id]) stop(o.id)
+  else playPause(o)
+}
+
+function playPause(model) {
+    if (!playing[model.id]) {
+        playing[model.id] = model
+        play(model.id)
+    } else if (playing[model.id].paused) unpause(model.id)
+    else pause(model.id)
+}
+
+function play(id) {
+    let model = playing[id]
+      , s = model.player = new Tone.Player(buffers[model.soundName]).toMaster()
+      , g = model.gear = SVG.adopt(document.getElementById(model.id))
+    model.paused = false
+    deb = g.animate(s.buffer.duration * 1000).transform({rotation:360, cx:0, cy:0}).loop()
     s.loop = true
     s.start()
-    g.animate(s.buffer.duration * 1000).transform({rotation:360, cx:0, cy:0}).loop()
-  }
+    model.startTime = Tone.context.now()
+}
+
+function pause(id) {
+    let model = playing[id]
+    model.paused = true
+    model.gear.animate().pause()
+    model.player.stop()
+    model.pauseOffset = Tone.context.now() - model.startTime
+}
+
+function unpause(id) {
+    let model = playing[id]
+    model.paused = false
+    model.gear.animate().play()
+    model.player.start(Tone.context.now(), model.pauseOffset)
+    model.startTime = Tone.context.now() - model.pauseOffset
+}
+
+function stop(id) {
+    let model = playing[id]
+    model.gear.animate().play().finish()
+    model.player.stop()
+    playing[id] = null
 }

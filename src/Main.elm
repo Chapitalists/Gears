@@ -2,18 +2,20 @@ port module Main exposing (..)
 
 import Browser
 import Browser.Dom as DOM
-import Browser.Events exposing (onResize)
+import Browser.Events as BE
 import Browser.Navigation as Nav
 import Color
-import Draggable
-import Draggable.Events
+import Dict exposing (Dict)
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Events exposing (..)
 import Element.Font as Font
 import Element.Input as Input
+import Html
 import Html.Attributes
+import Html.Events.Extra.Mouse as Mouse
 import Http
+import Json.Decode as D
 import Json.Encode as E
 import Result exposing (Result)
 import Set exposing (Set)
@@ -28,7 +30,21 @@ import Url exposing (Url)
 port loadSound : String -> Cmd msg
 
 
-port play : E.Value -> Cmd msg
+port toEngine : E.Value -> Cmd msg
+
+
+type EngineAction
+    = PlayPause
+    | StopReset
+
+
+actionToString a =
+    case a of
+        PlayPause ->
+            "playPause"
+
+        StopReset ->
+            "stopReset"
 
 
 port soundLoaded : (String -> msg) -> Sub msg
@@ -61,17 +77,24 @@ type alias Model =
     , soundList : Set String
     , loadedSoundList : List SoundFile
     , tool : Tool
-    , gears : List Gear
+    , gears : Dict Id Gear
     , viewPos : ViewPos
     , svgSize : Size
     , nextId : Int
-    , drag : Draggable.State Id
-    , debug : String
+    , details : Maybe Id
+    , hover : Maybe Id
+    , click : Maybe ClickState
+    , debug : String -- TODO change all debug and silent edge or fail (_/NOOP) to debug.log
     }
 
 
 type alias ViewPos =
     { cx : Float, cy : Float, smallestSize : Float }
+
+
+getScale : Model -> Float
+getScale model =
+    model.viewPos.smallestSize / min model.svgSize.height model.svgSize.width
 
 
 type SoundFile
@@ -103,22 +126,39 @@ type alias Gear =
     , x : Float
     , y : Float
     , startPercent : Float
-    , id : Id
+    , stopped : Bool
     , sound : SoundFile
     }
 
 
+moveGear : Float -> ( Float, Float ) -> Gear -> Gear
+moveGear scale ( dx, dy ) g =
+    { g | x = g.x + dx * scale, y = g.y + dy * scale }
+
+
 type alias Id =
-    String
+    Int
 
 
-encodeGear : Gear -> E.Value
-encodeGear g =
+idToString id =
+    "gear-" ++ String.fromInt id
+
+
+engineEncoder : { action : EngineAction, id : Id, gear : Maybe Gear } -> E.Value
+engineEncoder { action, id, gear } =
     E.object
-        [ ( "type", E.string "gear" )
-        , ( "soundName", E.string <| sFtoString g.sound )
-        , ( "gearId", E.string g.id )
-        ]
+        ([ ( "type", E.string "gear" )
+         , ( "id", E.string <| idToString id )
+         , ( "action", E.string <| actionToString action )
+         ]
+            ++ (case gear of
+                    Nothing ->
+                        []
+
+                    Just g ->
+                        [ ( "soundName", E.string <| sFtoString g.sound ) ]
+               )
+        )
 
 
 type alias Size =
@@ -131,9 +171,51 @@ cmdSVGSize =
     Task.attempt checkSVGSize <| DOM.getElement "svg"
 
 
+type alias ClickState =
+    { target : Id
+    , drag : Bool
+    , pos : Coords
+    }
+
+
+howInteract id { hover, click } =
+    case ( hover, click ) of
+        ( Just target, Nothing ) ->
+            if target == id then
+                Hover
+
+            else
+                None
+
+        ( _, Just { target, drag } ) ->
+            if target == id then
+                if drag then
+                    Drag
+
+                else
+                    Click
+
+            else
+                None
+
+        _ ->
+            None
+
+
+type Interact
+    = None
+    | Hover
+    | Click
+    | Drag
+
+
+type alias Coords =
+    ( Float, Float )
+
+
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url _ =
-    ( Model False url Set.empty [] Play [] (ViewPos 0 0 10) (Size 0 0) 1 Draggable.init ""
+    ( Model False url Set.empty [] Play Dict.empty (ViewPos 0 0 10) (Size 0 0) 1 Nothing Nothing Nothing ""
     , Cmd.batch [ cmdSVGSize, fetchSoundList url ]
     )
 
@@ -147,16 +229,20 @@ type Msg
     | UpdateSoundList
     | ChangeTool Tool
     | RequestSoundLoad String
-    | RequestPlay Playable
     | SoundLoaded String
     | CreateGear SoundFile
     | UpdateViewPos (Maybe ViewPos)
     | SVGSize Size
-    | GearDrag Draggable.Delta
-    | GearClick Id
+    | HoverIn Id
+    | HoverOut
+    | StartClick Id Mouse.Event
+    | ClickMove Mouse.Event
+    | EndClick
+    | AbortClick
+    | StopGear Id
+    | DeleteGear Id
     | NOOP
     | Problem String
-    | DragMsg (Draggable.Msg Id)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -191,9 +277,6 @@ update msg model =
                 Cmd.none
             )
 
-        RequestPlay _ ->
-            ( model, Cmd.none )
-
         SoundLoaded res ->
             let
                 newList =
@@ -218,38 +301,98 @@ update msg model =
                     sFtoTime sf
             in
             ( { model
-                | gears = Gear length x y 0.2 ("gear-" ++ String.fromInt model.nextId) sf :: model.gears
+                | gears = Dict.insert model.nextId (Gear length x y 0.2 True sf) model.gears
                 , nextId = model.nextId + 1
                 , viewPos = { cx = x, cy = y, smallestSize = length * 2 * 4 }
               }
             , Cmd.none
             )
 
-        GearDrag ( dx, dy ) ->
-            case model.tool of
-                Play ->
-                    let
-                        scale =
-                            model.viewPos.smallestSize / min model.svgSize.height model.svgSize.width
-                    in
-                    ( { model | gears = List.map (\g -> { g | x = g.x + dx * scale, y = g.y + dy * scale }) model.gears }, Cmd.none )
+        HoverIn id ->
+            ( { model | hover = Just id }, Cmd.none )
 
-                _ ->
+        HoverOut ->
+            ( { model | hover = Nothing }, Cmd.none )
+
+        StartClick id e ->
+            ( { model | click = Just (ClickState id False e.clientPos) }, Cmd.none )
+
+        ClickMove e ->
+            case model.click of
+                Nothing ->
                     ( model, Cmd.none )
 
-        GearClick id ->
-            case List.head <| List.filter (\g -> g.id == id) model.gears of
-                Just g ->
-                    ( model, play <| encodeGear g )
+                Just state ->
+                    let
+                        scale =
+                            getScale model
 
+                        move =
+                            moveGear scale <| posDif e.clientPos state.pos
+                    in
+                    ( { model
+                        | gears = Dict.update state.target (Maybe.map move) model.gears
+                        , click = Just { state | drag = True, pos = e.clientPos }
+                      }
+                    , Cmd.none
+                    )
+
+        EndClick ->
+            case model.click of
                 Nothing ->
-                    ( { model | debug = "Not found clicked id : " ++ id }, Cmd.none )
+                    ( model, Debug.log "No click to end" Cmd.none )
+
+                Just { target, drag, pos } ->
+                    let
+                        newM =
+                            { model | click = Nothing }
+                    in
+                    if drag then
+                        ( newM, Cmd.none )
+
+                    else
+                        case model.tool of
+                            Play ->
+                                case Dict.get target model.gears of
+                                    Nothing ->
+                                        ( newM, Debug.log ("No gear to play for id " ++ idToString target) Cmd.none )
+
+                                    Just g ->
+                                        let
+                                            unstop gear =
+                                                { gear | stopped = False }
+                                        in
+                                        ( { newM | gears = Dict.insert target (unstop g) model.gears }
+                                        , toEngine <| engineEncoder { id = target, gear = Just g, action = PlayPause }
+                                        )
+
+                            Edit ->
+                                ( { model | details = Just target }, Cmd.none )
+
+                            Link ->
+                                ( model, Cmd.none )
+
+        AbortClick ->
+            ( { model | click = Nothing }, Cmd.none )
+
+        StopGear id ->
+            let
+                stop gear =
+                    { gear | stopped = True }
+            in
+            ( { model | gears = Dict.update id (Maybe.map stop) model.gears }
+            , toEngine <| engineEncoder { action = StopReset, id = id, gear = Nothing }
+            )
+
+        DeleteGear id ->
+            ( { model | gears = Dict.remove id model.gears }, Cmd.none )
 
         UpdateViewPos maybeVP ->
             case maybeVP of
                 Just vp ->
                     ( { model | viewPos = vp }, cmdSVGSize )
 
+                -- TODO Maybe update vp and svgsize simultaneously
                 Nothing ->
                     ( model, cmdSVGSize )
 
@@ -262,27 +405,63 @@ update msg model =
         Problem str ->
             ( { model | debug = str }, Cmd.none )
 
-        DragMsg dm ->
-            Draggable.update
-                (Draggable.customConfig
-                    [ Draggable.Events.onDragBy GearDrag
-                    , Draggable.Events.onClick GearClick
-                    ]
-                )
-                dm
-                model
-
 
 
 -- SUBS
 
 
-subs { drag } =
-    Sub.batch
+subs { click } =
+    Sub.batch <|
         [ soundLoaded SoundLoaded
-        , onResize (\_ _ -> UpdateViewPos Nothing)
-        , Draggable.subscriptions DragMsg drag
+        , BE.onResize <| always <| always <| UpdateViewPos Nothing
         ]
+            ++ clickSubs click
+
+
+clickSubs : Maybe ClickState -> List (Sub Msg)
+clickSubs click =
+    case click of
+        Nothing ->
+            []
+
+        Just state ->
+            [ BE.onMouseUp <| D.succeed <| EndClick
+            , BE.onVisibilityChange
+                (\v ->
+                    Debug.log (Debug.toString v) <|
+                        case v of
+                            BE.Hidden ->
+                                AbortClick
+
+                            _ ->
+                                NOOP
+                )
+            ]
+
+
+dragSpaceEvents : Maybe ClickState -> List (Html.Attribute Msg)
+dragSpaceEvents click =
+    case click of
+        Nothing ->
+            []
+
+        Just _ ->
+            [ Mouse.onMove ClickMove ]
+
+
+hoverEvents : Bool -> Id -> List (Html.Attribute Msg)
+hoverEvents hover id =
+    [ Mouse.onEnter <| always <| HoverIn id ]
+        ++ (if hover then
+                [ Mouse.onLeave <| always HoverOut ]
+
+            else
+                []
+           )
+
+
+draggableEvents id =
+    [ Mouse.onDown <| StartClick id ]
 
 
 
@@ -302,7 +481,7 @@ view model =
     , body =
         [ layout [] <|
             row [ height fill, width fill ]
-                [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+                ([ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
                     [ text <|
                         if String.isEmpty model.debug then
                             "Fine"
@@ -329,7 +508,7 @@ view model =
                         text "Chargés"
                             :: List.map soundView model.loadedSoundList
                     ]
-                , column []
+                 , column [ width fill, height fill ]
                     [ Input.radioRow []
                         { onChange = ChangeTool
                         , options =
@@ -342,17 +521,32 @@ view model =
                         }
                     , Element.html <|
                         S.svg
-                            [ Html.Attributes.id "svg"
-                            , SS.attribute "width" "100vw"
-                            , SS.attribute "height" "100vh"
-                            , SA.display TypedSvg.Types.DisplayBlock
-                            , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
-                            , computeViewBox model
-                            ]
+                            ([ Html.Attributes.id "svg"
+                             , SS.attribute "width" "100%"
+                             , SS.attribute "height" "100%"
+                             , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
+                             , computeViewBox model
+                             ]
+                                ++ dragSpaceEvents model.click
+                            )
                         <|
-                            List.map viewGear model.gears
+                            List.map (viewGear model) <|
+                                Dict.toList model.gears
                     ]
-                ]
+                 ]
+                    ++ (case model.details of
+                            Nothing ->
+                                []
+
+                            Just id ->
+                                case Dict.get id model.gears of
+                                    Nothing ->
+                                        []
+
+                                    Just g ->
+                                        [ viewDetails id g ]
+                       )
+                )
         ]
     }
 
@@ -364,23 +558,34 @@ soundView soundFile =
         (text (sFtoString soundFile))
 
 
-viewGear : Gear -> SS.Svg Msg
-viewGear g =
+viewGear : { a | hover : Maybe Id, click : Maybe ClickState } -> ( Id, Gear ) -> SS.Svg Msg
+viewGear model ( id, g ) =
     let
         tickH =
             g.length / 15
 
         tickW =
             g.length / 30
+
+        stopSize =
+            g.length / 10
+
+        stopSpace =
+            g.length / 30
+
+        interact =
+            howInteract id model
     in
     S.g [ SA.transform [ Translate g.x g.y ] ]
-        [ S.g [ Html.Attributes.id g.id ]
+        ([ S.g [ Html.Attributes.id <| idToString id ]
             [ S.circle
-                [ SA.cx <| Num 0
-                , SA.cy <| Num 0
-                , SA.r <| Num (g.length / 2)
-                , Draggable.mouseTrigger g.id DragMsg
-                ]
+                ([ SA.cx <| Num 0
+                 , SA.cy <| Num 0
+                 , SA.r <| Num (g.length / 2)
+                 ]
+                    ++ hoverEvents (interact == Hover) id
+                    ++ draggableEvents id
+                )
                 []
             , S.rect
                 [ SA.width <| Num tickW
@@ -399,7 +604,27 @@ viewGear g =
                 ]
                 []
             ]
-        ]
+         ]
+            ++ (if g.stopped then
+                    []
+
+                else
+                    [ S.rect
+                        [ SA.x <| Num (stopSize / -2)
+                        , SA.y <| Num ((g.length / -2) - stopSize - stopSpace)
+                        , SA.width <| Num stopSize
+                        , SA.height <| Num stopSize
+                        , Mouse.onClick <| always <| StopGear id
+                        ]
+                        []
+                    ]
+               )
+        )
+
+
+viewDetails : Id -> Gear -> Element Msg
+viewDetails id g =
+    column [] [ Input.button [] { onPress = Just <| DeleteGear id, label = text "Supprimer" } ]
 
 
 checkSVGSize : Result DOM.Error DOM.Element -> Msg
@@ -412,36 +637,40 @@ checkSVGSize res =
             SVGSize { width = element.width, height = element.height }
 
 
-computeViewBox : Model -> SS.Attribute msg
+computeViewBox : Model -> SS.Attribute Msg
 computeViewBox { viewPos, svgSize } =
-    let
-        landscapeOrientation =
-            svgSize.height < svgSize.width
-
-        ratio =
-            if landscapeOrientation then
-                svgSize.width / svgSize.height
-
-            else
-                svgSize.height / svgSize.width
-
-        h =
-            viewPos.smallestSize
-
-        w =
-            h * ratio
-
-        x =
-            viewPos.cx - w / 2
-
-        y =
-            viewPos.cy - h / 2
-    in
-    if landscapeOrientation then
-        SA.viewBox x y w h
+    if svgSize.height == 0 || svgSize.width == 0 then
+        SA.viewBox 0 0 100 100
 
     else
-        SA.viewBox y x h w
+        let
+            landscapeOrientation =
+                svgSize.height < svgSize.width
+
+            ratio =
+                if landscapeOrientation then
+                    svgSize.width / svgSize.height
+
+                else
+                    svgSize.height / svgSize.width
+
+            h =
+                viewPos.smallestSize
+
+            w =
+                h * ratio
+
+            x =
+                viewPos.cx - w / 2
+
+            y =
+                viewPos.cy - h / 2
+        in
+        if landscapeOrientation then
+            SA.viewBox x y w h
+
+        else
+            SA.viewBox y x h w
 
 
 
@@ -454,3 +683,12 @@ fetchSoundList url =
         { url = Url.toString { url | path = "/soundList" }
         , expect = Http.expectString NewSoundList
         }
+
+
+
+-- MISC
+
+
+posDif ( x1, y1 ) ( x2, y2 ) =
+    ( x1 - x2, y1 - y2 )
+--}
