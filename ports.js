@@ -5,7 +5,14 @@ if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 
 const buffers = {}
     , playing = {}
+    , ro = new ResizeObserver(sendSize)
+ro.observe(document.getElementById('svg').parentElement)
+
 let deb = null
+
+function sendSize(entries) {
+    app.ports.newSVGSize.send(entries[0].contentRect)
+}
 
 function createBuffer(soundName) {
   if (buffers[soundName]) {

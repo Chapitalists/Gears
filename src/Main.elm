@@ -50,6 +50,9 @@ actionToString a =
 port soundLoaded : (String -> msg) -> Sub msg
 
 
+port newSVGSize : (D.Value -> msg) -> Sub msg
+
+
 
 -- TODO refactor existing Debug.log with "key" value
 -- TODO check bug visibility hidden not emitted on window change but on tab change
@@ -167,8 +170,8 @@ type alias Size =
     }
 
 
-cmdSVGSize =
-    Task.attempt checkSVGSize <| DOM.getElement "svg"
+sizeDecoder =
+    D.decodeValue <| D.map2 Size (D.field "width" D.float) (D.field "height" D.float)
 
 
 type alias ClickState =
@@ -216,7 +219,7 @@ type alias Coords =
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url _ =
     ( Model False url Set.empty [] Play Dict.empty (ViewPos 0 0 10) (Size 0 0) 1 Nothing Nothing Nothing ""
-    , Cmd.batch [ cmdSVGSize, fetchSoundList url ]
+    , fetchSoundList url
     )
 
 
@@ -231,8 +234,8 @@ type Msg
     | RequestSoundLoad String
     | SoundLoaded String
     | CreateGear SoundFile
-    | UpdateViewPos (Maybe ViewPos)
-    | SVGSize Size
+    | UpdateViewPos ViewPos
+    | SVGSize (Result D.Error Size)
     | HoverIn Id
     | HoverOut
     | StartClick Id Mouse.Event
@@ -387,17 +390,16 @@ update msg model =
         DeleteGear id ->
             ( { model | gears = Dict.remove id model.gears }, Cmd.none )
 
-        UpdateViewPos maybeVP ->
-            case maybeVP of
-                Just vp ->
-                    ( { model | viewPos = vp }, cmdSVGSize )
+        UpdateViewPos vp ->
+            ( { model | viewPos = vp }, Cmd.none )
 
-                -- TODO Maybe update vp and svgsize simultaneously
-                Nothing ->
-                    ( model, cmdSVGSize )
+        SVGSize res ->
+            case res of
+                Result.Err e ->
+                    ( { model | debug = D.errorToString e }, Cmd.none )
 
-        SVGSize s ->
-            ( { model | svgSize = s }, Cmd.none )
+                Result.Ok s ->
+                    ( { model | svgSize = s }, Cmd.none )
 
         NOOP ->
             ( model, Cmd.none )
@@ -413,7 +415,7 @@ update msg model =
 subs { click } =
     Sub.batch <|
         [ soundLoaded SoundLoaded
-        , BE.onResize <| always <| always <| UpdateViewPos Nothing
+        , newSVGSize (sizeDecoder >> SVGSize)
         ]
             ++ clickSubs click
 
@@ -519,19 +521,20 @@ view model =
                         , selected = Just model.tool
                         , label = Input.labelHidden "Outils"
                         }
-                    , Element.html <|
-                        S.svg
-                            ([ Html.Attributes.id "svg"
-                             , SS.attribute "width" "100%"
-                             , SS.attribute "height" "100%"
-                             , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
-                             , computeViewBox model
-                             ]
-                                ++ dragSpaceEvents model.click
-                            )
-                        <|
-                            List.map (viewGear model) <|
-                                Dict.toList model.gears
+                    , el [ width fill, height fill ] <|
+                        Element.html <|
+                            S.svg
+                                ([ Html.Attributes.id "svg"
+                                 , SS.attribute "width" "100%"
+                                 , SS.attribute "height" "100%"
+                                 , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
+                                 , computeViewBox model
+                                 ]
+                                    ++ dragSpaceEvents model.click
+                                )
+                            <|
+                                List.map (viewGear model) <|
+                                    Dict.toList model.gears
                     ]
                  ]
                     ++ (case model.details of
@@ -625,16 +628,6 @@ viewGear model ( id, g ) =
 viewDetails : Id -> Gear -> Element Msg
 viewDetails id g =
     column [] [ Input.button [] { onPress = Just <| DeleteGear id, label = text "Supprimer" } ]
-
-
-checkSVGSize : Result DOM.Error DOM.Element -> Msg
-checkSVGSize res =
-    case res of
-        Err (DOM.NotFound str) ->
-            Problem str
-
-        Ok { element } ->
-            SVGSize { width = element.width, height = element.height }
 
 
 computeViewBox : Model -> SS.Attribute Msg
