@@ -35,6 +35,8 @@ port soundLoaded : (String -> msg) -> Sub msg
 
 
 
+-- TODO refactor existing Debug.log with "key" value
+-- TODO check bug visibility hidden not emitted on window change but on tab change
 -- MAIN
 
 
@@ -44,17 +46,9 @@ main =
         , update = update
         , subscriptions = subs
         , view = view
-        , onUrlRequest = urlReq
-        , onUrlChange = urlCh
+        , onUrlRequest = always NOOP
+        , onUrlChange = always NOOP
         }
-
-
-urlReq _ =
-    NOOP
-
-
-urlCh _ =
-    NOOP
 
 
 
@@ -188,6 +182,7 @@ update msg model =
             ( { model | tool = t }, Cmd.none )
 
         RequestSoundLoad n ->
+            -- TODO handle no response
             ( model
             , if Set.member n model.soundList then
                 loadSound n
