@@ -1,25 +1,23 @@
 port module Main exposing (..)
 
 import Browser
-import Browser.Dom as DOM
-import Browser.Events as BE
 import Browser.Navigation as Nav
-import Color
-import Dict exposing (Dict)
+import Coll exposing (Coll, Id)
+import Doc exposing (Doc, Interactable)
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Events exposing (..)
 import Element.Font as Font
 import Element.Input as Input
-import Html
+import Gear exposing (Gear)
 import Html.Attributes
-import Html.Events.Extra.Mouse as Mouse
 import Http
+import Interact
 import Json.Decode as D
-import Json.Encode as E
+import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Result exposing (Result)
 import Set exposing (Set)
-import Task
+import Sound exposing (Sound)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as SS
@@ -28,23 +26,6 @@ import Url exposing (Url)
 
 
 port loadSound : String -> Cmd msg
-
-
-port toEngine : E.Value -> Cmd msg
-
-
-type EngineAction
-    = PlayPause
-    | StopReset
-
-
-actionToString a =
-    case a of
-        PlayPause ->
-            "playPause"
-
-        StopReset ->
-            "stopReset"
 
 
 port soundLoaded : (String -> msg) -> Sub msg
@@ -79,90 +60,23 @@ type alias Model =
     { connected : Bool
     , currentUrl : Url.Url
     , soundList : Set String
-    , loadedSoundList : List SoundFile
-    , tool : Tool
-    , gears : Dict Id Gear
+    , loadedSoundList : List Sound
+    , doc : Doc
     , viewPos : ViewPos
     , svgSize : Size
-    , nextId : Int
-    , details : Maybe Id
-    , hover : Maybe Id
-    , click : Maybe ClickState
+    , details : Maybe (Id Gear)
+    , interact : Interact.State String
     , debug : String -- TODO change all debug and silent edge or fail (_/NOOP) to debug.log
     }
 
 
 type alias ViewPos =
-    { cx : Float, cy : Float, smallestSize : Float }
+    { c : Vec2, smallestSize : Float }
 
 
 getScale : Model -> Float
 getScale model =
     model.viewPos.smallestSize / min model.svgSize.height model.svgSize.width
-
-
-type SoundFile
-    = Path String
-
-
-sFtoString : SoundFile -> String
-sFtoString (Path name) =
-    name
-
-
-sFtoTime : SoundFile -> Float
-sFtoTime _ =
-    1
-
-
-type Tool
-    = Edit
-    | Play
-    | Link
-
-
-type Playable
-    = SingleGear Gear
-
-
-type alias Gear =
-    { length : Float
-    , x : Float
-    , y : Float
-    , startPercent : Float
-    , stopped : Bool
-    , sound : SoundFile
-    }
-
-
-moveGear : Float -> ( Float, Float ) -> Gear -> Gear
-moveGear scale ( dx, dy ) g =
-    { g | x = g.x + dx * scale, y = g.y + dy * scale }
-
-
-type alias Id =
-    Int
-
-
-idToString id =
-    "gear-" ++ String.fromInt id
-
-
-engineEncoder : { action : EngineAction, id : Id, gear : Maybe Gear } -> E.Value
-engineEncoder { action, id, gear } =
-    E.object
-        ([ ( "type", E.string "gear" )
-         , ( "id", E.string <| idToString id )
-         , ( "action", E.string <| actionToString action )
-         ]
-            ++ (case gear of
-                    Nothing ->
-                        []
-
-                    Just g ->
-                        [ ( "soundName", E.string <| sFtoString g.sound ) ]
-               )
-        )
 
 
 type alias Size =
@@ -176,50 +90,15 @@ sizeDecoder =
 
 
 type alias ClickState =
-    { target : Id
+    { target : Id Gear
     , drag : Bool
-    , pos : Coords
+    , pos : Vec2
     }
-
-
-howInteract id { hover, click } =
-    case ( hover, click ) of
-        ( Just target, Nothing ) ->
-            if target == id then
-                Hover
-
-            else
-                None
-
-        ( _, Just { target, drag } ) ->
-            if target == id then
-                if drag then
-                    Drag
-
-                else
-                    Click
-
-            else
-                None
-
-        _ ->
-            None
-
-
-type Interact
-    = None
-    | Hover
-    | Click
-    | Drag
-
-
-type alias Coords =
-    ( Float, Float )
 
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url _ =
-    ( Model False url Set.empty [] Play Dict.empty (ViewPos 0 0 10) (Size 0 0) 1 Nothing Nothing Nothing ""
+    ( Model False url Set.empty [] Doc.new (ViewPos (vec2 0 0) 10) (Size 0 0) Nothing Interact.init ""
     , fetchSoundList url
     )
 
@@ -229,22 +108,15 @@ init _ url _ =
 
 
 type Msg
-    = NewSoundList (Result Http.Error String)
-    | UpdateSoundList
-    | ChangeTool Tool
+    = GotSoundList (Result Http.Error String)
+    | RequestSoundList
     | RequestSoundLoad String
     | SoundLoaded String
-    | CreateGear SoundFile
+    | SoundClicked Sound
     | UpdateViewPos ViewPos
-    | SVGSize (Result D.Error Size)
-    | HoverIn Id
-    | HoverOut
-    | StartClick Id Mouse.Event
-    | ClickMove Mouse.Event
-    | EndClick
-    | AbortClick
-    | StopGear Id
-    | DeleteGear Id
+    | GotSVGSize (Result D.Error Size)
+    | DocMsg Doc.Msg
+    | InteractMsg (Interact.Msg String)
     | NOOP
     | Problem String
 
@@ -252,7 +124,7 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        NewSoundList result ->
+        GotSoundList result ->
             case result of
                 Ok stringList ->
                     ( { model
@@ -265,11 +137,8 @@ update msg model =
                 Err _ ->
                     ( { model | connected = False }, Cmd.none )
 
-        UpdateSoundList ->
+        RequestSoundList ->
             ( model, fetchSoundList model.currentUrl )
-
-        ChangeTool t ->
-            ( { model | tool = t }, Cmd.none )
 
         RequestSoundLoad n ->
             -- TODO handle no response
@@ -285,123 +154,103 @@ update msg model =
             let
                 newList =
                     case String.split " " res of
-                        name :: "ok" :: rest ->
-                            Path name :: model.loadedSoundList
+                        name :: "ok" :: _ ->
+                            Sound.fromPath name :: model.loadedSoundList
 
                         _ ->
                             model.loadedSoundList
             in
             ( { model | debug = res, loadedSoundList = newList }, Cmd.none )
 
-        CreateGear sf ->
+        -- TODO strange interferences between Doc, Gear, ViewPos
+        SoundClicked sound ->
             let
-                x =
-                    50
-
-                y =
-                    50
-
-                length =
-                    sFtoTime sf
+                ( newDoc, newGearPos ) =
+                    Doc.addNewGear sound model.doc
             in
-            ( { model
-                | gears = Dict.insert model.nextId (Gear length x y 0.2 True sf) model.gears
-                , nextId = model.nextId + 1
-                , viewPos = { cx = x, cy = y, smallestSize = length * 2 * 4 }
-              }
-            , Cmd.none
-            )
+            ( { model | doc = newDoc, viewPos = { c = newGearPos, smallestSize = Sound.length sound * 2 * 4 } }, Cmd.none )
 
-        HoverIn id ->
-            ( { model | hover = Just id }, Cmd.none )
+        {- }
+           --TODO could be same message ? If no clickState, startClick, else, clickMove
+           ClickMove pos ->
+               case model.click of
+                   Nothing ->
+                       ( model, Cmd.none )
 
-        HoverOut ->
-            ( { model | hover = Nothing }, Cmd.none )
+                   Just state ->
+                       let
+                           dPos =
+                               Vec2.scale (getScale model) <| Vec2.sub pos state.pos
+                       in
+                       ( { model
+                           | gears = Coll.update state.target (Gear.move dPos) model.gears
+                           , click = Just { state | drag = True, pos = pos }
+                         }
+                       , Cmd.none
+                       )
 
-        StartClick id e ->
-            ( { model | click = Just (ClickState id False e.clientPos) }, Cmd.none )
+           EndClick ->
+               case model.click of
+                   Nothing ->
+                       ( model, Debug.log "IMPOSSIBLE No click to end" Cmd.none )
 
-        ClickMove e ->
-            case model.click of
-                Nothing ->
-                    ( model, Cmd.none )
+                   Just { target, drag, pos } ->
+                       let
+                           newM =
+                               -- TODO this modification should be in another module, or one or another, newM smells
+                               { model | click = Nothing }
+                       in
+                       if drag then
+                           ( newM, Cmd.none )
 
-                Just state ->
-                    let
-                        scale =
-                            getScale model
+                       else
+                           case model.tool of
+                               Play ->
+                                   case Coll.get target model.gears of
+                                       Nothing ->
+                                           ( newM, Debug.log ("IMPOSSIBLE No gear to play for id " ++ Gear.jsId target) Cmd.none )
 
-                        move =
-                            moveGear scale <| posDif e.clientPos state.pos
-                    in
-                    ( { model
-                        | gears = Dict.update state.target (Maybe.map move) model.gears
-                        , click = Just { state | drag = True, pos = e.clientPos }
-                      }
-                    , Cmd.none
-                    )
+                                       Just g ->
+                                           ( { newM | gears = Coll.update target Gear.play model.gears }
+                                           , toEngine <| engineEncoder { playable = SingleGear ( target, g ), action = PlayPause }
+                                           )
 
-        EndClick ->
-            case model.click of
-                Nothing ->
-                    ( model, Debug.log "No click to end" Cmd.none )
+                               Edit ->
+                                   ( { newM | details = Just target }, Cmd.none )
 
-                Just { target, drag, pos } ->
-                    let
-                        newM =
-                            -- TODO this modification should be in another module, or one or another, newM smells
-                            { model | click = Nothing }
-                    in
-                    if drag then
-                        ( newM, Cmd.none )
+                               Link ->
+                                   ( newM, Cmd.none )
 
-                    else
-                        case model.tool of
-                            Play ->
-                                case Dict.get target model.gears of
-                                    Nothing ->
-                                        ( newM, Debug.log ("No gear to play for id " ++ idToString target) Cmd.none )
-
-                                    Just g ->
-                                        let
-                                            unstop gear =
-                                                { gear | stopped = False }
-                                        in
-                                        ( { newM | gears = Dict.insert target (unstop g) model.gears }
-                                        , toEngine <| engineEncoder { id = target, gear = Just g, action = PlayPause }
-                                        )
-
-                            Edit ->
-                                ( { newM | details = Just target }, Cmd.none )
-
-                            Link ->
-                                ( newM, Cmd.none )
-
-        AbortClick ->
-            ( { model | click = Nothing }, Cmd.none )
-
-        StopGear id ->
-            let
-                stop gear =
-                    { gear | stopped = True }
-            in
-            ( { model | gears = Dict.update id (Maybe.map stop) model.gears }
-            , toEngine <| engineEncoder { action = StopReset, id = id, gear = Nothing }
-            )
-
-        DeleteGear id ->
-            ( { model | gears = Dict.remove id model.gears }, Cmd.none )
-
+           AbortClick ->
+               ( { model | click = Nothing }, Cmd.none )
+        -}
         UpdateViewPos vp ->
             ( { model | viewPos = vp }, Cmd.none )
 
-        SVGSize res ->
+        GotSVGSize res ->
             case res of
                 Result.Err e ->
                     ( { model | debug = D.errorToString e }, Cmd.none )
 
                 Result.Ok s ->
                     ( { model | svgSize = s }, Cmd.none )
+
+        DocMsg subMsg ->
+            let
+                ( doc, cmd ) =
+                    Doc.update subMsg model.doc
+            in
+            ( { model | doc = doc }, cmd )
+
+        InteractMsg subMsg ->
+            let
+                ( interact, event ) =
+                    Interact.update subMsg model.interact
+
+                ( doc, cmd ) =
+                    Doc.update (Doc.InteractEvent event) model.doc
+            in
+            ( { model | interact = interact, doc = doc }, cmd )
 
         NOOP ->
             ( model, Cmd.none )
@@ -414,58 +263,12 @@ update msg model =
 -- SUBS
 
 
-subs { click } =
+subs { interact } =
     Sub.batch <|
         [ soundLoaded SoundLoaded
-        , newSVGSize (sizeDecoder >> SVGSize)
+        , newSVGSize (sizeDecoder >> GotSVGSize)
         ]
-            ++ clickSubs click
-
-
-clickSubs : Maybe ClickState -> List (Sub Msg)
-clickSubs click =
-    case click of
-        Nothing ->
-            []
-
-        Just state ->
-            [ BE.onMouseUp <| D.succeed <| EndClick
-            , BE.onVisibilityChange
-                (\v ->
-                    Debug.log (Debug.toString v) <|
-                        case v of
-                            BE.Hidden ->
-                                AbortClick
-
-                            _ ->
-                                NOOP
-                )
-            ]
-
-
-dragSpaceEvents : Maybe ClickState -> List (Html.Attribute Msg)
-dragSpaceEvents click =
-    case click of
-        Nothing ->
-            []
-
-        Just _ ->
-            [ Mouse.onMove ClickMove ]
-
-
-hoverEvents : Bool -> Id -> List (Html.Attribute Msg)
-hoverEvents hover id =
-    [ Mouse.onEnter <| always <| HoverIn id ]
-        ++ (if hover then
-                [ Mouse.onLeave <| always HoverOut ]
-
-            else
-                []
-           )
-
-
-draggableEvents id =
-    [ Mouse.onDown <| StartClick id ]
+            ++ List.map (Sub.map InteractMsg) (Interact.subs interact)
 
 
 
@@ -500,7 +303,7 @@ view model =
                             else
                                 rgb 1 0 0
                         ]
-                        { onPress = Just UpdateSoundList
+                        { onPress = Just RequestSoundList
                         , label = text "Actualiser"
                         }
                     , column [ spacing 5 ] <|
@@ -513,16 +316,7 @@ view model =
                             :: List.map soundView model.loadedSoundList
                     ]
                  , column [ width fill, height fill ]
-                    [ Input.radioRow []
-                        { onChange = ChangeTool
-                        , options =
-                            [ Input.option Play <| text "Jouer"
-                            , Input.option Edit <| text "Éditer"
-                            , Input.option Link <| text "Lier"
-                            ]
-                        , selected = Just model.tool
-                        , label = Input.labelHidden "Outils"
-                        }
+                    [ Element.map DocMsg <| Doc.viewTools model.doc
                     , el [ width fill, height fill ] <|
                         Element.html <|
                             S.svg
@@ -532,11 +326,13 @@ view model =
                                  , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
                                  , computeViewBox model
                                  ]
-                                    ++ dragSpaceEvents model.click
+                                    ++ List.map (Html.Attributes.map InteractMsg)
+                                        (Interact.dragSpaceEvents model.interact)
                                 )
                             <|
-                                List.map (viewGear model) <|
-                                    Dict.toList model.gears
+                                List.map (SS.map forwardGearOutMsg) <|
+                                    Doc.viewContent model.doc <|
+                                        Interact.getInteract model.interact
                     ]
                  ]
                     ++ (case model.details of
@@ -544,7 +340,7 @@ view model =
                                 []
 
                             Just id ->
-                                case Dict.get id model.gears of
+                                case Doc.getGear id model.doc of
                                     Nothing ->
                                         []
 
@@ -556,80 +352,16 @@ view model =
     }
 
 
-soundView : SoundFile -> Element Msg
-soundView soundFile =
+soundView : Sound -> Element Msg
+soundView s =
     el
-        [ onClick (CreateGear soundFile) ]
-        (text (sFtoString soundFile))
+        [ onClick <| SoundClicked s ]
+        (text (Sound.toString s))
 
 
-viewGear : { a | hover : Maybe Id, click : Maybe ClickState } -> ( Id, Gear ) -> SS.Svg Msg
-viewGear model ( id, g ) =
-    let
-        tickH =
-            g.length / 15
-
-        tickW =
-            g.length / 30
-
-        stopSize =
-            g.length / 10
-
-        stopSpace =
-            g.length / 30
-
-        interact =
-            howInteract id model
-    in
-    S.g [ SA.transform [ Translate g.x g.y ] ]
-        ([ S.g [ Html.Attributes.id <| idToString id ]
-            [ S.circle
-                ([ SA.cx <| Num 0
-                 , SA.cy <| Num 0
-                 , SA.r <| Num (g.length / 2)
-                 ]
-                    ++ hoverEvents (interact == Hover) id
-                    ++ draggableEvents id
-                )
-                []
-            , S.rect
-                [ SA.width <| Num tickW
-                , SA.height <| Num tickH
-                , SA.x <| Num (tickW / -2)
-                , SA.y <| Num ((g.length / -2) - tickH)
-                ]
-                []
-            , S.rect
-                [ SA.width <| Num tickW
-                , SA.height <| Num tickH
-                , SA.x <| Num (tickW / -2)
-                , SA.y <| Num (tickH / -2)
-                , SA.fill <| TypedSvg.Types.Fill Color.orange
-                , SA.transform [ Rotate (g.startPercent * 360) 0 0, Translate 0 ((g.length / -2) + (tickH / 2)) ]
-                ]
-                []
-            ]
-         ]
-            ++ (if g.stopped then
-                    []
-
-                else
-                    [ S.rect
-                        [ SA.x <| Num (stopSize / -2)
-                        , SA.y <| Num ((g.length / -2) - stopSize - stopSpace)
-                        , SA.width <| Num stopSize
-                        , SA.height <| Num stopSize
-                        , Mouse.onClick <| always <| StopGear id
-                        ]
-                        []
-                    ]
-               )
-        )
-
-
-viewDetails : Id -> Gear -> Element Msg
+viewDetails : Id Gear -> Gear -> Element Msg
 viewDetails id g =
-    column [] [ Input.button [] { onPress = Just <| DeleteGear id, label = text "Supprimer" } ]
+    column [] [ Input.button [] { onPress = Just <| DocMsg <| Doc.DeleteGear id, label = text "Supprimer" } ]
 
 
 computeViewBox : Model -> SS.Attribute Msg
@@ -656,16 +388,26 @@ computeViewBox { viewPos, svgSize } =
                 h * ratio
 
             x =
-                viewPos.cx - w / 2
+                Vec2.getX viewPos.c - w / 2
 
             y =
-                viewPos.cy - h / 2
+                Vec2.getY viewPos.c - h / 2
         in
         if landscapeOrientation then
             SA.viewBox x y w h
 
         else
             SA.viewBox y x h w
+
+
+forwardGearOutMsg : Gear.OutMsg -> Msg
+forwardGearOutMsg msg =
+    case msg of
+        Gear.InteractMsg m ->
+            InteractMsg m
+
+        Gear.GearMsg m ->
+            DocMsg <| Doc.GearMsg m
 
 
 
@@ -676,14 +418,5 @@ fetchSoundList : Url.Url -> Cmd Msg
 fetchSoundList url =
     Http.get
         { url = Url.toString { url | path = "/soundList" }
-        , expect = Http.expectString NewSoundList
+        , expect = Http.expectString GotSoundList
         }
-
-
-
--- MISC
-
-
-posDif ( x1, y1 ) ( x2, y2 ) =
-    ( x1 - x2, y1 - y2 )
---}
