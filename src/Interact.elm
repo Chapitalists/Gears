@@ -23,7 +23,7 @@ getInteract (S state) =
         ( Just item, Nothing ) ->
             Just ( item, Hover )
 
-        ( _, Just ( item, pos ) ) ->
+        ( _, Just ( item, _ ) ) ->
             if state.moved then
                 Just ( item, Drag )
 
@@ -61,10 +61,6 @@ type Event item
     = NoEvent
     | Moved item Vec2 Vec2 -- old new
     | Clicked item
-
-
-
--- TODO put debug in all the impossible states instead of not noticing
 
 
 update : Msg item -> State item -> ( State item, Event item )

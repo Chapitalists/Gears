@@ -2,7 +2,6 @@ module Gear exposing (..)
 
 import Coll
 import Color
-import Html
 import Html.Attributes
 import Html.Events.Extra.Mouse as Mouse
 import Interact
@@ -20,7 +19,7 @@ type Gear
         { length : Float
         , pos : Vec2
         , startPercent : Float
-        , stopped : Bool
+        , playing : Bool
         , sound : Sound
         }
 
@@ -32,7 +31,7 @@ stringType =
 
 toUID : Coll.Id Gear -> String
 toUID id =
-    stringType ++ Coll.idToString id
+    stringType ++ "-" ++ Coll.idToString id
 
 
 fromSound : Sound -> Vec2 -> Gear
@@ -41,24 +40,9 @@ fromSound s p =
         { length = Sound.length s
         , pos = p
         , startPercent = 0
-        , stopped = False
+        , playing = False
         , sound = s
         }
-
-
-move : Vec2 -> Gear -> Gear
-move d (G g) =
-    G { g | pos = add d g.pos }
-
-
-play : Gear -> Gear
-play (G g) =
-    G { g | stopped = True }
-
-
-stop : Gear -> Gear
-stop (G g) =
-    G { g | stopped = False }
 
 
 encoder : ( Coll.Id Gear, Gear ) -> E.Value
@@ -80,16 +64,20 @@ type Mod
 type Msg
     = Play
     | Stop
+    | Move Vec2
 
 
 update : Msg -> Gear -> Gear
 update msg (G g) =
     case msg of
         Play ->
-            G { g | stopped = False }
+            G { g | playing = True }
 
         Stop ->
-            G { g | stopped = True }
+            G { g | playing = False }
+
+        Move d ->
+            G { g | pos = add d g.pos }
 
 
 type OutMsg
@@ -143,10 +131,7 @@ view ( id, G g ) mod =
                 []
             ]
          ]
-            ++ (if g.stopped then
-                    []
-
-                else
+            ++ (if g.playing then
                     [ S.rect
                         [ SA.x <| Num (stopSize / -2)
                         , SA.y <| Num ((g.length / -2) - stopSize - stopSpace)
@@ -156,5 +141,8 @@ view ( id, G g ) mod =
                         ]
                         []
                     ]
+
+                else
+                    []
                )
         )

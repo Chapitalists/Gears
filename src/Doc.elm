@@ -4,21 +4,22 @@ import Coll exposing (Coll, Id)
 import Element exposing (..)
 import Element.Input as Input
 import Gear exposing (Gear)
-import Html.Attributes
 import Interact
 import Json.Encode as E
-import Math.Vector2 exposing (Vec2, vec2)
+import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Sound exposing (Sound)
-import TypedSvg.Attributes as SA
 import TypedSvg.Core exposing (Svg)
-import TypedSvg.Types
 
 
 port toEngine : E.Value -> Cmd msg
 
 
 type Doc
-    = D { gears : Coll Gear, tool : Tool }
+    = D
+        { gears : Coll Gear
+        , tool : Tool
+        , details : Maybe (Id Gear)
+        }
 
 
 type Tool
@@ -29,6 +30,7 @@ type Tool
 
 type Interactable
     = IGear (Id Gear)
+    | INothing
 
 
 type HasDetails
@@ -65,12 +67,21 @@ engineEncoder { action, playable } =
 
 new : Doc
 new =
-    D { gears = Coll.empty, tool = Play }
+    D
+        { gears = Coll.empty
+        , tool = Play
+        , details = Nothing
+        }
 
 
-getGear : Id Gear -> Doc -> Maybe Gear
-getGear id (D { gears }) =
-    Coll.get id gears
+interactableFromUID : String -> Interactable
+interactableFromUID uid =
+    case String.split "-" uid of
+        stringType :: int :: _ ->
+            IGear (Coll.forgeId int)
+
+        _ ->
+            Debug.log ("ERROR Unrecognized UID " ++ uid) INothing
 
 
 addNewGear : Sound -> Doc -> ( Doc, Vec2 )
@@ -91,7 +102,7 @@ type Msg
     = ChangedTool Tool
     | DeleteGear (Id Gear)
     | GearMsg ( Id Gear, Gear.Msg )
-    | InteractEvent (Interact.Event String)
+    | InteractEvent (Interact.Event String) Float
 
 
 update : Msg -> Doc -> ( Doc, Cmd msg )
@@ -101,7 +112,20 @@ update msg (D doc) =
             ( D { doc | tool = tool }, Cmd.none )
 
         DeleteGear id ->
-            ( D { doc | gears = Coll.remove id doc.gears }, Cmd.none )
+            let
+                details =
+                    case doc.details of
+                        Nothing ->
+                            Nothing
+
+                        Just d ->
+                            if d == id then
+                                Debug.log "empty details" Nothing
+
+                            else
+                                doc.details
+            in
+            ( D { doc | gears = Coll.remove id doc.gears, details = details }, Cmd.none )
 
         GearMsg ( id, subMsg ) ->
             let
@@ -120,12 +144,55 @@ update msg (D doc) =
             in
             ( D { doc | gears = Coll.update id (Gear.update subMsg) doc.gears }, cmd )
 
-        InteractEvent event ->
-            ( D doc, Cmd.none )
+        InteractEvent event scale ->
+            case ( doc.tool, event ) of
+                ( Play, Interact.Clicked uid ) ->
+                    case interactableFromUID uid of
+                        IGear id ->
+                            let
+                                cmd =
+                                    case Coll.get id doc.gears of
+                                        Nothing ->
+                                            Debug.log
+                                                ("IMPOSSIBLE No gear to play for id " ++ Gear.toUID id)
+                                                Cmd.none
 
+                                        Just g ->
+                                            toEngine <|
+                                                engineEncoder { playable = PGear ( id, g ), action = PlayPause }
+                            in
+                            ( D { doc | gears = Coll.update id (Gear.update Gear.Play) doc.gears }, cmd )
 
+                        _ ->
+                            ( D doc, Cmd.none )
 
--- TODO DODODO
+                ( Edit, Interact.Clicked uid ) ->
+                    case interactableFromUID uid of
+                        IGear id ->
+                            ( D { doc | details = Just id }, Cmd.none )
+
+                        _ ->
+                            ( D doc, Cmd.none )
+
+                ( _, Interact.Moved uid oldPos newPos ) ->
+                    case interactableFromUID uid of
+                        IGear id ->
+                            let
+                                dPos =
+                                    Vec.scale scale <| Vec.sub newPos oldPos
+                            in
+                            ( D
+                                { doc
+                                    | gears = Coll.update id (Gear.update <| Gear.Move dPos) doc.gears
+                                }
+                            , Cmd.none
+                            )
+
+                        _ ->
+                            ( D doc, Cmd.none )
+
+                _ ->
+                    ( D doc, Cmd.none )
 
 
 viewTools : Doc -> Element Msg
@@ -168,3 +235,24 @@ viewContent (D doc) inter =
     in
     List.map (\( id, g ) -> Gear.view ( id, g ) (getMod inter id)) <|
         Coll.toList doc.gears
+
+
+viewDetails : Doc -> List (Element Msg)
+viewDetails (D doc) =
+    case doc.details of
+        Nothing ->
+            []
+
+        Just id ->
+            case Coll.get id doc.gears of
+                Nothing ->
+                    Debug.log ("IMPOSSIBLE No gear for details of " ++ Gear.toUID id) []
+
+                Just g ->
+                    [ column []
+                        [ Input.button []
+                            { onPress = Just <| DeleteGear id
+                            , label = text "Supprimer"
+                            }
+                        ]
+                    ]

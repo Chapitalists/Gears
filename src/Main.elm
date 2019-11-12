@@ -64,7 +64,6 @@ type alias Model =
     , doc : Doc
     , viewPos : ViewPos
     , svgSize : Size
-    , details : Maybe (Id Gear)
     , interact : Interact.State String
     , debug : String -- TODO change all debug and silent edge or fail (_/NOOP) to debug.log
     }
@@ -98,7 +97,7 @@ type alias ClickState =
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url _ =
-    ( Model False url Set.empty [] Doc.new (ViewPos (vec2 0 0) 10) (Size 0 0) Nothing Interact.init ""
+    ( Model False url Set.empty [] Doc.new (ViewPos (vec2 0 0) 10) (Size 0 0) Interact.init ""
     , fetchSoundList url
     )
 
@@ -162,7 +161,6 @@ update msg model =
             in
             ( { model | debug = res, loadedSoundList = newList }, Cmd.none )
 
-        -- TODO strange interferences between Doc, Gear, ViewPos
         SoundClicked sound ->
             let
                 ( newDoc, newGearPos ) =
@@ -170,60 +168,6 @@ update msg model =
             in
             ( { model | doc = newDoc, viewPos = { c = newGearPos, smallestSize = Sound.length sound * 2 * 4 } }, Cmd.none )
 
-        {- }
-           --TODO could be same message ? If no clickState, startClick, else, clickMove
-           ClickMove pos ->
-               case model.click of
-                   Nothing ->
-                       ( model, Cmd.none )
-
-                   Just state ->
-                       let
-                           dPos =
-                               Vec2.scale (getScale model) <| Vec2.sub pos state.pos
-                       in
-                       ( { model
-                           | gears = Coll.update state.target (Gear.move dPos) model.gears
-                           , click = Just { state | drag = True, pos = pos }
-                         }
-                       , Cmd.none
-                       )
-
-           EndClick ->
-               case model.click of
-                   Nothing ->
-                       ( model, Debug.log "IMPOSSIBLE No click to end" Cmd.none )
-
-                   Just { target, drag, pos } ->
-                       let
-                           newM =
-                               -- TODO this modification should be in another module, or one or another, newM smells
-                               { model | click = Nothing }
-                       in
-                       if drag then
-                           ( newM, Cmd.none )
-
-                       else
-                           case model.tool of
-                               Play ->
-                                   case Coll.get target model.gears of
-                                       Nothing ->
-                                           ( newM, Debug.log ("IMPOSSIBLE No gear to play for id " ++ Gear.jsId target) Cmd.none )
-
-                                       Just g ->
-                                           ( { newM | gears = Coll.update target Gear.play model.gears }
-                                           , toEngine <| engineEncoder { playable = SingleGear ( target, g ), action = PlayPause }
-                                           )
-
-                               Edit ->
-                                   ( { newM | details = Just target }, Cmd.none )
-
-                               Link ->
-                                   ( newM, Cmd.none )
-
-           AbortClick ->
-               ( { model | click = Nothing }, Cmd.none )
-        -}
         UpdateViewPos vp ->
             ( { model | viewPos = vp }, Cmd.none )
 
@@ -248,7 +192,7 @@ update msg model =
                     Interact.update subMsg model.interact
 
                 ( doc, cmd ) =
-                    Doc.update (Doc.InteractEvent event) model.doc
+                    Doc.update (Doc.InteractEvent event <| getScale model) model.doc
             in
             ( { model | interact = interact, doc = doc }, cmd )
 
@@ -335,17 +279,8 @@ view model =
                                         Interact.getInteract model.interact
                     ]
                  ]
-                    ++ (case model.details of
-                            Nothing ->
-                                []
-
-                            Just id ->
-                                case Doc.getGear id model.doc of
-                                    Nothing ->
-                                        []
-
-                                    Just g ->
-                                        [ viewDetails id g ]
+                    ++ (List.map (Element.map DocMsg) <|
+                            Doc.viewDetails model.doc
                        )
                 )
         ]
@@ -357,11 +292,6 @@ soundView s =
     el
         [ onClick <| SoundClicked s ]
         (text (Sound.toString s))
-
-
-viewDetails : Id Gear -> Gear -> Element Msg
-viewDetails id g =
-    column [] [ Input.button [] { onPress = Just <| DocMsg <| Doc.DeleteGear id, label = text "Supprimer" } ]
 
 
 computeViewBox : Model -> SS.Attribute Msg

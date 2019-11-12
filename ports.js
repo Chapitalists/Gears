@@ -32,8 +32,8 @@ function loadErr(err, soundName) {
 }
 
 function engine(o) {
-  if (o.action == "stopReset" && playing[o.id]) stop(o.id)
-  else playPause(o)
+  if (o.action == "stopReset" && playing[o.item.id]) stop(o.item.id)
+  else playPause(o.item)
 }
 
 function playPause(model) {
