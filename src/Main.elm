@@ -78,6 +78,19 @@ getScale { viewPos, svgSize } =
     viewPos.smallestSize / min svgSize.height svgSize.width
 
 
+posToSvg : Vec2 -> Model -> Vec2
+posToSvg pos { viewPos, svgSize } =
+    Vec.add
+        viewPos.c
+    <|
+        Vec.scale
+            (viewPos.smallestSize / min svgSize.height svgSize.width)
+        <|
+            Vec.sub
+                pos
+                (vec2 (svgSize.width / 2) (svgSize.height / 2))
+
+
 type alias Size =
     { width : Float
     , height : Float
@@ -191,8 +204,16 @@ update msg model =
                 ( interact, event ) =
                     Interact.update subMsg model.interact
 
+                svgEvent =
+                    case event of
+                        Interact.Dragged item pos1 pos2 ->
+                            Interact.Dragged item (posToSvg pos1 model) (posToSvg pos2 model)
+
+                        _ ->
+                            event
+
                 ( doc, cmd ) =
-                    Doc.update (Doc.InteractEvent event <| getScale model) model.doc
+                    Doc.update (Doc.InteractEvent svgEvent) model.doc
             in
             ( { model | interact = interact, doc = doc }, cmd )
 

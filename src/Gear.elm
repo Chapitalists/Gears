@@ -45,6 +45,16 @@ fromSound s p =
         }
 
 
+getLength : Gear -> Float
+getLength (G g) =
+    g.length
+
+
+getPos : Gear -> Vec2
+getPos (G g) =
+    g.pos
+
+
 encoder : ( Coll.Id Gear, Gear ) -> E.Value
 encoder ( id, G g ) =
     E.object

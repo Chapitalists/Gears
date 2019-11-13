@@ -1,6 +1,7 @@
 port module Doc exposing (..)
 
 import Coll exposing (Coll, Id)
+import Color
 import Element exposing (..)
 import Element.Input as Input
 import Gear exposing (Gear)
@@ -8,7 +9,10 @@ import Interact
 import Json.Encode as E
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Sound exposing (Sound)
+import TypedSvg as S
+import TypedSvg.Attributes as SA
 import TypedSvg.Core exposing (Svg)
+import TypedSvg.Types exposing (Length(..), Transform(..))
 
 
 port toEngine : E.Value -> Cmd msg
@@ -17,6 +21,7 @@ port toEngine : E.Value -> Cmd msg
 type Doc
     = D
         { gears : Coll Gear
+        , futureLink : Maybe ( Id Gear, Vec2 )
         , tool : Tool
         , details : Maybe (Id Gear)
         }
@@ -69,6 +74,7 @@ new : Doc
 new =
     D
         { gears = Coll.empty
+        , futureLink = Nothing
         , tool = Play
         , details = Nothing
         }
@@ -106,7 +112,7 @@ type Msg
     = ChangedTool Tool
     | DeleteGear (Id Gear)
     | GearMsg ( Id Gear, Gear.Msg )
-    | InteractEvent (Interact.Event String) Float
+    | InteractEvent (Interact.Event String)
 
 
 update : Msg -> Doc -> ( Doc, Cmd msg )
@@ -148,7 +154,7 @@ update msg (D doc) =
             in
             ( D { doc | gears = Coll.update id (Gear.update subMsg) doc.gears }, cmd )
 
-        InteractEvent event scale ->
+        InteractEvent event ->
             case ( doc.tool, event ) of
                 ( Play, Interact.Clicked uid ) ->
                     case interactableFromUID uid of
@@ -178,16 +184,27 @@ update msg (D doc) =
                         _ ->
                             ( D doc, Cmd.none )
 
-                ( _, Interact.Moved uid oldPos newPos ) ->
+                ( Link, Interact.Dragged uid oldPos newPos ) ->
                     case interactableFromUID uid of
                         IGear id ->
-                            let
-                                dPos =
-                                    Vec.scale scale <| Vec.sub newPos oldPos
-                            in
+                            ( D { doc | futureLink = Just ( id, newPos ) }, Cmd.none )
+
+                        _ ->
+                            ( D doc, Cmd.none )
+
+                ( Link, Interact.DragCanceled ) ->
+                    ( D { doc | futureLink = Nothing }, Cmd.none )
+
+                --TODO
+                ( Link, Interact.DragEnded ) ->
+                    ( D { doc | futureLink = Nothing }, Cmd.none )
+
+                ( _, Interact.Dragged uid oldPos newPos ) ->
+                    case interactableFromUID uid of
+                        IGear id ->
                             ( D
                                 { doc
-                                    | gears = Coll.update id (Gear.update <| Gear.Move dPos) doc.gears
+                                    | gears = Coll.update id (Gear.update <| Gear.Move <| Vec.sub newPos oldPos) doc.gears
                                 }
                             , Cmd.none
                             )
@@ -237,8 +254,38 @@ viewContent (D doc) inter =
                             Interact.Drag ->
                                 Gear.Dragged
     in
-    List.map (\( id, g ) -> Gear.view ( id, g ) (getMod inter id)) <|
+    (List.map (\( id, g ) -> Gear.view ( id, g ) (getMod inter id)) <|
         Coll.toList doc.gears
+    )
+        ++ (case doc.futureLink of
+                Nothing ->
+                    []
+
+                Just ( id, pos ) ->
+                    case Coll.get id doc.gears of
+                        Nothing ->
+                            Debug.log ("IMPOSSIBLE future link didn’t found gear " ++ Gear.toUID id) []
+
+                        Just g ->
+                            let
+                                l =
+                                    Gear.getLength g
+
+                                linkW =
+                                    l / 30
+
+                                center =
+                                    Gear.getPos g
+                            in
+                            [ S.polyline
+                                [ SA.points [ tupleFromVec center, tupleFromVec pos ]
+                                , SA.stroke <| Color.brown
+                                , SA.strokeWidth <| Num linkW
+                                , SA.strokeLinecap TypedSvg.Types.StrokeLinecapRound
+                                ]
+                                []
+                            ]
+           )
 
 
 viewDetails : Doc -> List (Element Msg)
@@ -260,3 +307,8 @@ viewDetails (D doc) =
                             }
                         ]
                     ]
+
+
+tupleFromVec : Vec2 -> ( Float, Float )
+tupleFromVec v =
+    ( Vec.getX v, Vec.getY v )

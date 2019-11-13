@@ -59,8 +59,10 @@ type Msg item
 
 type Event item
     = NoEvent
-    | Moved item Vec2 Vec2 -- old new
     | Clicked item
+    | Dragged item Vec2 Vec2 -- old new
+    | DragEnded
+    | DragCanceled
 
 
 update : Msg item -> State item -> ( State item, Event item )
@@ -78,7 +80,7 @@ update msg (S state) =
         ClickMove pos ->
             case state.click of
                 Just ( item, oldPos ) ->
-                    ( S { state | click = Just ( item, pos ), moved = True }, Moved item oldPos pos )
+                    ( S { state | click = Just ( item, pos ), moved = True }, Dragged item oldPos pos )
 
                 _ ->
                     Debug.log "IMPOSSIBLE ClickMove without state.pos or state.click" ( S state, NoEvent )
@@ -86,7 +88,7 @@ update msg (S state) =
         EndClick ->
             ( S { state | click = Nothing }
             , if state.moved then
-                NoEvent
+                DragEnded
 
               else
                 case state.click of
@@ -98,7 +100,13 @@ update msg (S state) =
             )
 
         AbortClick ->
-            ( S { state | click = Nothing }, NoEvent )
+            ( S { state | click = Nothing }
+            , if state.moved then
+                DragCanceled
+
+              else
+                NoEvent
+            )
 
         NOOP ->
             ( S state, NoEvent )
@@ -132,7 +140,7 @@ dragSpaceEvents (S { click }) =
             []
 
         Just _ ->
-            [ Mouse.onMove <| ClickMove << vecFromTuple << .clientPos ]
+            [ Mouse.onMove <| ClickMove << vecFromTuple << .offsetPos ]
 
 
 hoverEvents : Bool -> item -> List (Html.Attribute (Msg item))
@@ -148,7 +156,7 @@ hoverEvents hover id =
 
 draggableEvents : item -> List (Html.Attribute (Msg item))
 draggableEvents id =
-    [ Mouse.onDown <| StartClick id << vecFromTuple << .clientPos ]
+    [ Mouse.onDown <| StartClick id << vecFromTuple << .offsetPos ]
 
 
 
