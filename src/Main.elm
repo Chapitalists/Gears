@@ -14,7 +14,7 @@ import Html.Attributes
 import Http
 import Interact
 import Json.Decode as D
-import Math.Vector2 as Vec2 exposing (Vec2, vec2)
+import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Result exposing (Result)
 import Set exposing (Set)
 import Sound exposing (Sound)
@@ -74,8 +74,8 @@ type alias ViewPos =
 
 
 getScale : Model -> Float
-getScale model =
-    model.viewPos.smallestSize / min model.svgSize.height model.svgSize.width
+getScale { viewPos, svgSize } =
+    viewPos.smallestSize / min svgSize.height svgSize.width
 
 
 type alias Size =
@@ -318,10 +318,10 @@ computeViewBox { viewPos, svgSize } =
                 h * ratio
 
             x =
-                Vec2.getX viewPos.c - w / 2
+                Vec.getX viewPos.c - w / 2
 
             y =
-                Vec2.getY viewPos.c - h / 2
+                Vec.getY viewPos.c - h / 2
         in
         if landscapeOrientation then
             SA.viewBox x y w h

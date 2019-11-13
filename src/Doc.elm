@@ -78,7 +78,11 @@ interactableFromUID : String -> Interactable
 interactableFromUID uid =
     case String.split "-" uid of
         stringType :: int :: _ ->
-            IGear (Coll.forgeId int)
+            if stringType == Gear.stringType then
+                IGear (Coll.forgeId int)
+
+            else
+                Debug.log ("ERROR Unrecognized UID type " ++ stringType) INothing
 
         _ ->
             Debug.log ("ERROR Unrecognized UID " ++ uid) INothing
