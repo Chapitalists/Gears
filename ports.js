@@ -52,8 +52,9 @@ function play(id) {
       , s = model.player = new Tone.Player(buffers[model.soundName]).toMaster()
       , g = model.gear = SVG.adopt(document.getElementById(model.id))
     model.paused = false
-    deb = g.animate(s.buffer.duration * 1000).transform({rotation:360, cx:0, cy:0}).loop()
+    g.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).loop()
     s.loop = true
+    s.playbackRate = model.rate = s.buffer.duration / model.length
     s.start()
     model.startTime = Tone.context.now()
 }
@@ -63,7 +64,7 @@ function pause(id) {
     model.paused = true
     model.gear.animate().pause()
     model.player.stop()
-    model.pauseOffset = Tone.context.now() - model.startTime
+    model.pauseOffset = (Tone.context.now() - model.startTime) * model.rate
 }
 
 function unpause(id) {
@@ -71,7 +72,7 @@ function unpause(id) {
     model.paused = false
     model.gear.animate().play()
     model.player.start(Tone.context.now(), model.pauseOffset)
-    model.startTime = Tone.context.now() - model.pauseOffset
+    model.startTime = Tone.context.now() - model.pauseOffset / model.rate
 }
 
 function stop(id) {

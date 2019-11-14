@@ -2,6 +2,7 @@ module Gear exposing (..)
 
 import Coll
 import Color
+import Fraction as Fract exposing (Fraction)
 import Html.Attributes
 import Html.Events.Extra.Mouse as Mouse
 import Interact
@@ -60,6 +61,7 @@ encoder ( id, G g ) =
     E.object
         [ ( "type", E.string stringType )
         , ( "id", E.string <| toUID id )
+        , ( "length", E.float <| g.length )
         , ( "soundName", E.string <| Sound.toString g.sound )
         ]
 
@@ -75,6 +77,7 @@ type Msg
     = Play
     | Stop
     | Move Vec2
+    | ResizeFract Fraction
 
 
 update : Msg -> Gear -> Gear
@@ -88,6 +91,9 @@ update msg (G g) =
 
         Move d ->
             G { g | pos = add d g.pos }
+
+        ResizeFract f ->
+            G { g | length = g.length * Fract.toFloat f }
 
 
 type OutMsg

@@ -4,6 +4,7 @@ import Coll exposing (Coll, Id)
 import Color
 import Element exposing (..)
 import Element.Input as Input
+import Fraction as Fract
 import Gear exposing (Gear)
 import Interact
 import Json.Encode as E
@@ -302,6 +303,10 @@ viewDetails (D doc) =
                 Just g ->
                     [ column []
                         [ Input.button []
+                            { label = text "x2"
+                            , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer 2 )
+                            }
+                        , Input.button []
                             { onPress = Just <| DeleteGear id
                             , label = text "Supprimer"
                             }
