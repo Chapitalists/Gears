@@ -184,7 +184,11 @@ update msg (D doc) =
             )
 
         GearMsg ( id, subMsg ) ->
-            ( D { doc | gears = Coll.update id (Gear.update subMsg) doc.gears }
+            ( D
+                { doc
+                    | gears = Coll.update id (Gear.update subMsg) doc.gears
+                    , playing = List.filter (\el -> el /= id) doc.playing
+                }
             , engineStopGear ( id, Coll.get id doc.gears )
             )
 
@@ -232,12 +236,7 @@ update msg (D doc) =
                 ( _, Interact.Dragged uid oldPos newPos ) ->
                     case interactableFromUID uid of
                         IGear id ->
-                            ( D
-                                { doc
-                                    | gears = Coll.update id (Gear.update <| Gear.Move <| Vec.sub newPos oldPos) doc.gears
-                                }
-                            , Cmd.none
-                            )
+                            update (GearMsg <| ( id, Gear.Move <| Vec.sub newPos oldPos )) <| D doc
 
                         _ ->
                             ( D doc, Cmd.none )
