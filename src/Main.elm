@@ -11,6 +11,7 @@ import Element.Font as Font
 import Element.Input as Input
 import Gear exposing (Gear)
 import Html.Attributes
+import Html.Events.Extra.Wheel as Wheel
 import Http
 import Interact
 import Json.Decode as D
@@ -129,6 +130,7 @@ type Msg
     | SoundLoaded (Result D.Error Sound)
     | SoundClicked Sound
     | UpdateViewPos ViewPos
+    | Zoom Float
     | GotSVGSize (Result D.Error Size)
     | DocMsg Doc.Msg
     | InteractMsg (Interact.Msg String)
@@ -182,6 +184,16 @@ update msg model =
 
         UpdateViewPos vp ->
             ( { model | viewPos = vp }, Cmd.none )
+
+        Zoom f ->
+            let
+                vp =
+                    model.viewPos
+
+                factor =
+                    1 + f / 1000
+            in
+            ( { model | viewPos = { vp | smallestSize = model.viewPos.smallestSize * factor } }, Cmd.none )
 
         GotSVGSize res ->
             case res of
@@ -289,6 +301,7 @@ view model =
                                  , SS.attribute "height" "100%"
                                  , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
                                  , computeViewBox model
+                                 , Wheel.onWheel (Zoom << .deltaY)
                                  ]
                                     ++ List.map (Html.Attributes.map InteractMsg)
                                         (Interact.dragSpaceEvents model.interact)
