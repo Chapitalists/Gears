@@ -24,6 +24,7 @@ port toEngine : E.Value -> Cmd msg
 type Doc
     = D
         { gears : Coll Gear
+        , playing : List (Id Gear)
         , futureLink : Maybe ( Id Gear, Vec2 )
         , tool : Tool
         , details : Maybe (Id Gear)
@@ -73,10 +74,35 @@ engineEncoder { action, playable } =
                 ]
 
 
+enginePlayGear ( id, mayGear ) =
+    case mayGear of
+        Nothing ->
+            Debug.log
+                ("IMPOSSIBLE No gear to play for id " ++ Gear.toUID id)
+                Cmd.none
+
+        Just g ->
+            toEngine <|
+                engineEncoder { playable = PGear ( id, g ), action = PlayPause }
+
+
+engineStopGear ( id, mayGear ) =
+    case mayGear of
+        Nothing ->
+            Debug.log
+                ("IMPOSSIBLE No gear to stop for id " ++ Gear.toUID id)
+                Cmd.none
+
+        Just g ->
+            toEngine <|
+                engineEncoder { playable = PGear ( id, g ), action = StopReset }
+
+
 new : Doc
 new =
     D
         { gears = Coll.empty
+        , playing = []
         , futureLink = Nothing
         , tool = Play
         , details = Nothing
@@ -113,6 +139,8 @@ addNewGear sound (D doc) =
 
 type Msg
     = ChangedTool Tool
+    | PlayGear (Id Gear)
+    | StopGear (Id Gear)
     | DeleteGear (Id Gear)
     | GearMsg ( Id Gear, Gear.Msg )
     | InteractEvent (Interact.Event String)
@@ -123,6 +151,14 @@ update msg (D doc) =
     case msg of
         ChangedTool tool ->
             ( D { doc | tool = tool }, Cmd.none )
+
+        PlayGear id ->
+            ( D { doc | playing = id :: doc.playing }, enginePlayGear ( id, Coll.get id doc.gears ) )
+
+        StopGear id ->
+            ( D { doc | playing = List.filter (\el -> el /= id) doc.playing }
+            , engineStopGear ( id, Coll.get id doc.gears )
+            )
 
         DeleteGear id ->
             let
@@ -138,24 +174,19 @@ update msg (D doc) =
                             else
                                 doc.details
             in
-            ( D { doc | gears = Coll.remove id doc.gears, details = details }, Cmd.none )
+            ( D
+                { doc
+                    | gears = Coll.remove id doc.gears
+                    , playing = List.filter (\el -> el /= id) doc.playing
+                    , details = details
+                }
+            , Cmd.none
+            )
 
         GearMsg ( id, subMsg ) ->
-            let
-                cmd =
-                    case subMsg of
-                        Gear.Stop ->
-                            case Coll.get id doc.gears of
-                                Nothing ->
-                                    Debug.log ("IMPOSSIBLE No gear to stop for id " ++ Gear.toUID id) Cmd.none
-
-                                Just g ->
-                                    toEngine <| engineEncoder { action = StopReset, playable = PGear ( id, g ) }
-
-                        _ ->
-                            Cmd.none
-            in
-            ( D { doc | gears = Coll.update id (Gear.update subMsg) doc.gears }, cmd )
+            ( D { doc | gears = Coll.update id (Gear.update subMsg) doc.gears }
+            , engineStopGear ( id, Coll.get id doc.gears )
+            )
 
         InteractEvent event ->
             case ( doc.tool, event ) of
@@ -163,18 +194,14 @@ update msg (D doc) =
                     case interactableFromUID uid of
                         IGear id ->
                             let
-                                cmd =
-                                    case Coll.get id doc.gears of
-                                        Nothing ->
-                                            Debug.log
-                                                ("IMPOSSIBLE No gear to play for id " ++ Gear.toUID id)
-                                                Cmd.none
+                                playing =
+                                    if List.member id doc.playing then
+                                        doc.playing
 
-                                        Just g ->
-                                            toEngine <|
-                                                engineEncoder { playable = PGear ( id, g ), action = PlayPause }
+                                    else
+                                        id :: doc.playing
                             in
-                            ( D { doc | gears = Coll.update id (Gear.update Gear.Play) doc.gears }, cmd )
+                            ( D { doc | playing = playing }, enginePlayGear ( id, Coll.get id doc.gears ) )
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -305,6 +332,17 @@ viewDetails (D doc) =
                 Just g ->
                     [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
                         [ text <| Gear.toUID id
+                        , Input.button []
+                            (if List.member id doc.playing then
+                                { label = text "Stop"
+                                , onPress = Just <| StopGear id
+                                }
+
+                             else
+                                { label = text "Play"
+                                , onPress = Just <| PlayGear id
+                                }
+                            )
                         , Input.button []
                             { label = text "x 2"
                             , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer 2 )

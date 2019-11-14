@@ -20,7 +20,6 @@ type Gear
         { length : Float
         , pos : Vec2
         , startPercent : Float
-        , playing : Bool
         , sound : Sound
         }
 
@@ -41,7 +40,6 @@ fromSound s p =
         { length = Sound.length s
         , pos = p
         , startPercent = 0
-        , playing = False
         , sound = s
         }
 
@@ -74,21 +72,13 @@ type Mod
 
 
 type Msg
-    = Play
-    | Stop
-    | Move Vec2
+    = Move Vec2
     | ResizeFract Fraction
 
 
 update : Msg -> Gear -> Gear
 update msg (G g) =
     case msg of
-        Play ->
-            G { g | playing = True }
-
-        Stop ->
-            G { g | playing = False }
-
         Move d ->
             G { g | pos = add d g.pos }
 
@@ -117,7 +107,7 @@ view ( id, G g ) mod =
             g.length / 30
     in
     S.g [ SA.transform [ Translate (getX g.pos) (getY g.pos) ] ]
-        ([ S.g [ Html.Attributes.id <| toUID id ]
+        [ S.g [ Html.Attributes.id <| toUID id ]
             [ S.circle
                 ([ SA.cx <| Num 0
                  , SA.cy <| Num 0
@@ -146,19 +136,4 @@ view ( id, G g ) mod =
                 ]
                 []
             ]
-         ]
-            ++ (if g.playing then
-                    [ S.rect
-                        [ SA.x <| Num (stopSize / -2)
-                        , SA.y <| Num ((g.length / -2) - stopSize - stopSpace)
-                        , SA.width <| Num stopSize
-                        , SA.height <| Num stopSize
-                        , Mouse.onClick <| always <| GearMsg ( id, Stop )
-                        ]
-                        []
-                    ]
-
-                else
-                    []
-               )
-        )
+        ]
