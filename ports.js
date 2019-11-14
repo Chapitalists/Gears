@@ -35,7 +35,7 @@ function loadErr(err, soundName) {
 }
 
 function engine(o) {
-  if (o.action == "stopReset" && playing[o.item.id]) stop(o.item.id)
+  if (o.action == "stopReset") stop(o.item.id)
   else playPause(o.item)
 }
 
@@ -77,6 +77,7 @@ function unpause(id) {
 
 function stop(id) {
     let model = playing[id]
+    if (!model) return;
     model.gear.animate().play().finish()
     model.player.stop()
     playing[id] = null
