@@ -23,7 +23,10 @@ function createBuffer(soundName) {
 }
 
 function loadOk(soundName) {
-  app.ports.soundLoaded.send(soundName + ' ok')
+  app.ports.soundLoaded.send(
+  { path : soundName
+  , length : buffers[soundName].duration
+  })
 }
 
 function loadErr(err, soundName) {

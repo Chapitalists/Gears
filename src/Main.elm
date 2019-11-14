@@ -28,7 +28,7 @@ import Url exposing (Url)
 port loadSound : String -> Cmd msg
 
 
-port soundLoaded : (String -> msg) -> Sub msg
+port soundLoaded : (D.Value -> msg) -> Sub msg
 
 
 port newSVGSize : (D.Value -> msg) -> Sub msg
@@ -126,7 +126,7 @@ type Msg
     = GotSoundList (Result Http.Error String)
     | RequestSoundList
     | RequestSoundLoad String
-    | SoundLoaded String
+    | SoundLoaded (Result D.Error Sound)
     | SoundClicked Sound
     | UpdateViewPos ViewPos
     | GotSVGSize (Result D.Error Size)
@@ -166,16 +166,12 @@ update msg model =
             )
 
         SoundLoaded res ->
-            let
-                newList =
-                    case String.split " " res of
-                        name :: "ok" :: _ ->
-                            Sound.fromPath name :: model.loadedSoundList
+            case res of
+                Result.Err e ->
+                    ( { model | debug = D.errorToString e }, Cmd.none )
 
-                        _ ->
-                            model.loadedSoundList
-            in
-            ( { model | debug = res, loadedSoundList = newList }, Cmd.none )
+                Result.Ok s ->
+                    ( { model | loadedSoundList = s :: model.loadedSoundList }, Cmd.none )
 
         SoundClicked sound ->
             let
@@ -233,7 +229,7 @@ update msg model =
 
 subs { interact } =
     Sub.batch <|
-        [ soundLoaded SoundLoaded
+        [ soundLoaded (Sound.decoder >> SoundLoaded)
         , newSVGSize (sizeDecoder >> GotSVGSize)
         ]
             ++ List.map (Sub.map InteractMsg) (Interact.subs interact)
