@@ -6,7 +6,7 @@ if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 const buffers = {}
     , playing = {}
     , ro = new ResizeObserver(sendSize)
-ro.observe(document.getElementById('svg').parentElement)
+ro.observe(document.getElementById('svgResizeObserver'))
 
 let deb = null
 

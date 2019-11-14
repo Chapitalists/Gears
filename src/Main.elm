@@ -280,7 +280,7 @@ viewDoc model =
     column [ width fill, height fill ]
         [ Doc.viewTools model.doc
             |> Element.map DocMsg
-        , el [ width fill, height fill ] <|
+        , el [ width fill, height fill, Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver" ] <|
             Element.html <|
                 S.svg
                     ([ Html.Attributes.id "svg"
