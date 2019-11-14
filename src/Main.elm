@@ -264,60 +264,71 @@ view model =
     , body =
         [ layout [] <|
             row [ height fill, width fill ]
-                ([ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
-                    [ text <|
-                        if String.isEmpty model.debug then
-                            "Fine"
-
-                        else
-                            model.debug
-                    , Input.button
-                        [ Font.color <|
-                            if model.connected then
-                                rgb 0 0 0
-
-                            else
-                                rgb 1 0 0
-                        ]
-                        { onPress = Just RequestSoundList
-                        , label = text "Actualiser"
-                        }
-                    , column [ spacing 5 ] <|
-                        text "Sons"
-                            :: (List.map (\s -> el [ onClick (RequestSoundLoad s) ] (text s)) <|
-                                    Set.toList model.soundList
-                               )
-                    , column [ spacing 10 ] <|
-                        text "Chargés"
-                            :: List.map soundView model.loadedSoundList
-                    ]
-                 , column [ width fill, height fill ]
-                    [ Element.map DocMsg <| Doc.viewTools model.doc
-                    , el [ width fill, height fill ] <|
-                        Element.html <|
-                            S.svg
-                                ([ Html.Attributes.id "svg"
-                                 , SS.attribute "width" "100%"
-                                 , SS.attribute "height" "100%"
-                                 , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
-                                 , computeViewBox model
-                                 , Wheel.onWheel (Zoom << .deltaY)
-                                 ]
-                                    ++ List.map (Html.Attributes.map InteractMsg)
-                                        (Interact.dragSpaceEvents model.interact)
-                                )
-                            <|
-                                List.map (SS.map forwardGearOutMsg) <|
-                                    Doc.viewContent model.doc <|
-                                        Interact.getInteract model.interact
-                    ]
+                ([ viewSoundLib model
+                 , viewDoc model
                  ]
-                    ++ (List.map (Element.map DocMsg) <|
-                            Doc.viewDetails model.doc
+                    ++ (Doc.viewDetails model.doc
+                            |> List.map (Element.map DocMsg)
                        )
                 )
         ]
     }
+
+
+viewDoc : Model -> Element Msg
+viewDoc model =
+    column [ width fill, height fill ]
+        [ Doc.viewTools model.doc
+            |> Element.map DocMsg
+        , el [ width fill, height fill ] <|
+            Element.html <|
+                S.svg
+                    ([ Html.Attributes.id "svg"
+                     , SS.attribute "width" "100%"
+                     , SS.attribute "height" "100%"
+                     , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
+                     , computeViewBox model
+                     , Wheel.onWheel (Zoom << .deltaY)
+                     ]
+                        ++ List.map (Html.Attributes.map InteractMsg)
+                            (Interact.dragSpaceEvents model.interact)
+                    )
+                <|
+                    (Doc.viewContent model.doc (Interact.getInteract model.interact)
+                        |> List.map (SS.map forwardGearOutMsg)
+                    )
+        ]
+
+
+viewSoundLib : Model -> Element Msg
+viewSoundLib model =
+    column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+        [ text <|
+            if String.isEmpty model.debug then
+                "Fine"
+
+            else
+                model.debug
+        , Input.button
+            [ Font.color <|
+                if model.connected then
+                    rgb 0 0 0
+
+                else
+                    rgb 1 0 0
+            ]
+            { onPress = Just RequestSoundList
+            , label = text "Actualiser"
+            }
+        , column [ spacing 5 ] <|
+            text "Sons"
+                :: (List.map (\s -> el [ onClick (RequestSoundLoad s) ] (text s)) <|
+                        Set.toList model.soundList
+                   )
+        , column [ spacing 10 ] <|
+            text "Chargés"
+                :: List.map soundView model.loadedSoundList
+        ]
 
 
 soundView : Sound -> Element Msg
