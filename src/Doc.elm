@@ -3,6 +3,8 @@ port module Doc exposing (..)
 import Coll exposing (Coll, Id)
 import Color
 import Element exposing (..)
+import Element.Background as Bg
+import Element.Font as Font
 import Element.Input as Input
 import Fraction as Fract
 import Gear exposing (Gear)
@@ -131,7 +133,7 @@ update msg (D doc) =
 
                         Just d ->
                             if d == id then
-                                Debug.log "empty details" Nothing
+                                Nothing
 
                             else
                                 doc.details
@@ -301,10 +303,15 @@ viewDetails (D doc) =
                     Debug.log ("IMPOSSIBLE No gear for details of " ++ Gear.toUID id) []
 
                 Just g ->
-                    [ column []
-                        [ Input.button []
-                            { label = text "x2"
+                    [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+                        [ text <| Gear.toUID id
+                        , Input.button []
+                            { label = text "x 2"
                             , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer 2 )
+                            }
+                        , Input.button []
+                            { label = text "/ 2"
+                            , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit 2 )
                             }
                         , Input.button []
                             { onPress = Just <| DeleteGear id
