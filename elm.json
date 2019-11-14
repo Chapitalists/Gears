@@ -19,6 +19,7 @@
             "elm-community/typed-svg": "5.1.0",
             "elm-explorations/linear-algebra": "1.0.3",
             "krisajenkins/remotedata": "6.0.1",
+            "ljuglaret/fraction": "1.0.0",
             "mdgriffith/elm-ui": "1.1.5",
             "mpizenberg/elm-pointer-events": "4.0.1",
             "zaboco/elm-draggable": "4.0.5"

@@ -38,6 +38,8 @@ port newSVGSize : (D.Value -> msg) -> Sub msg
 -- TODO refactor existing Debug.log with "key" value
 -- TODO check bug visibility hidden not emitted on window change but on tab change
 -- TODO check msg or Msg in types, if unused, maybe replace by x
+-- TODO clean all module exposings decl
+-- TODO is "No error handling in update, everything comes Checked before" is a good pattern ?
 -- MAIN
 
 
@@ -97,6 +99,7 @@ type alias Size =
     }
 
 
+sizeDecoder : D.Value -> Result D.Error Size
 sizeDecoder =
     D.decodeValue <| D.map2 Size (D.field "width" D.float) (D.field "height" D.float)
 
