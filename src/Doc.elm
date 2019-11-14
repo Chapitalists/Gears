@@ -16,6 +16,7 @@ import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core exposing (Svg)
 import TypedSvg.Types exposing (Length(..), Transform(..))
+import UndoList as Undo exposing (UndoList)
 
 
 port toEngine : E.Value -> Cmd msg
@@ -23,7 +24,7 @@ port toEngine : E.Value -> Cmd msg
 
 type Doc
     = D
-        { gears : Coll Gear
+        { gears : UndoList (Coll Gear)
         , playing : List (Id Gear)
         , futureLink : Maybe ( Id Gear, Vec2 )
         , tool : Tool
@@ -101,7 +102,7 @@ engineStopGear ( id, mayGear ) =
 new : Doc
 new =
     D
-        { gears = Coll.empty
+        { gears = Undo.fresh Coll.empty
         , playing = []
         , futureLink = Nothing
         , tool = Play
@@ -131,7 +132,7 @@ addNewGear sound (D doc) =
     in
     ( D
         { doc
-            | gears = Coll.insert (Gear.fromSound sound pos) doc.gears
+            | gears = undoNew doc.gears <| Coll.insert (Gear.fromSound sound pos)
         }
     , pos
     )
@@ -142,6 +143,8 @@ type Msg
     | PlayGear (Id Gear)
     | StopGear (Id Gear)
     | DeleteGear (Id Gear)
+    | Undo
+    | Redo
     | GearMsg ( Id Gear, Gear.Msg )
     | InteractEvent (Interact.Event String)
 
@@ -153,11 +156,11 @@ update msg (D doc) =
             ( D { doc | tool = tool }, Cmd.none )
 
         PlayGear id ->
-            ( D { doc | playing = id :: doc.playing }, enginePlayGear ( id, Coll.get id doc.gears ) )
+            ( D { doc | playing = id :: doc.playing }, enginePlayGear ( id, Coll.get id doc.gears.present ) )
 
         StopGear id ->
             ( D { doc | playing = List.filter (\el -> el /= id) doc.playing }
-            , engineStopGear ( id, Coll.get id doc.gears )
+            , engineStopGear ( id, Coll.get id doc.gears.present )
             )
 
         DeleteGear id ->
@@ -176,20 +179,26 @@ update msg (D doc) =
             in
             ( D
                 { doc
-                    | gears = Coll.remove id doc.gears
+                    | gears = undoNew doc.gears <| Coll.remove id
                     , playing = List.filter (\el -> el /= id) doc.playing
                     , details = details
                 }
             , Cmd.none
             )
 
+        Undo ->
+            ( D { doc | gears = Undo.undo doc.gears }, Cmd.none )
+
+        Redo ->
+            ( D { doc | gears = Undo.redo doc.gears }, Cmd.none )
+
         GearMsg ( id, subMsg ) ->
             ( D
                 { doc
-                    | gears = Coll.update id (Gear.update subMsg) doc.gears
+                    | gears = undoNew doc.gears <| Coll.update id (Gear.update subMsg)
                     , playing = List.filter (\el -> el /= id) doc.playing
                 }
-            , engineStopGear ( id, Coll.get id doc.gears )
+            , engineStopGear ( id, Coll.get id doc.gears.present )
             )
 
         InteractEvent event ->
@@ -205,7 +214,7 @@ update msg (D doc) =
                                     else
                                         id :: doc.playing
                             in
-                            ( D { doc | playing = playing }, enginePlayGear ( id, Coll.get id doc.gears ) )
+                            ( D { doc | playing = playing }, enginePlayGear ( id, Coll.get id doc.gears.present ) )
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -247,16 +256,36 @@ update msg (D doc) =
 
 viewTools : Doc -> Element Msg
 viewTools (D doc) =
-    Input.radioRow []
-        { onChange = ChangedTool
-        , options =
-            [ Input.option Play <| text "Jouer"
-            , Input.option Edit <| text "Éditer"
-            , Input.option Link <| text "Lier"
-            ]
-        , selected = Just doc.tool
-        , label = Input.labelHidden "Outils"
-        }
+    row [ width fill, padding 10, spacing 20 ]
+        [ Input.radioRow [ spacing 30 ]
+            { onChange = ChangedTool
+            , options =
+                [ Input.option Play <| text "Jouer"
+                , Input.option Edit <| text "Éditer"
+                , Input.option Link <| text "Lier"
+                ]
+            , selected = Just doc.tool
+            , label = Input.labelHidden "Outils"
+            }
+        , Input.button [ alignRight ]
+            { label = text "Undo"
+            , onPress =
+                if Undo.hasPast doc.gears then
+                    Just Undo
+
+                else
+                    Nothing
+            }
+        , Input.button []
+            { label = text "Redo"
+            , onPress =
+                if Undo.hasFuture doc.gears then
+                    Just Redo
+
+                else
+                    Nothing
+            }
+        ]
 
 
 viewContent : Doc -> Interact.Interact String -> List (Svg Gear.OutMsg)
@@ -284,14 +313,14 @@ viewContent (D doc) inter =
                                 Gear.Dragged
     in
     (List.map (\( id, g ) -> Gear.view ( id, g ) (getMod inter id)) <|
-        Coll.toList doc.gears
+        Coll.toList doc.gears.present
     )
         ++ (case doc.futureLink of
                 Nothing ->
                     []
 
                 Just ( id, pos ) ->
-                    case Coll.get id doc.gears of
+                    case Coll.get id doc.gears.present of
                         Nothing ->
                             Debug.log ("IMPOSSIBLE future link didn’t found gear " ++ Gear.toUID id) []
 
@@ -324,7 +353,7 @@ viewDetails (D doc) =
             []
 
         Just id ->
-            case Coll.get id doc.gears of
+            case Coll.get id doc.gears.present of
                 Nothing ->
                     Debug.log ("IMPOSSIBLE No gear for details of " ++ Gear.toUID id) []
 
@@ -361,3 +390,13 @@ viewDetails (D doc) =
 tupleFromVec : Vec2 -> ( Float, Float )
 tupleFromVec v =
     ( Vec.getX v, Vec.getY v )
+
+
+undoNew : UndoList model -> (model -> model) -> UndoList model
+undoNew undo action =
+    Undo.new (action undo.present) undo
+
+
+undont : UndoList model -> (model -> model) -> UndoList model
+undont undo action =
+    { undo | present = action undo.present }
