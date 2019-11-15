@@ -1,4 +1,4 @@
-module Coll exposing (Coll, Id, empty, fillReserved, forgeId, get, idToString, insert, remove, reserve, toList, update)
+module Coll exposing (Coll, Id, empty, fillReserved, filter, forgeId, get, idToString, insert, remove, reserve, toList, update)
 
 import Dict exposing (Dict)
 
@@ -69,6 +69,11 @@ fillReserved id el (C coll) =
 update : Id item -> (item -> item) -> Coll item -> Coll item
 update id f (C coll) =
     C { coll | d = Dict.update (getIdInternal id) (Maybe.map f) coll.d }
+
+
+filter : (item -> Bool) -> Coll item -> Coll item
+filter isGood (C coll) =
+    C { coll | d = Dict.filter (\_ v -> isGood v) coll.d }
 
 
 toList : Coll item -> List ( Id item, item )

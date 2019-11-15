@@ -190,27 +190,40 @@ update msg (D doc) =
             )
 
         DeleteGear id ->
-            let
-                details =
-                    case doc.details of
-                        Nothing ->
-                            Nothing
+            case Coll.get id doc.data.present.gears of
+                Nothing ->
+                    ( D doc, Cmd.none )
 
-                        Just d ->
-                            if d == id then
-                                Nothing
+                Just g ->
+                    let
+                        details =
+                            case doc.details of
+                                Nothing ->
+                                    Nothing
 
-                            else
-                                doc.details
-            in
-            ( D
-                { doc
-                    | data = undoNew doc.data <| \d -> { d | gears = Coll.remove id d.gears }
-                    , playing = List.filter (\el -> el /= id) doc.playing
-                    , details = details
-                }
-            , Cmd.none
-            )
+                                Just d ->
+                                    if d == id then
+                                        Nothing
+
+                                    else
+                                        doc.details
+                    in
+                    ( D
+                        { doc
+                            | data =
+                                undoNew doc.data <|
+                                    \d ->
+                                        { d
+                                            | gears = Coll.remove id d.gears
+                                            , refs =
+                                                Coll.filter Gear.isUsed <|
+                                                    Coll.update (Gear.getRefId g) Gear.decRefWhenDeleteGear d.refs
+                                        }
+                            , playing = List.filter (\el -> el /= id) doc.playing
+                            , details = details
+                        }
+                    , Cmd.none
+                    )
 
         Undo ->
             ( D { doc | data = Undo.undo doc.data }, Cmd.none )

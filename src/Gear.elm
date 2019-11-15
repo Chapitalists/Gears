@@ -32,6 +32,16 @@ type Ref
         }
 
 
+decRefWhenDeleteGear : Ref -> Ref
+decRefWhenDeleteGear (R r) =
+    R { r | nRefs = r.nRefs - 1 }
+
+
+isUsed : Ref -> Bool
+isUsed (R r) =
+    r.nRefs /= 0
+
+
 defaultRef =
     R { unit = 1, nRefs = 0 }
 
