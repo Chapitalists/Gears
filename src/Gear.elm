@@ -1,6 +1,6 @@
 module Gear exposing (..)
 
-import Coll
+import Coll exposing (Id)
 import Color
 import Fraction as Fract exposing (Fraction)
 import Html.Attributes
@@ -17,11 +17,23 @@ import TypedSvg.Types exposing (Length(..), Transform(..))
 
 type Gear
     = G
-        { length : Float
+        { refId : Id Ref
+        , fract : Fraction
         , pos : Vec2
         , startPercent : Float
         , sound : Sound
         }
+
+
+type Ref
+    = R
+        { unit : Float
+        , nRefs : Int
+        }
+
+
+defaultRef =
+    R { unit = 1, nRefs = 0 }
 
 
 stringType : String
@@ -29,24 +41,32 @@ stringType =
     "gear"
 
 
-toUID : Coll.Id Gear -> String
+toUID : Id Gear -> String
 toUID id =
     stringType ++ "-" ++ Coll.idToString id
 
 
-fromSound : Sound -> Vec2 -> Gear
-fromSound s p =
-    G
-        { length = Sound.length s
+fromSound : Sound -> Vec2 -> Id Ref -> ( Gear, Ref )
+fromSound s p refId =
+    ( G
+        { refId = refId
+        , fract = Fract.integer 1
         , pos = p
         , startPercent = 0
         , sound = s
         }
+    , R { unit = Sound.length s, nRefs = 1 }
+    )
 
 
-getLength : Gear -> Float
-getLength (G g) =
-    g.length
+getRefId : Gear -> Id Ref
+getRefId (G g) =
+    g.refId
+
+
+getLength : ( Gear, Ref ) -> Float
+getLength ( G { fract }, R r ) =
+    r.unit * Fract.toFloat fract
 
 
 getPos : Gear -> Vec2
@@ -54,12 +74,12 @@ getPos (G g) =
     g.pos
 
 
-encoder : ( Coll.Id Gear, Gear ) -> E.Value
-encoder ( id, G g ) =
+encoder : ( Id Gear, Gear, Ref ) -> E.Value
+encoder ( id, G g, R r ) =
     E.object
         [ ( "type", E.string stringType )
         , ( "id", E.string <| toUID id )
-        , ( "length", E.float <| g.length )
+        , ( "length", E.float <| getLength ( G g, R r ) )
         , ( "soundName", E.string <| Sound.toString g.sound )
         ]
 
@@ -83,35 +103,32 @@ update msg (G g) =
             G { g | pos = add d g.pos }
 
         ResizeFract f ->
-            G { g | length = g.length * Fract.toFloat f }
+            G { g | fract = Fract.multiplication g.fract f }
 
 
 type OutMsg
     = InteractMsg (Interact.Msg String)
-    | GearMsg ( Coll.Id Gear, Msg )
+    | GearMsg ( Id Gear, Msg )
 
 
-view : ( Coll.Id Gear, Gear ) -> Mod -> Svg OutMsg
-view ( id, G g ) mod =
+view : ( Id Gear, Gear, Ref ) -> Mod -> Svg OutMsg
+view ( id, G g, R r ) mod =
     let
+        length =
+            getLength ( G g, R r )
+
         tickH =
-            g.length / 15
+            length / 15
 
         tickW =
-            g.length / 30
-
-        stopSize =
-            g.length / 10
-
-        stopSpace =
-            g.length / 30
+            length / 30
     in
     S.g [ SA.transform [ Translate (getX g.pos) (getY g.pos) ] ]
         [ S.g [ Html.Attributes.id <| toUID id ]
             [ S.circle
                 ([ SA.cx <| Num 0
                  , SA.cy <| Num 0
-                 , SA.r <| Num (g.length / 2)
+                 , SA.r <| Num (length / 2)
                  ]
                     ++ (List.map (Html.Attributes.map InteractMsg) <|
                             Interact.hoverEvents (mod == Hovered) (toUID id)
@@ -123,7 +140,7 @@ view ( id, G g ) mod =
                 [ SA.width <| Num tickW
                 , SA.height <| Num tickH
                 , SA.x <| Num (tickW / -2)
-                , SA.y <| Num ((g.length / -2) - tickH)
+                , SA.y <| Num ((length / -2) - tickH)
                 ]
                 []
             , S.rect
@@ -132,7 +149,7 @@ view ( id, G g ) mod =
                 , SA.x <| Num (tickW / -2)
                 , SA.y <| Num (tickH / -2)
                 , SA.fill <| TypedSvg.Types.Fill Color.orange
-                , SA.transform [ Rotate (g.startPercent * 360) 0 0, Translate 0 ((g.length / -2) + (tickH / 2)) ]
+                , SA.transform [ Rotate (g.startPercent * 360) 0 0, Translate 0 ((length / -2) + (tickH / 2)) ]
                 ]
                 []
             ]

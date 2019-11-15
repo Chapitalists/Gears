@@ -7,7 +7,7 @@ import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
 import Fraction as Fract
-import Gear exposing (Gear)
+import Gear exposing (Gear, Ref)
 import Interact
 import Json.Encode as E
 import Math.Vector2 as Vec exposing (Vec2, vec2)
@@ -24,7 +24,7 @@ port toEngine : E.Value -> Cmd msg
 
 type Doc
     = D
-        { gears : UndoList (Coll Gear)
+        { data : UndoList { gears : Coll Gear, refs : Coll Ref }
         , playing : List (Id Gear)
         , futureLink : Maybe ( Id Gear, Vec2 )
         , tool : Tool
@@ -48,7 +48,7 @@ type HasDetails
 
 
 type Playable
-    = PGear ( Id Gear, Gear )
+    = PGear ( Id Gear, Gear, Ref )
 
 
 type EngineAction
@@ -68,41 +68,55 @@ actionToString a =
 engineEncoder : { action : EngineAction, playable : Playable } -> E.Value
 engineEncoder { action, playable } =
     case playable of
-        PGear ( id, g ) ->
+        PGear tuple ->
             E.object
                 [ ( "action", E.string <| actionToString action )
-                , ( "item", Gear.encoder ( id, g ) )
+                , ( "item", Gear.encoder tuple )
                 ]
 
 
-enginePlayGear ( id, mayGear ) =
-    case mayGear of
+idToPlay id data =
+    case Coll.get id data.gears of
         Nothing ->
             Debug.log
                 ("IMPOSSIBLE No gear to play for id " ++ Gear.toUID id)
                 Cmd.none
 
         Just g ->
-            toEngine <|
-                engineEncoder { playable = PGear ( id, g ), action = PlayPause }
+            case Coll.get (Gear.getRefId g) data.refs of
+                Nothing ->
+                    Debug.log ("ERROR No Ref for gear " ++ Gear.toUID id) Cmd.none
+
+                Just r ->
+                    toEngine <|
+                        engineEncoder { playable = PGear ( id, g, r ), action = PlayPause }
 
 
-engineStopGear ( id, mayGear ) =
-    case mayGear of
+
+-- TODO Don’t really need anything else than id to stop
+
+
+idToStop id data =
+    case Coll.get id data.gears of
         Nothing ->
             Debug.log
-                ("IMPOSSIBLE No gear to stop for id " ++ Gear.toUID id)
+                ("IMPOSSIBLE No gear to play for id " ++ Gear.toUID id)
                 Cmd.none
 
         Just g ->
-            toEngine <|
-                engineEncoder { playable = PGear ( id, g ), action = StopReset }
+            case Coll.get (Gear.getRefId g) data.refs of
+                Nothing ->
+                    Debug.log ("ERROR No Ref for gear " ++ Gear.toUID id) Cmd.none
+
+                Just r ->
+                    toEngine <|
+                        engineEncoder { playable = PGear ( id, g, r ), action = StopReset }
 
 
 new : Doc
 new =
     D
-        { gears = Undo.fresh Coll.empty
+        { data = Undo.fresh { gears = Coll.empty, refs = Coll.empty }
         , playing = []
         , futureLink = Nothing
         , tool = Play
@@ -129,10 +143,22 @@ addNewGear sound (D doc) =
     let
         pos =
             vec2 50 50
+
+        ( tmpRefs, refId ) =
+            Coll.reserve doc.data.present.refs
+
+        ( g, r ) =
+            Gear.fromSound sound pos refId
     in
     ( D
         { doc
-            | gears = undoNew doc.gears <| Coll.insert (Gear.fromSound sound pos)
+            | data =
+                undoNew doc.data <|
+                    \d ->
+                        { d
+                            | gears = Coll.insert g d.gears
+                            , refs = Coll.fillReserved refId r tmpRefs
+                        }
         }
     , pos
     )
@@ -156,11 +182,11 @@ update msg (D doc) =
             ( D { doc | tool = tool }, Cmd.none )
 
         PlayGear id ->
-            ( D { doc | playing = id :: doc.playing }, enginePlayGear ( id, Coll.get id doc.gears.present ) )
+            ( D { doc | playing = id :: doc.playing }, idToPlay id doc.data.present )
 
         StopGear id ->
             ( D { doc | playing = List.filter (\el -> el /= id) doc.playing }
-            , engineStopGear ( id, Coll.get id doc.gears.present )
+            , idToStop id doc.data.present
             )
 
         DeleteGear id ->
@@ -179,7 +205,7 @@ update msg (D doc) =
             in
             ( D
                 { doc
-                    | gears = undoNew doc.gears <| Coll.remove id
+                    | data = undoNew doc.data <| \d -> { d | gears = Coll.remove id d.gears }
                     , playing = List.filter (\el -> el /= id) doc.playing
                     , details = details
                 }
@@ -187,18 +213,18 @@ update msg (D doc) =
             )
 
         Undo ->
-            ( D { doc | gears = Undo.undo doc.gears }, Cmd.none )
+            ( D { doc | data = Undo.undo doc.data }, Cmd.none )
 
         Redo ->
-            ( D { doc | gears = Undo.redo doc.gears }, Cmd.none )
+            ( D { doc | data = Undo.redo doc.data }, Cmd.none )
 
         GearMsg ( id, subMsg ) ->
             ( D
                 { doc
-                    | gears = undoNew doc.gears <| Coll.update id (Gear.update subMsg)
+                    | data = undoNew doc.data <| \d -> { d | gears = Coll.update id (Gear.update subMsg) d.gears }
                     , playing = List.filter (\el -> el /= id) doc.playing
                 }
-            , engineStopGear ( id, Coll.get id doc.gears.present )
+            , idToStop id doc.data.present
             )
 
         InteractEvent event ->
@@ -214,7 +240,7 @@ update msg (D doc) =
                                     else
                                         id :: doc.playing
                             in
-                            ( D { doc | playing = playing }, enginePlayGear ( id, Coll.get id doc.gears.present ) )
+                            ( D { doc | playing = playing }, idToPlay id doc.data.present )
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -270,7 +296,7 @@ viewTools (D doc) =
         , Input.button [ alignRight ]
             { label = text "Undo"
             , onPress =
-                if Undo.hasPast doc.gears then
+                if Undo.hasPast doc.data then
                     Just Undo
 
                 else
@@ -279,7 +305,7 @@ viewTools (D doc) =
         , Input.button []
             { label = text "Redo"
             , onPress =
-                if Undo.hasFuture doc.gears then
+                if Undo.hasFuture doc.data then
                     Just Redo
 
                 else
@@ -311,38 +337,52 @@ viewContent (D doc) inter =
 
                             Interact.Drag ->
                                 Gear.Dragged
+
+        getRef : Gear -> Coll Ref -> Ref
+        getRef g refs =
+            case Coll.get (Gear.getRefId g) refs of
+                Nothing ->
+                    Debug.log "ERROR No ref found in view" Gear.defaultRef
+
+                Just r ->
+                    r
     in
-    (List.map (\( id, g ) -> Gear.view ( id, g ) (getMod inter id)) <|
-        Coll.toList doc.gears.present
+    (List.map (\( id, g ) -> Gear.view ( id, g, getRef g doc.data.present.refs ) (getMod inter id)) <|
+        Coll.toList doc.data.present.gears
     )
         ++ (case doc.futureLink of
                 Nothing ->
                     []
 
                 Just ( id, pos ) ->
-                    case Coll.get id doc.gears.present of
+                    case Coll.get id doc.data.present.gears of
                         Nothing ->
                             Debug.log ("IMPOSSIBLE future link didn’t found gear " ++ Gear.toUID id) []
 
                         Just g ->
-                            let
-                                l =
-                                    Gear.getLength g
+                            case Coll.get (Gear.getRefId g) doc.data.present.refs of
+                                Nothing ->
+                                    Debug.log ("ERROR No ref for " ++ Gear.toUID id) []
 
-                                linkW =
-                                    l / 30
+                                Just r ->
+                                    let
+                                        l =
+                                            Gear.getLength ( g, r )
 
-                                center =
-                                    Gear.getPos g
-                            in
-                            [ S.polyline
-                                [ SA.points [ tupleFromVec center, tupleFromVec pos ]
-                                , SA.stroke <| Color.brown
-                                , SA.strokeWidth <| Num linkW
-                                , SA.strokeLinecap TypedSvg.Types.StrokeLinecapRound
-                                ]
-                                []
-                            ]
+                                        linkW =
+                                            l / 30
+
+                                        center =
+                                            Gear.getPos g
+                                    in
+                                    [ S.polyline
+                                        [ SA.points [ tupleFromVec center, tupleFromVec pos ]
+                                        , SA.stroke <| Color.brown
+                                        , SA.strokeWidth <| Num linkW
+                                        , SA.strokeLinecap TypedSvg.Types.StrokeLinecapRound
+                                        ]
+                                        []
+                                    ]
            )
 
 
@@ -353,7 +393,7 @@ viewDetails (D doc) =
             []
 
         Just id ->
-            case Coll.get id doc.gears.present of
+            case Coll.get id doc.data.present.gears of
                 Nothing ->
                     Debug.log ("IMPOSSIBLE No gear for details of " ++ Gear.toUID id) []
 

@@ -1,4 +1,4 @@
-module Coll exposing (Coll, Id, empty, forgeId, get, idToString, insert, remove, toList, update)
+module Coll exposing (Coll, Id, empty, fillReserved, forgeId, get, idToString, insert, remove, reserve, toList, update)
 
 import Dict exposing (Dict)
 
@@ -54,6 +54,16 @@ insert el (C coll) =
 remove : Id item -> Coll item -> Coll item
 remove id (C coll) =
     C { coll | d = Dict.remove (getIdInternal id) coll.d }
+
+
+reserve : Coll item -> ( Coll item, Id item )
+reserve (C coll) =
+    ( C { coll | nextId = coll.nextId + 1 }, opacifyId coll.nextId )
+
+
+fillReserved : Id item -> item -> Coll item -> Coll item
+fillReserved id el (C coll) =
+    C { coll | d = Dict.insert (getIdInternal id) el coll.d }
 
 
 update : Id item -> (item -> item) -> Coll item -> Coll item
