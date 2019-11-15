@@ -168,6 +168,7 @@ type Msg
     = ChangedTool Tool
     | PlayGear (Id Gear)
     | StopGear (Id Gear)
+    | CopyGear (Id Gear)
     | DeleteGear (Id Gear)
     | Undo
     | Redo
@@ -188,6 +189,35 @@ update msg (D doc) =
             ( D { doc | playing = List.filter (\el -> el /= id) doc.playing }
             , idToStop id doc.data.present
             )
+
+        CopyGear id ->
+            case Coll.get id doc.data.present.gears of
+                Nothing ->
+                    Debug.log ("IMPOSSIBLE No gear to copy " ++ Gear.toUID id) ( D doc, Cmd.none )
+
+                Just g ->
+                    case Coll.get (Gear.getRefId g) doc.data.present.refs of
+                        Nothing ->
+                            Debug.log ("IMPOSSIBLE No ref to copy gear " ++ Gear.toUID id) ( D doc, Cmd.none )
+
+                        Just r ->
+                            let
+                                ( newG, upR ) =
+                                    Gear.copy ( g, r )
+                            in
+                            ( D
+                                { doc
+                                    | data =
+                                        undoNew doc.data
+                                            (\d ->
+                                                { d
+                                                    | gears = Coll.insert newG d.gears
+                                                    , refs = Coll.update (Gear.getRefId g) (always upR) d.refs
+                                                }
+                                            )
+                                }
+                            , Cmd.none
+                            )
 
         DeleteGear id ->
             case Coll.get id doc.data.present.gears of
@@ -424,6 +454,10 @@ viewDetails (D doc) =
                                 , onPress = Just <| PlayGear id
                                 }
                             )
+                        , Input.button []
+                            { label = text "Copie"
+                            , onPress = Just <| CopyGear id
+                            }
                         , Input.button []
                             { label = text "x 2"
                             , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer 2 )

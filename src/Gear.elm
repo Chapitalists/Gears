@@ -69,6 +69,18 @@ fromSound s p refId =
     )
 
 
+
+-- TODO Should return a Ref Msg and Doc forward it to Ref ?
+-- Seems weird in doc update to get the ref out of the coll and then reput it instead of updating
+
+
+copy : ( Gear, Ref ) -> ( Gear, Ref )
+copy ( G g, R r ) =
+    ( G { g | pos = add g.pos (vec2 (getLength ( G g, R r ) * 1.1) 0) }
+    , R { r | nRefs = r.nRefs + 1 }
+    )
+
+
 getRefId : Gear -> Id Ref
 getRefId (G g) =
     g.refId
