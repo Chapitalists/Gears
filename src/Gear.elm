@@ -86,6 +86,11 @@ getRefId (G g) =
     g.refId
 
 
+getFract : Gear -> Fraction
+getFract (G g) =
+    g.fract
+
+
 getLength : ( Gear, Ref ) -> Float
 getLength ( G { fract }, R r ) =
     r.unit * Fract.toFloat fract

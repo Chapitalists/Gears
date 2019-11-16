@@ -10,6 +10,7 @@ import Fraction as Fract
 import Gear exposing (Gear, Ref)
 import Interact
 import Json.Encode as E
+import Link exposing (Link)
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Sound exposing (Sound)
 import TypedSvg as S
@@ -24,7 +25,7 @@ port toEngine : E.Value -> Cmd msg
 
 type Doc
     = D
-        { data : UndoList { gears : Coll Gear, refs : Coll Ref }
+        { data : UndoList { gears : Coll Gear, refs : Coll Ref, links : Coll Link }
         , playing : List (Id Gear)
         , futureLink : Maybe ( Id Gear, Vec2 )
         , tool : Tool
@@ -116,7 +117,7 @@ idToStop id data =
 new : Doc
 new =
     D
-        { data = Undo.fresh { gears = Coll.empty, refs = Coll.empty }
+        { data = Undo.fresh { gears = Coll.empty, refs = Coll.empty, links = Coll.empty }
         , playing = []
         , futureLink = Nothing
         , tool = Play
@@ -204,6 +205,9 @@ update msg (D doc) =
                             let
                                 ( newG, upR ) =
                                     Gear.copy ( g, r )
+
+                                ( tmpGears, gearId ) =
+                                    Coll.reserve doc.data.present.gears
                             in
                             ( D
                                 { doc
@@ -211,8 +215,9 @@ update msg (D doc) =
                                         undoNew doc.data
                                             (\d ->
                                                 { d
-                                                    | gears = Coll.insert newG d.gears
+                                                    | gears = Coll.fillReserved gearId newG tmpGears
                                                     , refs = Coll.update (Gear.getRefId g) (always upR) d.refs
+                                                    , links = Coll.insert ( id, gearId ) d.links
                                                 }
                                             )
                                 }
@@ -408,25 +413,12 @@ viewContent (D doc) inter =
                                     Debug.log ("ERROR No ref for " ++ Gear.toUID id) []
 
                                 Just r ->
-                                    let
-                                        l =
-                                            Gear.getLength ( g, r )
-
-                                        linkW =
-                                            l / 30
-
-                                        center =
-                                            Gear.getPos g
-                                    in
-                                    [ S.polyline
-                                        [ SA.points [ tupleFromVec center, tupleFromVec pos ]
-                                        , SA.stroke <| Color.brown
-                                        , SA.strokeWidth <| Num linkW
-                                        , SA.strokeLinecap TypedSvg.Types.StrokeLinecapRound
-                                        ]
-                                        []
+                                    [ Link.drawLink
+                                        ( Gear.getPos g, pos )
+                                        (Gear.getLength ( g, r ) / 30)
                                     ]
            )
+        ++ (List.concatMap (Link.view doc.data.present.gears doc.data.present.refs) <| Coll.values doc.data.present.links)
 
 
 viewDetails : Doc -> List (Element Msg)
@@ -472,11 +464,6 @@ viewDetails (D doc) =
                             }
                         ]
                     ]
-
-
-tupleFromVec : Vec2 -> ( Float, Float )
-tupleFromVec v =
-    ( Vec.getX v, Vec.getY v )
 
 
 undoNew : UndoList model -> (model -> model) -> UndoList model
