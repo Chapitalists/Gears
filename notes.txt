@@ -1,3 +1,6 @@
+elm-live src/Main.elm -s ports.html --hot -v -- --debug --output=elmApp.js
+
+
 problème, si durées fractions les unes des autres, il doit y avoir une référence commune
 Comment la matérialiser ?
 Comment décider si les durées restent liées les unes aux autres ?
