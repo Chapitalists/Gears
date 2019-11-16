@@ -23,8 +23,8 @@ getInteract (S state) =
         ( Just item, Nothing ) ->
             Just ( item, Hover )
 
-        ( _, Just ( item, _ ) ) ->
-            if state.moved then
+        ( _, Just ( item, _, moved ) ) ->
+            if moved then
                 Just ( item, Drag )
 
             else
@@ -37,14 +37,13 @@ getInteract (S state) =
 type State item
     = S
         { hover : Maybe item
-        , click : Maybe ( item, Vec2 )
-        , moved : Bool
+        , click : Maybe ( item, Vec2, Bool ) -- moved
         }
 
 
 init : State item
 init =
-    S { hover = Nothing, click = Nothing, moved = False }
+    S { hover = Nothing, click = Nothing }
 
 
 type Msg item
@@ -61,51 +60,55 @@ type Event item
     = NoEvent
     | Clicked item
     | Dragged item Vec2 Vec2 -- old new
-    | DragEnded
-    | DragCanceled
+    | DragEnded item Bool -- True for Up, False for Abort
 
 
 update : Msg item -> State item -> ( State item, Event item )
 update msg (S state) =
     case msg of
         HoverIn id ->
-            ( S { state | hover = Just id }, NoEvent )
+            Debug.log "hover" ( S { state | hover = Just id }, NoEvent )
 
         HoverOut ->
-            ( S { state | hover = Nothing }, NoEvent )
+            Debug.log "hover" ( S { state | hover = Nothing }, NoEvent )
 
         StartClick id pos ->
-            ( S { state | click = Just ( id, pos ), moved = False }, NoEvent )
+            ( S { state | click = Just ( id, pos, False ) }, NoEvent )
 
         ClickMove pos ->
             case state.click of
-                Just ( item, oldPos ) ->
-                    ( S { state | click = Just ( item, pos ), moved = True }, Dragged item oldPos pos )
+                Just ( item, oldPos, moved ) ->
+                    ( S { state | click = Just ( item, pos, True ) }, Dragged item oldPos pos )
 
                 _ ->
                     Debug.log "IMPOSSIBLE ClickMove without state.pos or state.click" ( S state, NoEvent )
 
         EndClick ->
             ( S { state | click = Nothing }
-            , if state.moved then
-                DragEnded
+            , case state.click of
+                Just ( item, oldPos, moved ) ->
+                    if moved then
+                        DragEnded item True
 
-              else
-                case state.click of
-                    Just ( item, _ ) ->
+                    else
                         Clicked item
 
-                    _ ->
-                        Debug.log "IMPOSSIBLE EndClick without state.click" NoEvent
+                _ ->
+                    Debug.log "IMPOSSIBLE EndClick without state.click" NoEvent
             )
 
         AbortClick ->
             ( S { state | click = Nothing }
-            , if state.moved then
-                DragCanceled
+            , case state.click of
+                Just ( item, oldPos, moved ) ->
+                    if moved then
+                        DragEnded item False
 
-              else
-                NoEvent
+                    else
+                        NoEvent
+
+                _ ->
+                    Debug.log "IMPOSSIBLE AbortClick without state.click" NoEvent
             )
 
         NOOP ->

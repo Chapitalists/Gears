@@ -309,12 +309,13 @@ update msg (D doc) =
                         _ ->
                             ( D doc, Cmd.none )
 
-                ( Link, Interact.DragCanceled ) ->
-                    ( D { doc | futureLink = Nothing }, Cmd.none )
+                ( Link, Interact.DragEnded uid valid ) ->
+                    if valid then
+                        --TODO
+                        ( D { doc | futureLink = Nothing }, Cmd.none )
 
-                --TODO
-                ( Link, Interact.DragEnded ) ->
-                    ( D { doc | futureLink = Nothing }, Cmd.none )
+                    else
+                        ( D { doc | futureLink = Nothing }, Cmd.none )
 
                 ( _, Interact.Dragged uid oldPos newPos ) ->
                     case interactableFromUID uid of
