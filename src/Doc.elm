@@ -1,11 +1,11 @@
-port module Doc exposing (..)
+module Doc exposing (..)
 
 import Coll exposing (Coll, Id)
-import Color
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
+import Engine
 import Fraction as Fract
 import Gear exposing (Gear, Ref)
 import Interact
@@ -13,18 +13,12 @@ import Json.Encode as E
 import Link exposing (Link)
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Sound exposing (Sound)
-import TypedSvg as S
-import TypedSvg.Attributes as SA
 import TypedSvg.Core exposing (Svg)
-import TypedSvg.Types exposing (Length(..), Transform(..))
 import UndoList as Undo exposing (UndoList)
 
 
 
 -- TODO Engine Module
-
-
-port toEngine : E.Value -> Cmd msg
 
 
 type Doc
@@ -55,34 +49,6 @@ type Interactable
 
 type HasDetails
     = DGear (Id Gear)
-
-
-type Playable
-    = PGear (Id Gear)
-
-
-type EngineAction
-    = PlayPause
-    | StopReset
-
-
-actionToString a =
-    case a of
-        PlayPause ->
-            "playPause"
-
-        StopReset ->
-            "stopReset"
-
-
-engineEncoder : { action : EngineAction, playable : Playable, mobile : Mobile } -> E.Value
-engineEncoder { action, playable, mobile } =
-    case playable of
-        PGear id ->
-            E.object
-                [ ( "action", E.string <| actionToString action )
-                , ( "item", Gear.encoder id mobile.gears )
-                ]
 
 
 new : Doc
@@ -137,6 +103,7 @@ addNewGear sound (D doc) =
 
 type Msg
     = ChangedTool Tool
+    | PlayMobile
     | PlayGear (Id Gear)
     | StopGear (Id Gear)
     | CopyGear (Id Gear)
@@ -153,24 +120,17 @@ update msg (D doc) =
         ChangedTool tool ->
             ( D { doc | tool = tool }, Cmd.none )
 
+        PlayMobile ->
+            ( D doc, Engine.playPause doc.data.present.motor doc.data.present.gears )
+
         PlayGear id ->
             ( D { doc | playing = id :: doc.playing }
-            , toEngine <|
-                engineEncoder
-                    { action = PlayPause
-                    , playable = PGear id
-                    , mobile = doc.data.present
-                    }
+            , Cmd.none
             )
 
         StopGear id ->
             ( D { doc | playing = List.filter (\el -> el /= id) doc.playing }
-            , toEngine <|
-                engineEncoder
-                    { action = StopReset
-                    , playable = PGear id
-                    , mobile = doc.data.present
-                    }
+            , Cmd.none
             )
 
         CopyGear id ->
@@ -318,6 +278,10 @@ viewTools (D doc) =
                 ]
             , selected = Just doc.tool
             , label = Input.labelHidden "Outils"
+            }
+        , Input.button [ centerX ]
+            { label = text "Jouer"
+            , onPress = Just PlayMobile
             }
         , Input.button [ alignRight ]
             { label = text "Undo"

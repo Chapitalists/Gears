@@ -23,10 +23,37 @@ type Gear
     = G
         { ref : Ref
         , fract : Fraction
+
+        -- TODO better be a Set than a List, either deOpacify Id or add Set in Coll lib
+        , motors : List (Id Gear)
         , pos : Vec2
         , startPercent : Float
         , sound : Sound
         }
+
+
+getMotors : Gear -> List (Id Gear)
+getMotors (G g) =
+    g.motors
+
+
+addMotorLink : Link -> Coll Gear -> Coll Gear
+addMotorLink l coll =
+    let
+        getGear id =
+            Coll.get id coll
+
+        addMotor id (G g) =
+            G { g | motors = id :: g.motors }
+    in
+    case Tuple.mapBoth getGear getGear l of
+        ( Just _, Just _ ) ->
+            coll
+                |> Coll.update (Tuple.first l) (addMotor <| Tuple.second l)
+                |> Coll.update (Tuple.second l) (addMotor <| Tuple.first l)
+
+        _ ->
+            debugGear (Tuple.first l) "Didn’t found gears to add Motor" coll
 
 
 type Ref
@@ -34,7 +61,7 @@ type Ref
     | Self
         { unit : Float
 
-        -- TODO better be a Set than a List, either deOpacify Id of add Set in Coll lib
+        -- TODO better be a Set than a List, either deOpacify Id or add Set in Coll lib
         , group : List (Id Gear)
         , links : List Link
         }
@@ -135,6 +162,7 @@ fromSound s p =
     G
         { ref = newSelfRef <| Sound.length s
         , fract = Fract.integer 1
+        , motors = []
         , pos = p
         , startPercent = 0
         , sound = s
