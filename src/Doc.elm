@@ -49,6 +49,7 @@ type Tool
 
 type Interactable
     = IGear (Id Gear)
+    | IResizeHandle (Id Gear) Bool
     | INothing
 
 
@@ -103,7 +104,16 @@ interactableFromUID uid =
                 IGear (Coll.forgeId int)
 
             else
-                Debug.log ("ERROR Unrecognized UID type " ++ stringType) INothing
+                case String.split "." stringType of
+                    "resize" :: dir :: strType :: _ ->
+                        if strType == Gear.stringType then
+                            IResizeHandle (Coll.forgeId int) (dir == "right")
+
+                        else
+                            Debug.log ("ERROR Unrecognized UID resize type " ++ strType) INothing
+
+                    _ ->
+                        Debug.log ("ERROR Unrecognized UID type " ++ stringType) INothing
 
         _ ->
             Debug.log ("ERROR Unrecognized UID " ++ uid) INothing
@@ -259,6 +269,35 @@ update msg (D doc) =
                     case interactableFromUID uid of
                         IGear id ->
                             update (GearMsg <| ( id, Gear.Move <| Vec.sub newPos oldPos )) <| D doc
+
+                        IResizeHandle id add ->
+                            case Coll.get id doc.data.present.gears of
+                                Nothing ->
+                                    Gear.debugGear id "No gear to resize" ( D doc, Cmd.none )
+
+                                Just g ->
+                                    let
+                                        d =
+                                            Vec.getX newPos - Vec.getX oldPos
+
+                                        dd =
+                                            if add then
+                                                d
+
+                                            else
+                                                -d
+
+                                        l =
+                                            d + Gear.getLength g doc.data.present.gears
+                                    in
+                                    ( D
+                                        { doc
+                                            | data =
+                                                undoNew doc.data
+                                                    (\m -> { m | gears = Gear.resizeFree id l m.gears })
+                                        }
+                                    , Cmd.none
+                                    )
 
                         _ ->
                             ( D doc, Cmd.none )

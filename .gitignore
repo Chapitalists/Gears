@@ -18,5 +18,5 @@ repl-temp-*
 
 # node stuff
 package.json
-package-rlxs.json
+package-lock.json
 node_modules

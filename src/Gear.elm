@@ -238,6 +238,7 @@ type Mod
     | Hovered
     | Clicked
     | Dragged
+    | Resizable
 
 
 type Msg
@@ -306,4 +307,42 @@ view ( id, G g ) coll mod =
                 ]
                 []
             ]
-        ]
+         ]
+            ++ (if mod == Resizable then
+                    [ S.polyline
+                        [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
+                        , SA.stroke Color.red
+                        , SA.strokeWidth <| Num tickW
+                        ]
+                        []
+                    , S.circle
+                        ([ SA.cx <| Num (-length / 2)
+                         , SA.cy <| Num 0
+                         , SA.r <| Num (tickW * 2)
+                         ]
+                            ++ (List.map (Html.Attributes.map InteractMsg) <|
+                                    Interact.draggableEvents ("resize.left." ++ toUID id)
+                               )
+                        )
+                        []
+                    , S.circle
+                        ([ SA.cx <| Num (length / 2)
+                         , SA.cy <| Num 0
+                         , SA.r <| Num (tickW * 2)
+                         ]
+                            ++ (List.map (Html.Attributes.map InteractMsg) <|
+                                    Interact.draggableEvents ("resize.right." ++ toUID id)
+                               )
+                        )
+                        []
+                    ]
+
+                else
+                    []
+               )
+        )
+
+
+debugGear : Id Gear -> String -> default -> default
+debugGear id str =
+    Debug.log (str ++ " " ++ toUID id)
