@@ -15,6 +15,10 @@ import TypedSvg.Core exposing (..)
 import TypedSvg.Types exposing (Length(..), Transform(..))
 
 
+
+--TODO Could be a type alias ?
+
+
 type Gear
     = G
         { refId : Id Ref
