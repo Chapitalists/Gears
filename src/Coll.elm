@@ -1,4 +1,4 @@
-module Coll exposing (Coll, Id, empty, fillReserved, filter, forgeId, get, idToString, insert, remove, reserve, toList, update, values)
+module Coll exposing (Coll, Id, empty, fillReserved, filter, forgeId, get, idToString, insert, insertTellId, remove, reserve, startId, toList, update, values)
 
 import Dict exposing (Dict)
 
@@ -41,6 +41,13 @@ empty =
     C { nextId = 1, d = Dict.empty }
 
 
+startId : Id item
+startId =
+    case empty of
+        C c ->
+            opacifyId c.nextId
+
+
 get : Id item -> Coll item -> Maybe item
 get id (C coll) =
     Dict.get (getIdInternal id) coll.d
@@ -49,6 +56,11 @@ get id (C coll) =
 insert : item -> Coll item -> Coll item
 insert el (C coll) =
     C { coll | d = Dict.insert coll.nextId el coll.d, nextId = coll.nextId + 1 }
+
+
+insertTellId : item -> Coll item -> ( Id item, Coll item )
+insertTellId el (C coll) =
+    ( opacifyId coll.nextId, C { coll | d = Dict.insert coll.nextId el coll.d, nextId = coll.nextId + 1 } )
 
 
 remove : Id item -> Coll item -> Coll item
