@@ -15,3 +15,8 @@ elm-stuff
 
 # elm-repl generated files
 repl-temp-*
+
+# node stuff
+package.json
+package-rlxs.json
+node_modules
