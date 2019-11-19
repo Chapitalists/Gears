@@ -150,7 +150,11 @@ copy id coll =
         Just (G g) ->
             let
                 newG =
-                    G { g | pos = add g.pos (vec2 (getLength (G g) coll * 1.1) 0) }
+                    G
+                        { g
+                            | pos = add g.pos (vec2 (getLength (G g) coll * 1.1) 0)
+                            , ref = Other id
+                        }
 
                 ( newId, newColl ) =
                     Coll.insertTellId newG coll
@@ -167,17 +171,14 @@ resizeFree id length coll =
         Just (G g) ->
             case g.ref of
                 Self r ->
-                    Coll.update id (\(G gg) -> G { gg | ref = Self { r | unit = length } }) coll
+                    Coll.update id
+                        (\(G gg) -> G { gg | ref = Self { r | unit = length / Fract.toFloat g.fract } })
+                        coll
 
                 Other rId ->
-                    case Coll.get rId coll of
-                        Nothing ->
-                            debugGear rId "Didn’t found ref" coll
-
-                        Just (G rg) ->
-                            coll
-                                |> Coll.update id (\(G gg) -> G { gg | ref = newSelfRef length })
-                                |> Coll.update rId (removeFromRefGroup id)
+                    coll
+                        |> Coll.update id (\(G gg) -> G { gg | ref = newSelfRef length, fract = Fract.unit 1 })
+                        |> Coll.update rId (removeFromRefGroup id)
 
 
 getFract : Gear -> Fraction

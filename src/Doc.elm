@@ -288,7 +288,7 @@ update msg (D doc) =
                                                 -d
 
                                         l =
-                                            d + Gear.getLength g doc.data.present.gears
+                                            abs <| dd * 2 + Gear.getLength g doc.data.present.gears
                                     in
                                     ( D
                                         { doc
