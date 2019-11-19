@@ -146,15 +146,11 @@ dragSpaceEvents (S { click }) =
             [ Mouse.onMove <| ClickMove << vecFromTuple << .offsetPos ]
 
 
-hoverEvents : Bool -> item -> List (Html.Attribute (Msg item))
-hoverEvents hover id =
-    [ Mouse.onEnter <| always <| HoverIn id ]
-        ++ (if hover then
-                [ Mouse.onLeave <| always HoverOut ]
-
-            else
-                []
-           )
+hoverEvents : item -> List (Html.Attribute (Msg item))
+hoverEvents id =
+    [ Mouse.onEnter <| always <| HoverIn id
+    , Mouse.onLeave <| always HoverOut
+    ]
 
 
 draggableEvents : item -> List (Html.Attribute (Msg item))
