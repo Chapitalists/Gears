@@ -1,6 +1,6 @@
 module Gear exposing (..)
 
-import Coll exposing (Id)
+import Coll exposing (Coll, Id)
 import Color
 import Fraction as Fract exposing (Fraction)
 import Html.Attributes
@@ -21,7 +21,7 @@ import TypedSvg.Types exposing (Length(..), Transform(..))
 
 type Gear
     = G
-        { refId : Id Ref
+        { ref : Ref
         , fract : Fraction
         , pos : Vec2
         , startPercent : Float
@@ -30,24 +30,94 @@ type Gear
 
 
 type Ref
-    = R
+    = Other (Id Gear)
+    | Self
         { unit : Float
-        , nRefs : Int
+
+        -- TODO better be a Set than a List, either deOpacify Id of add Set in Coll lib
+        , group : List (Id Gear)
+        , links : List Link
         }
 
 
-decRefWhenDeleteGear : Ref -> Ref
-decRefWhenDeleteGear (R r) =
-    R { r | nRefs = r.nRefs - 1 }
+type alias Link =
+    ( Id Gear, Id Gear )
 
 
-isUsed : Ref -> Bool
-isUsed (R r) =
-    r.nRefs /= 0
+newSelfRef length =
+    Self { unit = length, group = [], links = [] }
 
 
-defaultRef =
-    R { unit = 1, nRefs = 0 }
+isMother : Gear -> Bool
+isMother (G g) =
+    case g.ref of
+        Self _ ->
+            True
+
+        Other _ ->
+            False
+
+
+getMotherId : Gear -> Coll Gear -> Maybe (Id Gear)
+getMotherId (G g) coll =
+    case g.ref of
+        Self _ ->
+            Nothing
+
+        Other id ->
+            Just id
+
+
+addToRefGroup : Id Gear -> Gear -> Gear
+addToRefGroup id (G g) =
+    case g.ref of
+        Other _ ->
+            debugGear id "Can’t add to ref group if not mother" (G g)
+
+        Self r ->
+            G { g | ref = Self { r | group = id :: r.group } }
+
+
+removeFromRefGroup : Id Gear -> Gear -> Gear
+removeFromRefGroup id (G g) =
+    case g.ref of
+        Other _ ->
+            debugGear id "Can’t remove from ref group if not mother" (G g)
+
+        Self r ->
+            let
+                isGoodLink l =
+                    Tuple.first l /= id && Tuple.second l /= id
+            in
+            G
+                { g
+                    | ref =
+                        Self
+                            { r
+                                | group = List.filter ((/=) id) r.group
+                                , links = List.filter isGoodLink r.links
+                            }
+                }
+
+
+addLink : Link -> Gear -> Gear
+addLink l (G g) =
+    case g.ref of
+        Other _ ->
+            Debug.log "Can’t add link if not mother" (G g)
+
+        Self r ->
+            G { g | ref = Self { r | links = l :: r.links } }
+
+
+getGearLinks : Gear -> List Link
+getGearLinks (G g) =
+    case g.ref of
+        Other _ ->
+            []
+
+        Self { links } ->
+            links
 
 
 stringType : String
@@ -60,34 +130,54 @@ toUID id =
     stringType ++ "-" ++ Coll.idToString id
 
 
-fromSound : Sound -> Vec2 -> Id Ref -> ( Gear, Ref )
-fromSound s p refId =
-    ( G
-        { refId = refId
+fromSound : Sound -> Vec2 -> Gear
+fromSound s p =
+    G
+        { ref = newSelfRef <| Sound.length s
         , fract = Fract.integer 1
         , pos = p
         , startPercent = 0
         , sound = s
         }
-    , R { unit = Sound.length s, nRefs = 1 }
-    )
 
 
+copy : Id Gear -> Coll Gear -> Coll Gear
+copy id coll =
+    case Coll.get id coll of
+        Nothing ->
+            debugGear id "No gear to copy" coll
 
--- TODO Should return a Ref Msg and Doc forward it to Ref ?
--- Seems weird in doc update to get the ref out of the coll and then reput it instead of updating
+        Just (G g) ->
+            let
+                newG =
+                    G { g | pos = add g.pos (vec2 (getLength (G g) coll * 1.1) 0) }
+
+                ( newId, newColl ) =
+                    Coll.insertTellId newG coll
+            in
+            Coll.update id (addToRefGroup newId >> addLink ( id, newId )) newColl
 
 
-copy : ( Gear, Ref ) -> ( Gear, Ref )
-copy ( G g, R r ) =
-    ( G { g | pos = add g.pos (vec2 (getLength ( G g, R r ) * 1.1) 0) }
-    , R { r | nRefs = r.nRefs + 1 }
-    )
+resizeFree : Id Gear -> Float -> Coll Gear -> Coll Gear
+resizeFree id length coll =
+    case Coll.get id coll of
+        Nothing ->
+            debugGear id "No gear to resize" coll
 
+        Just (G g) ->
+            case g.ref of
+                Self r ->
+                    Coll.update id (\(G gg) -> G { gg | ref = Self { r | unit = length } }) coll
 
-getRefId : Gear -> Id Ref
-getRefId (G g) =
-    g.refId
+                Other rId ->
+                    case Coll.get rId coll of
+                        Nothing ->
+                            debugGear rId "Didn’t found ref" coll
+
+                        Just (G rg) ->
+                            coll
+                                |> Coll.update id (\(G gg) -> G { gg | ref = newSelfRef length })
+                                |> Coll.update rId (removeFromRefGroup id)
 
 
 getFract : Gear -> Fraction
@@ -95,9 +185,24 @@ getFract (G g) =
     g.fract
 
 
-getLength : ( Gear, Ref ) -> Float
-getLength ( G { fract }, R r ) =
-    r.unit * Fract.toFloat fract
+getLength : Gear -> Coll Gear -> Float
+getLength (G g) coll =
+    case g.ref of
+        Self { unit } ->
+            unit * Fract.toFloat g.fract
+
+        Other id ->
+            case Coll.get id coll of
+                Just (G { ref }) ->
+                    case ref of
+                        Self { unit } ->
+                            unit * Fract.toFloat g.fract
+
+                        Other _ ->
+                            Debug.log "IMPOSSIBLE Ref isn’t a mother" 0
+
+                Nothing ->
+                    Debug.log "IMPOSSIBLE Ref doesn’t exist" 0
 
 
 getPos : Gear -> Vec2
@@ -105,14 +210,27 @@ getPos (G g) =
     g.pos
 
 
-encoder : ( Id Gear, Gear, Ref ) -> E.Value
-encoder ( id, G g, R r ) =
-    E.object
-        [ ( "type", E.string stringType )
-        , ( "id", E.string <| toUID id )
-        , ( "length", E.float <| getLength ( G g, R r ) )
-        , ( "soundName", E.string <| Sound.toString g.sound )
-        ]
+encoder : Id Gear -> Coll Gear -> E.Value
+encoder id coll =
+    case Coll.get id coll of
+        Nothing ->
+            debugGear id "No gear to encode" E.null
+
+        Just (G g) ->
+            let
+                length =
+                    getLength (G g) coll
+            in
+            if length == 0 then
+                debugGear id "Length is 0" E.null
+
+            else
+                E.object
+                    [ ( "type", E.string stringType )
+                    , ( "id", E.string <| toUID id )
+                    , ( "length", E.float length )
+                    , ( "soundName", E.string <| Sound.toString g.sound )
+                    ]
 
 
 type Mod
@@ -142,11 +260,11 @@ type OutMsg
     | GearMsg ( Id Gear, Msg )
 
 
-view : ( Id Gear, Gear, Ref ) -> Mod -> Svg OutMsg
-view ( id, G g, R r ) mod =
+view : ( Id Gear, Gear ) -> Coll Gear -> Mod -> Svg OutMsg
+view ( id, G g ) coll mod =
     let
         length =
-            getLength ( G g, R r )
+            getLength (G g) coll
 
         tickH =
             length / 15
@@ -154,16 +272,20 @@ view ( id, G g, R r ) mod =
         tickW =
             length / 30
     in
-    S.g [ SA.transform [ Translate (getX g.pos) (getY g.pos) ] ]
-        [ S.g [ Html.Attributes.id <| toUID id ]
+    S.g
+        ([ SA.transform [ Translate (getX g.pos) (getY g.pos) ] ]
+            ++ (List.map (Html.Attributes.map InteractMsg) <|
+                    Interact.hoverEvents (toUID id)
+               )
+        )
+        ([ S.g [ Html.Attributes.id <| toUID id ]
             [ S.circle
                 ([ SA.cx <| Num 0
                  , SA.cy <| Num 0
                  , SA.r <| Num (length / 2)
                  ]
                     ++ (List.map (Html.Attributes.map InteractMsg) <|
-                            Interact.hoverEvents (mod == Hovered) (toUID id)
-                                ++ Interact.draggableEvents (toUID id)
+                            Interact.draggableEvents (toUID id)
                        )
                 )
                 []

@@ -29,12 +29,16 @@ port toEngine : E.Value -> Cmd msg
 
 type Doc
     = D
-        { data : UndoList { gears : Coll Gear, refs : Coll Ref, links : Coll Link }
+        { data : UndoList Mobile
         , playing : List (Id Gear)
         , futureLink : Maybe ( Id Gear, Vec2 )
         , tool : Tool
         , details : Maybe (Id Gear)
         }
+
+
+type alias Mobile =
+    { gears : Coll Gear, motor : Id Gear }
 
 
 type Tool
@@ -53,7 +57,7 @@ type HasDetails
 
 
 type Playable
-    = PGear ( Id Gear, Gear, Ref )
+    = PGear (Id Gear)
 
 
 type EngineAction
@@ -70,58 +74,20 @@ actionToString a =
             "stopReset"
 
 
-engineEncoder : { action : EngineAction, playable : Playable } -> E.Value
-engineEncoder { action, playable } =
+engineEncoder : { action : EngineAction, playable : Playable, mobile : Mobile } -> E.Value
+engineEncoder { action, playable, mobile } =
     case playable of
-        PGear tuple ->
+        PGear id ->
             E.object
                 [ ( "action", E.string <| actionToString action )
-                , ( "item", Gear.encoder tuple )
+                , ( "item", Gear.encoder id mobile.gears )
                 ]
-
-
-idToPlay id data =
-    case Coll.get id data.gears of
-        Nothing ->
-            Debug.log
-                ("IMPOSSIBLE No gear to play for id " ++ Gear.toUID id)
-                Cmd.none
-
-        Just g ->
-            case Coll.get (Gear.getRefId g) data.refs of
-                Nothing ->
-                    Debug.log ("ERROR No Ref for gear " ++ Gear.toUID id) Cmd.none
-
-                Just r ->
-                    toEngine <|
-                        engineEncoder { playable = PGear ( id, g, r ), action = PlayPause }
-
-
-
--- TODO Don’t really need anything else than id to stop
-
-
-idToStop id data =
-    case Coll.get id data.gears of
-        Nothing ->
-            Debug.log
-                ("IMPOSSIBLE No gear to play for id " ++ Gear.toUID id)
-                Cmd.none
-
-        Just g ->
-            case Coll.get (Gear.getRefId g) data.refs of
-                Nothing ->
-                    Debug.log ("ERROR No Ref for gear " ++ Gear.toUID id) Cmd.none
-
-                Just r ->
-                    toEngine <|
-                        engineEncoder { playable = PGear ( id, g, r ), action = StopReset }
 
 
 new : Doc
 new =
     D
-        { data = Undo.fresh { gears = Coll.empty, refs = Coll.empty, links = Coll.empty }
+        { data = Undo.fresh { gears = Coll.empty, motor = Coll.startId }
         , playing = []
         , futureLink = Nothing
         , tool = Play
@@ -148,22 +114,12 @@ addNewGear sound (D doc) =
     let
         pos =
             vec2 50 50
-
-        ( tmpRefs, refId ) =
-            Coll.reserve doc.data.present.refs
-
-        ( g, r ) =
-            Gear.fromSound sound pos refId
     in
     ( D
         { doc
             | data =
                 undoNew doc.data <|
-                    \d ->
-                        { d
-                            | gears = Coll.insert g d.gears
-                            , refs = Coll.fillReserved refId r tmpRefs
-                        }
+                    \m -> { m | gears = Coll.insert (Gear.fromSound sound pos) m.gears }
         }
     , pos
     )
@@ -188,45 +144,27 @@ update msg (D doc) =
             ( D { doc | tool = tool }, Cmd.none )
 
         PlayGear id ->
-            ( D { doc | playing = id :: doc.playing }, idToPlay id doc.data.present )
+            ( D { doc | playing = id :: doc.playing }
+            , toEngine <|
+                engineEncoder
+                    { action = PlayPause
+                    , playable = PGear id
+                    , mobile = doc.data.present
+                    }
+            )
 
         StopGear id ->
             ( D { doc | playing = List.filter (\el -> el /= id) doc.playing }
-            , idToStop id doc.data.present
+            , toEngine <|
+                engineEncoder
+                    { action = StopReset
+                    , playable = PGear id
+                    , mobile = doc.data.present
+                    }
             )
 
         CopyGear id ->
-            case Coll.get id doc.data.present.gears of
-                Nothing ->
-                    Debug.log ("IMPOSSIBLE No gear to copy " ++ Gear.toUID id) ( D doc, Cmd.none )
-
-                Just g ->
-                    case Coll.get (Gear.getRefId g) doc.data.present.refs of
-                        Nothing ->
-                            Debug.log ("IMPOSSIBLE No ref to copy gear " ++ Gear.toUID id) ( D doc, Cmd.none )
-
-                        Just r ->
-                            let
-                                ( newG, upR ) =
-                                    Gear.copy ( g, r )
-
-                                ( tmpGears, gearId ) =
-                                    Coll.reserve doc.data.present.gears
-                            in
-                            ( D
-                                { doc
-                                    | data =
-                                        undoNew doc.data
-                                            (\d ->
-                                                { d
-                                                    | gears = Coll.fillReserved gearId newG tmpGears
-                                                    , refs = Coll.update (Gear.getRefId g) (always upR) d.refs
-                                                    , links = Coll.insert ( id, gearId ) d.links
-                                                }
-                                            )
-                                }
-                            , Cmd.none
-                            )
+            ( D { doc | data = undoNew doc.data (\m -> { m | gears = Gear.copy id m.gears }) }, Cmd.none )
 
         DeleteGear id ->
             case Coll.get id doc.data.present.gears of
@@ -234,35 +172,40 @@ update msg (D doc) =
                     ( D doc, Cmd.none )
 
                 Just g ->
-                    let
-                        details =
-                            case doc.details of
-                                Nothing ->
-                                    Nothing
+                    case Gear.getMotherId g doc.data.present.gears of
+                        Nothing ->
+                            Debug.log "TODO delete mother" ( D doc, Cmd.none )
 
-                                Just d ->
-                                    if d == id then
-                                        Nothing
+                        Just motherId ->
+                            let
+                                details =
+                                    case doc.details of
+                                        Nothing ->
+                                            Nothing
 
-                                    else
-                                        doc.details
-                    in
-                    ( D
-                        { doc
-                            | data =
-                                undoNew doc.data <|
-                                    \d ->
-                                        { d
-                                            | gears = Coll.remove id d.gears
-                                            , refs =
-                                                Coll.filter Gear.isUsed <|
-                                                    Coll.update (Gear.getRefId g) Gear.decRefWhenDeleteGear d.refs
-                                        }
-                            , playing = List.filter (\el -> el /= id) doc.playing
-                            , details = details
-                        }
-                    , Cmd.none
-                    )
+                                        Just d ->
+                                            if d == id then
+                                                Nothing
+
+                                            else
+                                                doc.details
+                            in
+                            ( D
+                                { doc
+                                    | data =
+                                        undoNew doc.data <|
+                                            \d ->
+                                                { d
+                                                    | gears =
+                                                        d.gears
+                                                            |> Coll.update motherId (Gear.removeFromRefGroup id)
+                                                            |> Coll.remove id
+                                                }
+                                    , playing = List.filter (\el -> el /= id) doc.playing
+                                    , details = details
+                                }
+                            , Cmd.none
+                            )
 
         Undo ->
             ( D { doc | data = Undo.undo doc.data }, Cmd.none )
@@ -271,28 +214,19 @@ update msg (D doc) =
             ( D { doc | data = Undo.redo doc.data }, Cmd.none )
 
         GearMsg ( id, subMsg ) ->
-            ( D
-                { doc
-                    | data = undoNew doc.data <| \d -> { d | gears = Coll.update id (Gear.update subMsg) d.gears }
-                    , playing = List.filter (\el -> el /= id) doc.playing
-                }
-            , idToStop id doc.data.present
-            )
+            update (StopGear id)
+                (D
+                    { doc
+                        | data = undoNew doc.data <| \d -> { d | gears = Coll.update id (Gear.update subMsg) d.gears }
+                    }
+                )
 
         InteractEvent event ->
             case ( doc.tool, event ) of
                 ( Play, Interact.Clicked uid ) ->
                     case interactableFromUID uid of
                         IGear id ->
-                            let
-                                playing =
-                                    if List.member id doc.playing then
-                                        doc.playing
-
-                                    else
-                                        id :: doc.playing
-                            in
-                            ( D { doc | playing = playing }, idToPlay id doc.data.present )
+                            update (PlayGear id) (D doc)
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -381,26 +315,20 @@ viewContent (D doc) inter =
                         Gear.None
 
                     else
-                        case mode of
-                            Interact.Hover ->
+                        case ( doc.tool, mode ) of
+                            ( Edit, Interact.Hover ) ->
+                                Gear.Resizable
+
+                            ( _, Interact.Hover ) ->
                                 Gear.Hovered
 
-                            Interact.Click ->
+                            ( _, Interact.Click ) ->
                                 Gear.Clicked
 
-                            Interact.Drag ->
+                            ( _, Interact.Drag ) ->
                                 Gear.Dragged
-
-        getRef : Gear -> Coll Ref -> Ref
-        getRef g refs =
-            case Coll.get (Gear.getRefId g) refs of
-                Nothing ->
-                    Debug.log "ERROR No ref found in view" Gear.defaultRef
-
-                Just r ->
-                    r
     in
-    (List.map (\( id, g ) -> Gear.view ( id, g, getRef g doc.data.present.refs ) (getMod inter id)) <|
+    (List.map (\( id, g ) -> Gear.view ( id, g ) doc.data.present.gears (getMod inter id)) <|
         Coll.toList doc.data.present.gears
     )
         ++ (case doc.futureLink of
@@ -413,17 +341,15 @@ viewContent (D doc) inter =
                             Debug.log ("IMPOSSIBLE future link didn’t found gear " ++ Gear.toUID id) []
 
                         Just g ->
-                            case Coll.get (Gear.getRefId g) doc.data.present.refs of
-                                Nothing ->
-                                    Debug.log ("ERROR No ref for " ++ Gear.toUID id) []
-
-                                Just r ->
-                                    [ Link.drawLink
-                                        ( Gear.getPos g, pos )
-                                        (Gear.getLength ( g, r ) / 30)
-                                    ]
+                            [ Link.drawLink
+                                ( Gear.getPos g, pos )
+                                (Gear.getLength g doc.data.present.gears)
+                            ]
            )
-        ++ (List.concatMap (Link.view doc.data.present.gears doc.data.present.refs) <| Coll.values doc.data.present.links)
+        ++ (List.concatMap (Link.view doc.data.present.gears) <|
+                List.concatMap Gear.getGearLinks <|
+                    Coll.values doc.data.present.gears
+           )
 
 
 viewDetails : Doc -> List (Element Msg)

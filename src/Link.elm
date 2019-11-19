@@ -15,59 +15,35 @@ type alias Link =
     ( Id Gear, Id Gear )
 
 
-view : Coll Gear -> Coll Ref -> Link -> List (Svg msg)
-view gears refs l =
+view : Coll Gear -> Link -> List (Svg msg)
+view gears l =
     let
         getGear id =
             Coll.get id gears
-
-        getRef id =
-            Coll.get id refs
     in
     case Tuple.mapBoth getGear getGear l of
         ( Just g, Just gg ) ->
-            let
-                r =
-                    Gear.getRefId g
-
-                rr =
-                    Gear.getRefId gg
-            in
-            if r == rr then
-                case getRef r of
-                    Just ref ->
-                        drawRefLink ( g, gg, ref )
-
-                    Nothing ->
-                        Debug.log "Not found common ref to draw link" []
-
-            else
-                case ( getRef r, getRef rr ) of
-                    ( Just ref, Just rref ) ->
-                        [ drawLink ( Gear.getPos g, Gear.getPos gg ) <|
-                            min (Gear.getLength ( g, ref )) (Gear.getLength ( gg, rref ))
-                        ]
-
-                    _ ->
-                        Debug.log "Miss one ref to draw link" []
+            [ drawLink ( Gear.getPos g, Gear.getPos gg ) <|
+                max (Gear.getLength g gears) (Gear.getLength gg gears)
+            ]
 
         _ ->
             Debug.log "Didn’t found both gears to draw link" []
 
 
 drawLink : ( Vec2, Vec2 ) -> Float -> Svg msg
-drawLink ( p1, p2 ) w =
+drawLink ( p1, p2 ) gearL =
     S.polyline
         [ SA.points [ tupleFromVec p1, tupleFromVec p2 ]
         , SA.stroke <| Color.brown
-        , SA.strokeWidth <| Num w
+        , SA.strokeWidth <| Num (gearL / 30)
         , SA.strokeLinecap TypedSvg.Types.StrokeLinecapRound
         ]
         []
 
 
-drawRefLink : ( Gear, Gear, Ref ) -> List (Svg msg)
-drawRefLink ( g, gg, ref ) =
+drawRefLink : ( Gear, Gear ) -> Coll Gear -> List (Svg msg)
+drawRefLink ( g, gg ) coll =
     let
         ( minG, maxG ) =
             if (Fract.toFloat <| Gear.getFract g) < (Fract.toFloat <| Gear.getFract gg) then
@@ -83,7 +59,7 @@ drawRefLink ( g, gg, ref ) =
             Vec.direction (Tuple.second centers) (Tuple.first centers)
 
         r =
-            Gear.getLength ( minG, ref ) / 2
+            Gear.getLength minG coll / 2
 
         w =
             r / 15
