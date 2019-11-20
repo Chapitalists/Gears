@@ -29,6 +29,7 @@ type Gear
         , pos : Vec2
         , startPercent : Float
         , sound : Sound
+        , mute : Bool
         }
 
 
@@ -166,7 +167,18 @@ fromSound s p =
         , pos = p
         , startPercent = 0
         , sound = s
+        , mute = False
         }
+
+
+getMute : Gear -> Bool
+getMute (G g) =
+    g.mute
+
+
+setMute : Bool -> Gear -> Gear
+setMute mute (G g) =
+    G { g | mute = mute }
 
 
 copy : Id Gear -> Coll Gear -> Coll Gear
@@ -255,10 +267,10 @@ encoder id coll =
 
             else
                 E.object
-                    [ ( "type", E.string stringType )
-                    , ( "id", E.string <| toUID id )
+                    [ ( "id", E.string <| toUID id )
                     , ( "length", E.float length )
                     , ( "soundName", E.string <| Sound.toString g.sound )
+                    , ( "mute", E.bool g.mute )
                     ]
 
 

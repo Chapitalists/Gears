@@ -35,8 +35,17 @@ function loadErr(err, soundName) {
 }
 
 function engine(o) {
-  if (o.action == "stopReset") o.gears.map(stop)
-  else o.gears.map(playPause)
+  switch ( o.action ) {
+    case "stopReset" :
+        for ( id in playing) stop(id)
+        break;
+    case "playPause" :
+        o.gears.map(playPause)
+        break;
+    case "mute" :
+        mute(o.gearId, o.value)
+        break;
+    }
 }
 
 function playPause(model) {
@@ -54,6 +63,7 @@ function play(id) {
     model.paused = false
     g.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).loop()
     s.loop = true
+    s.mute = model.mute
     s.playbackRate = model.rate = s.buffer.duration / model.length
     s.start()
     model.startTime = Tone.context.now()
@@ -81,4 +91,11 @@ function stop(id) {
     model.gear.animate().play().finish()
     model.player.stop()
     playing[id] = null
+}
+
+function mute(id, mute) {
+    let model = playing[id]
+    if (!model) return;
+    model.mute = mute
+    model.player.mute = mute
 }

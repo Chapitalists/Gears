@@ -5,11 +5,10 @@ import Element exposing (..)
 import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
-import Engine
+import Engine exposing (Engine)
 import Fraction as Fract
 import Gear exposing (Gear, Ref)
 import Interact
-import Json.Encode as E
 import Link exposing (Link)
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Sound exposing (Sound)
@@ -27,6 +26,7 @@ type Doc
         , playing : List (Id Gear)
         , futureLink : Maybe ( Id Gear, Vec2 )
         , tool : Tool
+        , engine : Engine
         , details : Maybe (Id Gear)
         }
 
@@ -58,6 +58,7 @@ new =
         , playing = []
         , futureLink = Nothing
         , tool = Play
+        , engine = Engine.init
         , details = Nothing
         }
 
@@ -103,7 +104,7 @@ addNewGear sound (D doc) =
 
 type Msg
     = ChangedTool Tool
-    | PlayMobile
+    | ToggleEngine
     | PlayGear (Id Gear)
     | StopGear (Id Gear)
     | CopyGear (Id Gear)
@@ -120,8 +121,12 @@ update msg (D doc) =
         ChangedTool tool ->
             ( D { doc | tool = tool }, Cmd.none )
 
-        PlayMobile ->
-            ( D doc, Engine.playPause doc.data.present.motor doc.data.present.gears )
+        ToggleEngine ->
+            let
+                ( newEngine, cmd ) =
+                    Engine.toggle doc.data.present doc.engine
+            in
+            ( D { doc | engine = newEngine }, cmd )
 
         PlayGear id ->
             ( D { doc | playing = id :: doc.playing }
@@ -196,7 +201,11 @@ update msg (D doc) =
                 ( Play, Interact.Clicked uid ) ->
                     case interactableFromUID uid of
                         IGear id ->
-                            update (PlayGear id) (D doc)
+                            let
+                                ( newGears, cmd ) =
+                                    Engine.mute id doc.data.present.gears doc.engine
+                            in
+                            ( D { doc | data = undoNew doc.data (\m -> { m | gears = newGears }) }, cmd )
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -279,10 +288,6 @@ viewTools (D doc) =
             , selected = Just doc.tool
             , label = Input.labelHidden "Outils"
             }
-        , Input.button [ centerX ]
-            { label = text "Jouer"
-            , onPress = Just PlayMobile
-            }
         , Input.button [ alignRight ]
             { label = text "Undo"
             , onPress =
@@ -302,6 +307,25 @@ viewTools (D doc) =
                     Nothing
             }
         ]
+
+
+viewExtraTools (D doc) =
+    row [ width fill, padding 20 ]
+        (if doc.tool == Play then
+            [ Input.button [ centerX ]
+                { label =
+                    if Engine.isPlaying doc.engine then
+                        text "Stop"
+
+                    else
+                        text "Jouer"
+                , onPress = Just ToggleEngine
+                }
+            ]
+
+         else
+            []
+        )
 
 
 viewContent : Doc -> Interact.Interact String -> List (Svg Gear.OutMsg)

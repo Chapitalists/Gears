@@ -297,6 +297,8 @@ viewDoc model =
                     (Doc.viewContent model.doc (Interact.getInteract model.interact)
                         |> List.map (SS.map forwardGearOutMsg)
                     )
+        , Doc.viewExtraTools model.doc
+            |> Element.map DocMsg
         ]
 
 
