@@ -119,7 +119,27 @@ update : Msg -> Doc -> ( Doc, Cmd msg )
 update msg (D doc) =
     case msg of
         ChangedTool tool ->
-            ( D { doc | tool = tool }, Cmd.none )
+            let
+                ( newEngine, cmd ) =
+                    if Engine.isPlaying doc.engine then
+                        Engine.toggle doc.data.present doc.engine
+
+                    else
+                        ( doc.engine, Cmd.none )
+            in
+            ( D
+                { doc
+                    | tool = tool
+                    , futureLink =
+                        if tool == Edit then
+                            Nothing
+
+                        else
+                            doc.futureLink
+                    , engine = newEngine
+                }
+            , cmd
+            )
 
         ToggleEngine ->
             let
