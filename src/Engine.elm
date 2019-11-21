@@ -95,25 +95,16 @@ stop =
 
 visitMotors : Coll Gear -> Id Gear -> List (Id Gear) -> List (Id Gear)
 visitMotors gears motorId visited =
-    case Coll.get motorId gears of
-        Nothing ->
-            Gear.debugGear motorId "Gear not found to play" []
+    if List.member motorId visited then
+        visited
 
-        Just g ->
-            if List.isEmpty <| getMotors g then
-                [ motorId ]
+    else
+        case Coll.get motorId gears of
+            Nothing ->
+                Gear.debugGear motorId "Gear not found to visit motors" visited
 
-            else
-                motorId
-                    :: (List.foldl
-                            (\neighbour acc ->
-                                if List.member neighbour acc then
-                                    acc
-
-                                else
-                                    visitMotors gears neighbour acc
-                            )
-                            visited
-                        <|
-                            getMotors g
-                       )
+            Just g ->
+                getMotors g
+                    |> List.foldl
+                        (\neighbour -> visitMotors gears neighbour)
+                        (motorId :: visited)
