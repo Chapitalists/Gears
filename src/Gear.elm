@@ -4,7 +4,6 @@ import Coll exposing (Coll, Id)
 import Color
 import Fraction as Fract exposing (Fraction)
 import Html.Attributes
-import Html.Events.Extra.Mouse as Mouse
 import Interact
 import Json.Encode as E
 import Math.Vector2 exposing (..)

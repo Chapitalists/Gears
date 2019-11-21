@@ -16,10 +16,6 @@ import TypedSvg.Core exposing (Svg)
 import UndoList as Undo exposing (UndoList)
 
 
-
--- TODO Engine Module
-
-
 type Doc
     = D
         { data : UndoList Mobile

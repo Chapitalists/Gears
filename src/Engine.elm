@@ -9,6 +9,11 @@ import Link exposing (Link)
 port toEngine : E.Value -> Cmd msg
 
 
+
+-- TODO Could store adjacency lists (Gear.motors) in Dict (Id Gear, List (Id Gear))
+-- but as need for Sets with Ids, either deopacify or add this kind of Dict into Coll API
+
+
 type Engine
     = E { playing : List (Id Gear) }
 
