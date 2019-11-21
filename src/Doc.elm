@@ -323,13 +323,14 @@ update msg (D doc) =
                     case ( doc.futureLink, valid ) of
                         ( Just (Complete l), True ) ->
                             let
-                                ( gears, cmd ) =
+                                ( gears, newEngine, cmd ) =
                                     Engine.addMotor l doc.data.present.gears doc.engine
                             in
                             ( D
                                 { doc
                                     | futureLink = Nothing
                                     , data = undoNew doc.data (\m -> { m | gears = gears })
+                                    , engine = newEngine
                                 }
                             , cmd
                             )
