@@ -1,4 +1,4 @@
-module Coll exposing (Coll, Id, empty, fillReserved, filter, forgeId, get, idToString, insert, insertTellId, remove, reserve, startId, toList, update, values)
+module Coll exposing (Coll, Id, empty, fillReserved, filter, forgeId, get, idToString, ids, insert, insertTellId, remove, reserve, startId, toList, update, values)
 
 import Dict exposing (Dict)
 
@@ -92,6 +92,11 @@ toList : Coll item -> List ( Id item, item )
 toList (C { d }) =
     Dict.toList d
         |> List.map (Tuple.mapFirst opacifyId)
+
+
+ids : Coll item -> List (Id item)
+ids (C { d }) =
+    List.map opacifyId <| Dict.keys d
 
 
 values : Coll item -> List item
