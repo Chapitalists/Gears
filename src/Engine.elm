@@ -3,9 +3,14 @@ port module Engine exposing (..)
 import Coll exposing (Coll, Id)
 import Gear exposing (Gear, getMotors)
 import Json.Encode as E
+import Link exposing (Link)
 
 
 port toEngine : E.Value -> Cmd msg
+
+
+
+--TODO in case of cycle, should know which Gear is playing or not to prevent pausing
 
 
 type Engine
@@ -34,6 +39,18 @@ toggle { gears, motor } (E e) =
 
       else
         stop
+    )
+
+
+addMotor : Link -> Coll Gear -> Engine -> ( Coll Gear, Cmd msg )
+addMotor l gears (E e) =
+    ( Gear.addMotorLink l gears
+    , if e.play then
+        -- TODO
+        Cmd.none
+
+      else
+        Cmd.none
     )
 
 

@@ -24,7 +24,7 @@ type Doc
     = D
         { data : UndoList Mobile
         , playing : List (Id Gear)
-        , futureLink : Maybe ( Id Gear, Vec2 )
+        , futureLink : Maybe FutureLink
         , tool : Tool
         , engine : Engine
         , details : Maybe (Id Gear)
@@ -33,6 +33,11 @@ type Doc
 
 type alias Mobile =
     { gears : Coll Gear, motor : Id Gear }
+
+
+type FutureLink
+    = Demi ( Id Gear, Vec2 )
+    | Complete Link
 
 
 type Tool
@@ -238,23 +243,7 @@ update msg (D doc) =
                         _ ->
                             ( D doc, Cmd.none )
 
-                ( Link, Interact.Dragged uid oldPos newPos ) ->
-                    case interactableFromUID uid of
-                        IGear id ->
-                            ( D { doc | futureLink = Just ( id, newPos ) }, Cmd.none )
-
-                        _ ->
-                            ( D doc, Cmd.none )
-
-                ( Link, Interact.DragEnded uid valid ) ->
-                    if valid then
-                        --TODO
-                        ( D { doc | futureLink = Nothing }, Cmd.none )
-
-                    else
-                        ( D { doc | futureLink = Nothing }, Cmd.none )
-
-                ( _, Interact.Dragged uid oldPos newPos ) ->
+                ( Edit, Interact.Dragged uid oldPos newPos ) ->
                     case interactableFromUID uid of
                         IGear id ->
                             update (GearMsg <| ( id, Gear.Move <| Vec.sub newPos oldPos )) <| D doc
@@ -290,6 +279,72 @@ update msg (D doc) =
 
                         _ ->
                             ( D doc, Cmd.none )
+
+                ( _, Interact.Dragged uid oldPos newPos ) ->
+                    case doc.futureLink of
+                        Just (Complete _) ->
+                            ( D doc, Cmd.none )
+
+                        _ ->
+                            case interactableFromUID uid of
+                                IGear id ->
+                                    ( D { doc | futureLink = Just <| Demi ( id, newPos ) }, Cmd.none )
+
+                                _ ->
+                                    ( D doc, Cmd.none )
+
+                ( _, Interact.DragIn uid ) ->
+                    case doc.futureLink of
+                        Just (Demi ( idFrom, _ )) ->
+                            case interactableFromUID uid of
+                                IGear idTo ->
+                                    ( D { doc | futureLink = Just <| Complete ( idFrom, idTo ) }, Cmd.none )
+
+                                _ ->
+                                    ( D doc, Cmd.none )
+
+                        _ ->
+                            ( D doc, Cmd.none )
+
+                ( _, Interact.DragOut ) ->
+                    case doc.futureLink of
+                        Just (Complete ( idFrom, idTo )) ->
+                            case Coll.get idTo doc.data.present.gears of
+                                Just g ->
+                                    ( D { doc | futureLink = Just <| Demi ( idFrom, Gear.getPos g ) }, Cmd.none )
+
+                                Nothing ->
+                                    ( D doc, Cmd.none )
+
+                        _ ->
+                            ( D doc, Cmd.none )
+
+                ( Play, Interact.DragEnded valid ) ->
+                    case ( doc.futureLink, valid ) of
+                        ( Just (Complete l), True ) ->
+                            let
+                                ( gears, cmd ) =
+                                    Engine.addMotor l doc.data.present.gears doc.engine
+                            in
+                            ( D
+                                { doc
+                                    | futureLink = Nothing
+                                    , data = undoNew doc.data (\m -> { m | gears = gears })
+                                }
+                            , cmd
+                            )
+
+                        _ ->
+                            ( D { doc | futureLink = Nothing }, Cmd.none )
+
+                ( Link, Interact.DragEnded valid ) ->
+                    case ( doc.futureLink, valid ) of
+                        ( Just (Complete l), True ) ->
+                            --TODO
+                            ( D { doc | futureLink = Nothing }, Cmd.none )
+
+                        _ ->
+                            ( D { doc | futureLink = Nothing }, Cmd.none )
 
                 _ ->
                     ( D doc, Cmd.none )
@@ -382,16 +437,39 @@ viewContent (D doc) inter =
                 Nothing ->
                     []
 
-                Just ( id, pos ) ->
+                Just (Demi ( id, pos )) ->
                     case Coll.get id doc.data.present.gears of
                         Nothing ->
                             Debug.log ("IMPOSSIBLE future link didn’t found gear " ++ Gear.toUID id) []
 
                         Just g ->
-                            [ Link.drawLink
-                                ( Gear.getPos g, pos )
-                                (Gear.getLength g doc.data.present.gears)
-                            ]
+                            case doc.tool of
+                                Play ->
+                                    let
+                                        length =
+                                            Gear.getLength g doc.data.present.gears
+                                    in
+                                    [ Link.drawMotorLink ( ( Gear.getPos g, length ), ( pos, length ) ) ]
+
+                                Link ->
+                                    [ Link.drawRawLink
+                                        ( Gear.getPos g, pos )
+                                        (Gear.getLength g doc.data.present.gears)
+                                    ]
+
+                                _ ->
+                                    []
+
+                Just (Complete l) ->
+                    case doc.tool of
+                        Play ->
+                            Link.viewMotorLink doc.data.present.gears l
+
+                        Link ->
+                            Link.viewFractLink doc.data.present.gears l
+
+                        _ ->
+                            []
            )
         ++ (List.concatMap (Link.view doc.data.present.gears) <|
                 List.concatMap Gear.getGearLinks <|
