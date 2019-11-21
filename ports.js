@@ -1,12 +1,20 @@
 const app = Elm.Main.init()
 
-app.ports.loadSound.subscribe(createBuffer)
-app.ports.play.subscribe(play)
+if (app.ports.loadSound) app.ports.loadSound.subscribe(createBuffer)
+if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 
 const buffers = {}
+    , playing = {}
+    , ro = new ResizeObserver(sendSize)
+ro.observe(document.getElementById('svgResizeObserver'))
+
+let deb = null
+
+function sendSize(entries) {
+    app.ports.newSVGSize.send(entries[0].contentRect)
+}
 
 function createBuffer(soundName) {
-  console.log('create '+soundName)
   if (buffers[soundName]) {
     app.ports.soundLoaded.send(soundName + ' already Loaded')
   } else {
@@ -15,7 +23,10 @@ function createBuffer(soundName) {
 }
 
 function loadOk(soundName) {
-  app.ports.soundLoaded.send(soundName + ' ok')
+  app.ports.soundLoaded.send(
+  { path : soundName
+  , length : buffers[soundName].duration
+  })
 }
 
 function loadErr(err, soundName) {
@@ -23,13 +34,68 @@ function loadErr(err, soundName) {
   app.ports.soundLoaded.send(soundName + ' got ' + err)
 }
 
-function play(model) {
-  if (model.type == "gear") {
-    console.log('play '+ model.soundName)
-    let s = new Tone.Player(buffers[model.soundName]).toMaster()
-      , g = SVG.adopt(document.getElementById(model.gearId))
+function engine(o) {
+  switch ( o.action ) {
+    case "stopReset" :
+        for ( id in playing) stop(id)
+        break;
+    case "playPause" :
+        o.gears.map(playPause)
+        break;
+    case "mute" :
+        mute(o.gearId, o.value)
+        break;
+    }
+}
+
+function playPause(model) {
+    if (!playing[model.id]) {
+        playing[model.id] = model
+        play(model.id)
+    } else if (playing[model.id].paused) unpause(model.id)
+    else pause(model.id)
+}
+
+function play(id) {
+    let model = playing[id]
+      , s = model.player = new Tone.Player(buffers[model.soundName]).toMaster()
+      , g = model.gear = SVG.adopt(document.getElementById(model.id))
+    model.paused = false
+    g.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).loop()
     s.loop = true
+    s.mute = model.mute
+    s.playbackRate = model.rate = s.buffer.duration / model.length
     s.start()
-    g.animate(s.buffer.duration * 1000).transform({rotation:360, cx:0, cy:0}).loop()
-  }
+    model.startTime = Tone.context.now()
+}
+
+function pause(id) {
+    let model = playing[id]
+    model.paused = true
+    model.gear.animate().pause()
+    model.player.stop()
+    model.pauseOffset = (Tone.context.now() - model.startTime) * model.rate
+}
+
+function unpause(id) {
+    let model = playing[id]
+    model.paused = false
+    model.gear.animate().play()
+    model.player.start(Tone.context.now(), model.pauseOffset)
+    model.startTime = Tone.context.now() - model.pauseOffset / model.rate
+}
+
+function stop(id) {
+    let model = playing[id]
+    if (!model) return;
+    model.gear.animate().play().finish()
+    model.player.stop()
+    playing[id] = null
+}
+
+function mute(id, mute) {
+    let model = playing[id]
+    if (!model) return;
+    model.mute = mute
+    model.player.mute = mute
 }
