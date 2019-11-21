@@ -109,12 +109,17 @@ stop =
 getAllLinks : Coll Gear -> List Link
 getAllLinks gears =
     Coll.ids gears
-        |> List.foldl (\id -> visitToLinks gears id) ( [], [] )
+        |> List.foldl (\id -> visitToLinks gears id Nothing) ( [], [] )
         |> Tuple.second
 
 
-visitToLinks : Coll Gear -> Id Gear -> ( List (Id Gear), List Link ) -> ( List (Id Gear), List Link )
-visitToLinks gears motorId ( visited, links ) =
+
+-- TODO sometimes double Link in the list
+-- either Set Link or switch from adjacency list to edge list ?
+
+
+visitToLinks : Coll Gear -> Id Gear -> Maybe (Id Gear) -> ( List (Id Gear), List Link ) -> ( List (Id Gear), List Link )
+visitToLinks gears motorId mayFromId ( visited, links ) =
     if List.member motorId visited then
         ( visited, links )
 
@@ -126,7 +131,13 @@ visitToLinks gears motorId ( visited, links ) =
             Just g ->
                 getMotors g
                     |> List.foldl
-                        (\neighbour ( v, l ) -> visitToLinks gears neighbour ( v, ( motorId, neighbour ) :: links ))
+                        (\neighbour ( v, l ) ->
+                            if Just neighbour == mayFromId then
+                                ( v, l )
+
+                            else
+                                visitToLinks gears neighbour (Just motorId) ( v, ( motorId, neighbour ) :: l )
+                        )
                         ( motorId :: visited, links )
 
 
