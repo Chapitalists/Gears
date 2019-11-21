@@ -93,6 +93,30 @@ stop =
     toEngine <| E.object [ ( "action", E.string "stopReset" ) ]
 
 
+getAllLinks : Coll Gear -> List Link
+getAllLinks gears =
+    Coll.ids gears
+        |> List.foldl (\id -> visitToLinks gears id) ( [], [] )
+        |> Tuple.second
+
+
+visitToLinks : Coll Gear -> Id Gear -> ( List (Id Gear), List Link ) -> ( List (Id Gear), List Link )
+visitToLinks gears motorId ( visited, links ) =
+    if List.member motorId visited then
+        ( visited, links )
+
+    else
+        case Coll.get motorId gears of
+            Nothing ->
+                Gear.debugGear motorId "Gear not found to visit motors" ( visited, links )
+
+            Just g ->
+                getMotors g
+                    |> List.foldl
+                        (\neighbour ( v, l ) -> visitToLinks gears neighbour ( v, ( motorId, neighbour ) :: links ))
+                        ( motorId :: visited, links )
+
+
 visitMotors : Coll Gear -> Id Gear -> List (Id Gear) -> List (Id Gear)
 visitMotors gears motorId visited =
     if List.member motorId visited then

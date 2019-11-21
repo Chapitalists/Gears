@@ -471,9 +471,18 @@ viewContent (D doc) inter =
                         _ ->
                             []
            )
-        ++ (List.concatMap (Link.view doc.data.present.gears) <|
-                List.concatMap Gear.getGearLinks <|
-                    Coll.values doc.data.present.gears
+        ++ (case doc.tool of
+                Play ->
+                    List.concatMap (Link.viewMotorLink doc.data.present.gears) <|
+                        Engine.getAllLinks doc.data.present.gears
+
+                Link ->
+                    List.concatMap (Link.viewFractLink doc.data.present.gears) <|
+                        List.concatMap Gear.getGearLinks <|
+                            Coll.values doc.data.present.gears
+
+                _ ->
+                    []
            )
 
 
