@@ -60,17 +60,33 @@ type Event item
     = NoEvent
     | Clicked item
     | Dragged item Vec2 Vec2 -- old new
-    | DragEnded item Bool -- True for Up, False for Abort
+    | DragIn item
+    | DragOut
+    | DragEnded Bool -- True for Up, False for Abort
 
 
 update : Msg item -> State item -> ( State item, Event item )
 update msg (S state) =
     case msg of
         HoverIn id ->
-            Debug.log "hover" ( S { state | hover = Just id }, NoEvent )
+            ( S { state | hover = Just id }
+            , case state.click of
+                Nothing ->
+                    NoEvent
+
+                Just _ ->
+                    DragIn id
+            )
 
         HoverOut ->
-            Debug.log "hover" ( S { state | hover = Nothing }, NoEvent )
+            ( S { state | hover = Nothing }
+            , case state.click of
+                Nothing ->
+                    NoEvent
+
+                Just _ ->
+                    DragOut
+            )
 
         StartClick id pos ->
             ( S { state | click = Just ( id, pos, False ) }, NoEvent )
@@ -88,7 +104,7 @@ update msg (S state) =
             , case state.click of
                 Just ( item, oldPos, moved ) ->
                     if moved then
-                        DragEnded item True
+                        DragEnded True
 
                     else
                         Clicked item
@@ -102,7 +118,7 @@ update msg (S state) =
             , case state.click of
                 Just ( item, oldPos, moved ) ->
                     if moved then
-                        DragEnded item False
+                        DragEnded False
 
                     else
                         NoEvent
