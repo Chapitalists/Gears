@@ -61,7 +61,7 @@ type HasDetails
 new : Doc
 new =
     D
-        { data = Undo.fresh { gears = Coll.empty, motor = Coll.startId }
+        { data = Undo.fresh { gears = Coll.empty Gear.default, motor = Coll.startId }
         , playing = []
         , futureLink = Nothing
         , cutting = ( Nothing, [] )
@@ -191,43 +191,41 @@ update msg (D doc) =
 
                             else
                                 doc.details
+
+                g =
+                    Coll.get id mobile.gears
             in
-            case Coll.get id mobile.gears of
-                Nothing ->
-                    ( D doc, Cmd.none )
+            if Gear.hasHarmonics g then
+                -- TODO
+                Debug.log "TODO delete base" ( D doc, Cmd.none )
 
-                Just g ->
-                    if Gear.hasHarmonics g then
-                        -- TODO
-                        Debug.log "TODO delete base" ( D doc, Cmd.none )
+            else
+                case Gear.getBaseId g of
+                    Nothing ->
+                        ( D
+                            { doc
+                                | data = undoNew doc.data (\d -> { d | gears = Coll.remove id d.gears })
+                                , details = details
+                            }
+                        , Cmd.none
+                        )
 
-                    else
-                        case Gear.getBaseId g of
-                            Nothing ->
-                                ( D
-                                    { doc
-                                        | data = undoNew doc.data (\d -> { d | gears = Coll.remove id d.gears })
-                                        , details = details
-                                    }
-                                , Cmd.none
-                                )
-
-                            Just baseId ->
-                                ( D
-                                    { doc
-                                        | data =
-                                            undoNew doc.data <|
-                                                \d ->
-                                                    { d
-                                                        | gears =
-                                                            d.gears
-                                                                |> Coll.update baseId (Gear.removeFromRefGroup id)
-                                                                |> Coll.remove id
-                                                    }
-                                        , details = details
-                                    }
-                                , Cmd.none
-                                )
+                    Just baseId ->
+                        ( D
+                            { doc
+                                | data =
+                                    undoNew doc.data <|
+                                        \d ->
+                                            { d
+                                                | gears =
+                                                    d.gears
+                                                        |> Coll.update baseId (Gear.removeFromRefGroup id)
+                                                        |> Coll.remove id
+                                            }
+                                , details = details
+                            }
+                        , Cmd.none
+                        )
 
         Undo ->
             ( D { doc | data = Undo.undo doc.data }, Cmd.none )
@@ -272,33 +270,31 @@ update msg (D doc) =
                             update (GearMsg <| ( id, Gear.Move <| Vec.sub newPos oldPos )) <| D doc
 
                         IResizeHandle id add ->
-                            case Coll.get id mobile.gears of
-                                Nothing ->
-                                    Gear.debugGear id "No gear to resize" ( D doc, Cmd.none )
+                            let
+                                g =
+                                    Coll.get id mobile.gears
 
-                                Just g ->
-                                    let
-                                        d =
-                                            Vec.getX newPos - Vec.getX oldPos
+                                d =
+                                    Vec.getX newPos - Vec.getX oldPos
 
-                                        dd =
-                                            if add then
-                                                d
+                                dd =
+                                    if add then
+                                        d
 
-                                            else
-                                                -d
+                                    else
+                                        -d
 
-                                        l =
-                                            abs <| dd * 2 + Gear.getLength g mobile.gears
-                                    in
-                                    ( D
-                                        { doc
-                                            | data =
-                                                undoNew doc.data
-                                                    (\m -> { m | gears = Gear.resizeFree id l m.gears })
-                                        }
-                                    , Cmd.none
-                                    )
+                                l =
+                                    abs <| dd * 2 + Gear.getLength g mobile.gears
+                            in
+                            ( D
+                                { doc
+                                    | data =
+                                        undoNew doc.data
+                                            (\m -> { m | gears = Gear.resizeFree id l m.gears })
+                                }
+                            , Cmd.none
+                            )
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -357,12 +353,7 @@ update msg (D doc) =
                 ( _, Interact.DragOut ) ->
                     case doc.futureLink of
                         Just (Complete ( idFrom, idTo )) ->
-                            case Coll.get idTo mobile.gears of
-                                Just g ->
-                                    ( D { doc | futureLink = Just <| Demi ( idFrom, Gear.getPos g ) }, Cmd.none )
-
-                                Nothing ->
-                                    ( D doc, Cmd.none )
+                            ( D { doc | futureLink = Just <| Demi ( idFrom, Gear.getPos <| Coll.get idTo mobile.gears ) }, Cmd.none )
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -502,27 +493,26 @@ viewContent (D doc) inter scale =
                     []
 
                 Just (Demi ( id, pos )) ->
-                    case Coll.get id mobile.gears of
-                        Nothing ->
-                            Debug.log ("IMPOSSIBLE future link didn’t found gear " ++ Gear.toUID id) []
+                    let
+                        g =
+                            Coll.get id mobile.gears
+                    in
+                    case doc.tool of
+                        Play ->
+                            let
+                                length =
+                                    Gear.getLength g mobile.gears
+                            in
+                            [ Link.drawMotorLink ( ( Gear.getPos g, length ), ( pos, length ) ) ]
 
-                        Just g ->
-                            case doc.tool of
-                                Play ->
-                                    let
-                                        length =
-                                            Gear.getLength g mobile.gears
-                                    in
-                                    [ Link.drawMotorLink ( ( Gear.getPos g, length ), ( pos, length ) ) ]
+                        Link ->
+                            [ Link.drawRawLink
+                                ( Gear.getPos g, pos )
+                                (Gear.getLength g mobile.gears)
+                            ]
 
-                                Link ->
-                                    [ Link.drawRawLink
-                                        ( Gear.getPos g, pos )
-                                        (Gear.getLength g mobile.gears)
-                                    ]
-
-                                _ ->
-                                    []
+                        _ ->
+                            []
 
                 Just (Complete l) ->
                     case doc.tool of
@@ -564,42 +554,37 @@ viewDetails (D doc) =
             []
 
         Just id ->
-            case Coll.get id doc.data.present.gears of
-                Nothing ->
-                    Debug.log ("IMPOSSIBLE No gear for details of " ++ Gear.toUID id) []
+            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+                [ text <| Gear.toUID id
+                , Input.button []
+                    (if List.member id doc.playing then
+                        { label = text "Stop"
+                        , onPress = Just <| StopGear id
+                        }
 
-                Just g ->
-                    [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
-                        [ text <| Gear.toUID id
-                        , Input.button []
-                            (if List.member id doc.playing then
-                                { label = text "Stop"
-                                , onPress = Just <| StopGear id
-                                }
-
-                             else
-                                { label = text "Play"
-                                , onPress = Just <| PlayGear id
-                                }
-                            )
-                        , Input.button []
-                            { label = text "Copie"
-                            , onPress = Just <| CopyGear id
-                            }
-                        , Input.button []
-                            { label = text "x 2"
-                            , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer 2 )
-                            }
-                        , Input.button []
-                            { label = text "/ 2"
-                            , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit 2 )
-                            }
-                        , Input.button []
-                            { onPress = Just <| DeleteGear id
-                            , label = text "Supprimer"
-                            }
-                        ]
-                    ]
+                     else
+                        { label = text "Play"
+                        , onPress = Just <| PlayGear id
+                        }
+                    )
+                , Input.button []
+                    { label = text "Copie"
+                    , onPress = Just <| CopyGear id
+                    }
+                , Input.button []
+                    { label = text "x 2"
+                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer 2 )
+                    }
+                , Input.button []
+                    { label = text "/ 2"
+                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit 2 )
+                    }
+                , Input.button []
+                    { onPress = Just <| DeleteGear id
+                    , label = text "Supprimer"
+                    }
+                ]
+            ]
 
 
 undoNew : UndoList model -> (model -> model) -> UndoList model

@@ -83,27 +83,25 @@ rmMotors ls { gears, motor } (E e) =
 
 mute : Id Gear -> Coll Gear -> Engine -> ( Coll Gear, Cmd msg )
 mute id gears (E e) =
-    case Coll.get id gears of
-        Nothing ->
-            ( gears, Cmd.none )
+    let
+        g =
+            Coll.get id gears
 
-        Just g ->
-            let
-                newMute =
-                    not <| Gear.getMute g
-            in
-            ( Coll.update id (Gear.setMute newMute) gears
-            , if isPlaying (E e) then
-                Cmd.none
+        newMute =
+            not <| Gear.getMute g
+    in
+    ( Coll.update id (Gear.setMute newMute) gears
+    , if isPlaying (E e) then
+        Cmd.none
 
-              else
-                toEngine <|
-                    E.object
-                        [ ( "action", E.string "mute" )
-                        , ( "gearId", E.string <| Gear.toUID id )
-                        , ( "value", E.bool newMute )
-                        ]
-            )
+      else
+        toEngine <|
+            E.object
+                [ ( "action", E.string "mute" )
+                , ( "gearId", E.string <| Gear.toUID id )
+                , ( "value", E.bool newMute )
+                ]
+    )
 
 
 playPauseLinked : Id Gear -> Coll Gear -> ( List (Id Gear), Cmd msg )
@@ -149,21 +147,20 @@ visitToLinks gears motorId mayFromId ( visited, links ) =
         ( visited, links )
 
     else
-        case Coll.get motorId gears of
-            Nothing ->
-                Gear.debugGear motorId "Gear not found to visit motors" ( visited, links )
+        let
+            g =
+                Coll.get motorId gears
+        in
+        getMotors g
+            |> List.foldl
+                (\neighbour ( v, l ) ->
+                    if Just neighbour == mayFromId then
+                        ( v, l )
 
-            Just g ->
-                getMotors g
-                    |> List.foldl
-                        (\neighbour ( v, l ) ->
-                            if Just neighbour == mayFromId then
-                                ( v, l )
-
-                            else
-                                visitToLinks gears neighbour (Just motorId) ( v, ( motorId, neighbour ) :: l )
-                        )
-                        ( motorId :: visited, links )
+                    else
+                        visitToLinks gears neighbour (Just motorId) ( v, ( motorId, neighbour ) :: l )
+                )
+                ( motorId :: visited, links )
 
 
 visitMotors : Coll Gear -> Id Gear -> List (Id Gear) -> List (Id Gear)
@@ -172,12 +169,11 @@ visitMotors gears motorId visited =
         visited
 
     else
-        case Coll.get motorId gears of
-            Nothing ->
-                Gear.debugGear motorId "Gear not found to visit motors" visited
-
-            Just g ->
-                getMotors g
-                    |> List.foldl
-                        (\neighbour -> visitMotors gears neighbour)
-                        (motorId :: visited)
+        let
+            g =
+                Coll.get motorId gears
+        in
+        getMotors g
+            |> List.foldl
+                (\neighbour -> visitMotors gears neighbour)
+                (motorId :: visited)

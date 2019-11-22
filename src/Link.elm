@@ -17,38 +17,36 @@ type alias Link =
 
 viewFractLink : Coll Gear -> Link -> List (Svg msg)
 viewFractLink gears l =
-    case toGears gears l of
-        ( Just g, Just gg ) ->
-            [ drawRawLink ( Gear.getPos g, Gear.getPos gg ) <|
-                ((Gear.getLength g gears + Gear.getLength gg gears) / 2)
-            ]
-
-        _ ->
-            Debug.log "Didn’t found both gears to draw algebraic link" []
+    let
+        ( g, gg ) =
+            toGears gears l
+    in
+    [ drawRawLink ( Gear.getPos g, Gear.getPos gg ) <|
+        ((Gear.getLength g gears + Gear.getLength gg gears) / 2)
+    ]
 
 
 viewMotorLink : Coll Gear -> List Link -> Link -> List (Svg msg)
 viewMotorLink gears cutting l =
-    case toGears gears l of
-        ( Just g, Just gg ) ->
-            [ S.g
-                [ SA.opacity <|
-                    TypedSvg.Types.Opacity <|
-                        if List.any (equal l) cutting then
-                            0.5
+    let
+        ( g, gg ) =
+            toGears gears l
+    in
+    [ S.g
+        [ SA.opacity <|
+            TypedSvg.Types.Opacity <|
+                if List.any (equal l) cutting then
+                    0.5
 
-                        else
-                            1
-                ]
-                [ drawMotorLink
-                    ( ( Gear.getPos g, Gear.getLength g gears )
-                    , ( Gear.getPos gg, Gear.getLength gg gears )
-                    )
-                ]
-            ]
-
-        _ ->
-            Debug.log "Didn’t found both gears to draw motor link" []
+                else
+                    1
+        ]
+        [ drawMotorLink
+            ( ( Gear.getPos g, Gear.getLength g gears )
+            , ( Gear.getPos gg, Gear.getLength gg gears )
+            )
+        ]
+    ]
 
 
 drawMotorLink : ( ( Vec2, Float ), ( Vec2, Float ) ) -> Svg msg
@@ -98,7 +96,7 @@ equal l1 l2 =
         || (Tuple.first l1 == Tuple.second l2 && Tuple.first l2 == Tuple.second l1)
 
 
-toGears : Coll Gear -> Link -> ( Maybe Gear, Maybe Gear )
+toGears : Coll Gear -> Link -> ( Gear, Gear )
 toGears gears l =
     let
         getGear id =
@@ -109,12 +107,7 @@ toGears gears l =
 
 toSegment : Coll Gear -> Link -> ( Vec2, Vec2 )
 toSegment gears l =
-    case toGears gears l of
-        ( Just g, Just gg ) ->
-            ( Gear.getPos g, Gear.getPos gg )
-
-        _ ->
-            Debug.log "Cannot find both gears to make segment" ( vec2 0 0, vec2 0 0 )
+    Tuple.mapBoth Gear.getPos Gear.getPos <| toGears gears l
 
 
 tupleFromVec : Vec2 -> ( Float, Float )

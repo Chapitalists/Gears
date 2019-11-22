@@ -32,6 +32,18 @@ type Gear
         }
 
 
+default =
+    G
+        { ref = newSelfRef 0
+        , fract = Fract.integer 0
+        , motors = []
+        , pos = vec2 0 0
+        , startPercent = 0
+        , sound = Sound.noSound
+        , mute = False
+        }
+
+
 getMotors : Gear -> List (Id Gear)
 getMotors (G g) =
     g.motors
@@ -40,39 +52,23 @@ getMotors (G g) =
 addMotorLink : Link -> Coll Gear -> Coll Gear
 addMotorLink l coll =
     let
-        getGear id =
-            Coll.get id coll
-
         addMotor id (G g) =
             G { g | motors = id :: g.motors }
     in
-    case Tuple.mapBoth getGear getGear l of
-        ( Just _, Just _ ) ->
-            coll
-                |> Coll.update (Tuple.first l) (addMotor <| Tuple.second l)
-                |> Coll.update (Tuple.second l) (addMotor <| Tuple.first l)
-
-        _ ->
-            debugGear (Tuple.first l) "Didn’t found gears to add Motor" coll
+    coll
+        |> Coll.update (Tuple.first l) (addMotor <| Tuple.second l)
+        |> Coll.update (Tuple.second l) (addMotor <| Tuple.first l)
 
 
 rmMotorLink : Link -> Coll Gear -> Coll Gear
 rmMotorLink l coll =
     let
-        getGear id =
-            Coll.get id coll
-
         rmMotor id (G g) =
             G { g | motors = List.filter (\el -> el /= id) g.motors }
     in
-    case Tuple.mapBoth getGear getGear l of
-        ( Just _, Just _ ) ->
-            coll
-                |> Coll.update (Tuple.first l) (rmMotor <| Tuple.second l)
-                |> Coll.update (Tuple.second l) (rmMotor <| Tuple.first l)
-
-        _ ->
-            debugGear (Tuple.first l) "Didn’t found gears to rm Motor" coll
+    coll
+        |> Coll.update (Tuple.first l) (rmMotor <| Tuple.second l)
+        |> Coll.update (Tuple.second l) (rmMotor <| Tuple.first l)
 
 
 type Ref
@@ -205,42 +201,39 @@ setMute mute (G g) =
 
 copy : Id Gear -> Coll Gear -> Coll Gear
 copy id coll =
-    case Coll.get id coll of
-        Nothing ->
-            debugGear id "No gear to copy" coll
+    let
+        (G g) =
+            Coll.get id coll
 
-        Just (G g) ->
-            let
-                newG =
-                    G
-                        { g
-                            | pos = add g.pos (vec2 (getLength (G g) coll * 1.1) 0)
-                            , ref = Other id
-                        }
+        newG =
+            G
+                { g
+                    | pos = add g.pos (vec2 (getLength (G g) coll * 1.1) 0)
+                    , ref = Other id
+                }
 
-                ( newId, newColl ) =
-                    Coll.insertTellId newG coll
-            in
-            Coll.update id (addToRefGroup newId >> addLink ( id, newId )) newColl
+        ( newId, newColl ) =
+            Coll.insertTellId newG coll
+    in
+    Coll.update id (addToRefGroup newId >> addLink ( id, newId )) newColl
 
 
 resizeFree : Id Gear -> Float -> Coll Gear -> Coll Gear
 resizeFree id length coll =
-    case Coll.get id coll of
-        Nothing ->
-            debugGear id "No gear to resize" coll
+    let
+        (G g) =
+            Coll.get id coll
+    in
+    case g.ref of
+        Self r ->
+            Coll.update id
+                (\(G gg) -> G { gg | ref = Self { r | unit = length / Fract.toFloat g.fract } })
+                coll
 
-        Just (G g) ->
-            case g.ref of
-                Self r ->
-                    Coll.update id
-                        (\(G gg) -> G { gg | ref = Self { r | unit = length / Fract.toFloat g.fract } })
-                        coll
-
-                Other rId ->
-                    coll
-                        |> Coll.update id (\(G gg) -> G { gg | ref = newSelfRef length, fract = Fract.unit 1 })
-                        |> Coll.update rId (removeFromRefGroup id)
+        Other rId ->
+            coll
+                |> Coll.update id (\(G gg) -> G { gg | ref = newSelfRef length, fract = Fract.unit 1 })
+                |> Coll.update rId (removeFromRefGroup id)
 
 
 getFract : Gear -> Fraction
@@ -255,17 +248,16 @@ getLength (G g) coll =
             unit * Fract.toFloat g.fract
 
         Other id ->
-            case Coll.get id coll of
-                Just (G { ref }) ->
-                    case ref of
-                        Self { unit } ->
-                            unit * Fract.toFloat g.fract
+            let
+                (G { ref }) =
+                    Coll.get id coll
+            in
+            case ref of
+                Self { unit } ->
+                    unit * Fract.toFloat g.fract
 
-                        Other _ ->
-                            Debug.log "IMPOSSIBLE Ref isn’t a base" 0
-
-                Nothing ->
-                    Debug.log "IMPOSSIBLE Ref doesn’t exist" 0
+                Other _ ->
+                    Debug.log "IMPOSSIBLE Ref isn’t a base" 0
 
 
 getPos : Gear -> Vec2
@@ -275,25 +267,23 @@ getPos (G g) =
 
 encoder : Id Gear -> Coll Gear -> E.Value
 encoder id coll =
-    case Coll.get id coll of
-        Nothing ->
-            debugGear id "No gear to encode" E.null
+    let
+        (G g) =
+            Coll.get id coll
 
-        Just (G g) ->
-            let
-                length =
-                    getLength (G g) coll
-            in
-            if length == 0 then
-                debugGear id "Length is 0" E.null
+        length =
+            getLength (G g) coll
+    in
+    if length == 0 then
+        debugGear id "Length is 0" E.null
 
-            else
-                E.object
-                    [ ( "id", E.string <| toUID id )
-                    , ( "length", E.float length )
-                    , ( "soundName", E.string <| Sound.toString g.sound )
-                    , ( "mute", E.bool g.mute )
-                    ]
+    else
+        E.object
+            [ ( "id", E.string <| toUID id )
+            , ( "length", E.float length )
+            , ( "soundName", E.string <| Sound.toString g.sound )
+            , ( "mute", E.bool g.mute )
+            ]
 
 
 type Mod
