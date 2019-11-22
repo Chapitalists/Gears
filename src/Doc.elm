@@ -28,7 +28,7 @@ type Doc
         , cutting : ( Maybe ( Vec2, Vec2 ), List Link )
         , tool : Tool
         , engine : Engine
-        , details : Maybe HasDetails
+        , details : Detailed
         }
 
 
@@ -54,8 +54,9 @@ type Interactable
     | INothing
 
 
-type HasDetails
-    = DGear (Id Gear)
+type Detailed
+    = DNothing
+    | DGear (Id Gear)
     | DHarmolink Link
 
 
@@ -68,7 +69,7 @@ new =
         , cutting = ( Nothing, [] )
         , tool = Play
         , engine = Engine.init
-        , details = Nothing
+        , details = DNothing
         }
 
 
@@ -182,16 +183,11 @@ update msg (D doc) =
         DeleteGear id ->
             let
                 details =
-                    case doc.details of
-                        Nothing ->
-                            Nothing
+                    if doc.details == DGear id then
+                        DNothing
 
-                        Just d ->
-                            if d == DGear id then
-                                Nothing
-
-                            else
-                                doc.details
+                    else
+                        doc.details
 
                 g =
                     Coll.get id mobile.gears
@@ -260,7 +256,7 @@ update msg (D doc) =
                 ( Edit, Interact.Clicked uid ) ->
                     case interactableFromUID uid of
                         IGear id ->
-                            ( D { doc | details = Just <| DGear id }, Cmd.none )
+                            ( D { doc | details = DGear id }, Cmd.none )
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -422,7 +418,7 @@ update msg (D doc) =
                             ( D
                                 { doc
                                     | futureLink = Nothing
-                                    , details = Just <| DHarmolink l
+                                    , details = DHarmolink l
                                     , data = upData
                                 }
                             , Cmd.none
@@ -583,7 +579,7 @@ viewContent (D doc) inter scale =
 viewDetails : Doc -> List (Element Msg)
 viewDetails (D doc) =
     case doc.details of
-        Just (DGear id) ->
+        DGear id ->
             [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
                 [ text <| Gear.toUID id
                 , Input.button []
