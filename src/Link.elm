@@ -17,15 +17,10 @@ type alias Link =
 
 viewFractLink : Coll Gear -> Link -> List (Svg msg)
 viewFractLink gears l =
-    let
-        getGear id =
-            Coll.get id gears
-    in
-    case Tuple.mapBoth getGear getGear l of
+    case toGears gears l of
         ( Just g, Just gg ) ->
             [ drawRawLink ( Gear.getPos g, Gear.getPos gg ) <|
-                (Gear.getLength g gears + Gear.getLength gg gears)
-                    / 2
+                ((Gear.getLength g gears + Gear.getLength gg gears) / 2)
             ]
 
         _ ->
@@ -79,7 +74,7 @@ drawRawLink : ( Vec2, Vec2 ) -> Float -> Svg msg
 drawRawLink ( p1, p2 ) gearL =
     S.polyline
         [ SA.points [ tupleFromVec p1, tupleFromVec p2 ]
-        , SA.stroke <| Color.brown
+        , SA.stroke Color.brown
         , SA.strokeWidth <| Num (gearL / 30)
         , SA.strokeLinecap TypedSvg.Types.StrokeLinecapRound
         ]

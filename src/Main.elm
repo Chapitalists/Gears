@@ -288,7 +288,7 @@ viewDoc model =
         , el [ width fill, height fill, Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver" ] <|
             Element.html <|
                 S.svg
-                    ([ Html.Attributes.id "svg"
+                    ([ Html.Attributes.id svgId
                      , SS.attribute "width" "100%"
                      , SS.attribute "height" "100%"
                      , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet

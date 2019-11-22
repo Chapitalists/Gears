@@ -1,4 +1,4 @@
-port module Engine exposing (..)
+port module Engine exposing (Engine, addMotor, getAllLinks, init, isPlaying, mute, rmMotors, toggle)
 
 import Coll exposing (Coll, Id)
 import Gear exposing (Gear, getMotors)

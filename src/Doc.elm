@@ -229,6 +229,7 @@ update msg (D doc) =
                     }
                 )
 
+        -- TODO Find good pattern for big mess there
         InteractEvent event ->
             case ( doc.tool, event ) of
                 ( Play, Interact.Clicked uid ) ->
