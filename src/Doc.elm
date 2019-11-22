@@ -28,7 +28,7 @@ type Doc
         , cutting : ( Maybe ( Vec2, Vec2 ), List Link )
         , tool : Tool
         , engine : Engine
-        , details : Maybe (Id Gear)
+        , details : Maybe HasDetails
         }
 
 
@@ -56,6 +56,7 @@ type Interactable
 
 type HasDetails
     = DGear (Id Gear)
+    | DHarmolink Link
 
 
 new : Doc
@@ -186,7 +187,7 @@ update msg (D doc) =
                             Nothing
 
                         Just d ->
-                            if d == id then
+                            if d == DGear id then
                                 Nothing
 
                             else
@@ -259,7 +260,7 @@ update msg (D doc) =
                 ( Edit, Interact.Clicked uid ) ->
                     case interactableFromUID uid of
                         IGear id ->
-                            ( D { doc | details = Just id }, Cmd.none )
+                            ( D { doc | details = Just <| DGear id }, Cmd.none )
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -392,8 +393,40 @@ update msg (D doc) =
                 ( Link, Interact.DragEnded valid ) ->
                     case ( doc.futureLink, valid ) of
                         ( Just (Complete l), True ) ->
-                            --TODO
-                            ( D { doc | futureLink = Nothing }, Cmd.none )
+                            let
+                                base id =
+                                    Maybe.withDefault id <| Gear.getBaseId <| Coll.get id mobile.gears
+
+                                bases =
+                                    Tuple.mapBoth base base l
+
+                                upData =
+                                    if
+                                        (Tuple.first bases == Tuple.second bases)
+                                            && (not <| Gear.isActiveLink l <| Coll.get (Tuple.first bases) mobile.gears)
+                                    then
+                                        undoNew doc.data
+                                            (\m ->
+                                                { m
+                                                    | gears =
+                                                        Coll.update
+                                                            (Tuple.first bases)
+                                                            (Gear.addLink l)
+                                                            mobile.gears
+                                                }
+                                            )
+
+                                    else
+                                        doc.data
+                            in
+                            ( D
+                                { doc
+                                    | futureLink = Nothing
+                                    , details = Just <| DHarmolink l
+                                    , data = upData
+                                }
+                            , Cmd.none
+                            )
 
                         _ ->
                             ( D { doc | futureLink = Nothing }, Cmd.none )
@@ -550,10 +583,7 @@ viewContent (D doc) inter scale =
 viewDetails : Doc -> List (Element Msg)
 viewDetails (D doc) =
     case doc.details of
-        Nothing ->
-            []
-
-        Just id ->
+        Just (DGear id) ->
             [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
                 [ text <| Gear.toUID id
                 , Input.button []
@@ -585,6 +615,9 @@ viewDetails (D doc) =
                     }
                 ]
             ]
+
+        _ ->
+            []
 
 
 undoNew : UndoList model -> (model -> model) -> UndoList model

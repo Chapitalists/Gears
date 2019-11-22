@@ -156,6 +156,16 @@ addLink l (G g) =
             G { g | ref = Self { r | links = l :: r.links } }
 
 
+isActiveLink : Link -> Gear -> Bool
+isActiveLink l (G g) =
+    case g.ref of
+        Other _ ->
+            Debug.log "Can’t check active links if not base" False
+
+        Self { links } ->
+            List.any (equalLinks l) links
+
+
 getGearLinks : Gear -> List Link
 getGearLinks (G g) =
     case g.ref of
@@ -399,3 +409,14 @@ view ( id, G g ) coll mod =
 debugGear : Id Gear -> String -> default -> default
 debugGear id str =
     Debug.log (str ++ " " ++ toUID id)
+
+
+
+-- TODO copy of Link.equal because Link needs Gear and can’t cycle import
+-- Make Harmonies Module which imports on Gear and Link
+
+
+equalLinks : Link -> Link -> Bool
+equalLinks l1 l2 =
+    (Tuple.first l1 == Tuple.first l2 && Tuple.second l1 == Tuple.second l2)
+        || (Tuple.first l1 == Tuple.second l2 && Tuple.first l2 == Tuple.second l1)
