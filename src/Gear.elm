@@ -94,18 +94,22 @@ newSelfRef length =
     Self { unit = length, group = [], links = [] }
 
 
-isMother : Gear -> Bool
-isMother (G g) =
+hasHarmonics : Gear -> Bool
+hasHarmonics (G g) =
     case g.ref of
-        Self _ ->
-            True
+        Self { group } ->
+            if List.isEmpty group then
+                False
+
+            else
+                True
 
         Other _ ->
             False
 
 
-getMotherId : Gear -> Coll Gear -> Maybe (Id Gear)
-getMotherId (G g) coll =
+getBaseId : Gear -> Maybe (Id Gear)
+getBaseId (G g) =
     case g.ref of
         Self _ ->
             Nothing
@@ -118,7 +122,7 @@ addToRefGroup : Id Gear -> Gear -> Gear
 addToRefGroup id (G g) =
     case g.ref of
         Other _ ->
-            debugGear id "Can’t add to ref group if not mother" (G g)
+            debugGear id "Can’t add to ref group if not base" (G g)
 
         Self r ->
             G { g | ref = Self { r | group = id :: r.group } }
@@ -128,7 +132,7 @@ removeFromRefGroup : Id Gear -> Gear -> Gear
 removeFromRefGroup id (G g) =
     case g.ref of
         Other _ ->
-            debugGear id "Can’t remove from ref group if not mother" (G g)
+            debugGear id "Can’t remove from ref group if not base" (G g)
 
         Self r ->
             let
@@ -150,7 +154,7 @@ addLink : Link -> Gear -> Gear
 addLink l (G g) =
     case g.ref of
         Other _ ->
-            Debug.log "Can’t add link if not mother" (G g)
+            Debug.log "Can’t add link if not base" (G g)
 
         Self r ->
             G { g | ref = Self { r | links = l :: r.links } }
@@ -258,7 +262,7 @@ getLength (G g) coll =
                             unit * Fract.toFloat g.fract
 
                         Other _ ->
-                            Debug.log "IMPOSSIBLE Ref isn’t a mother" 0
+                            Debug.log "IMPOSSIBLE Ref isn’t a base" 0
 
                 Nothing ->
                     Debug.log "IMPOSSIBLE Ref doesn’t exist" 0
