@@ -175,45 +175,55 @@ update msg (D doc) =
             ( D { doc | data = undoNew doc.data (\m -> { m | gears = Gear.copy id m.gears }) }, Cmd.none )
 
         DeleteGear id ->
+            let
+                details =
+                    case doc.details of
+                        Nothing ->
+                            Nothing
+
+                        Just d ->
+                            if d == id then
+                                Nothing
+
+                            else
+                                doc.details
+            in
             case Coll.get id doc.data.present.gears of
                 Nothing ->
                     ( D doc, Cmd.none )
 
                 Just g ->
-                    case Gear.getMotherId g doc.data.present.gears of
-                        Nothing ->
-                            Debug.log "TODO delete mother" ( D doc, Cmd.none )
+                    if Gear.hasHarmonics g then
+                        -- TODO
+                        Debug.log "TODO delete base" ( D doc, Cmd.none )
 
-                        Just motherId ->
-                            let
-                                details =
-                                    case doc.details of
-                                        Nothing ->
-                                            Nothing
+                    else
+                        case Gear.getBaseId g of
+                            Nothing ->
+                                ( D
+                                    { doc
+                                        | data = undoNew doc.data (\d -> { d | gears = Coll.remove id d.gears })
+                                        , details = details
+                                    }
+                                , Cmd.none
+                                )
 
-                                        Just d ->
-                                            if d == id then
-                                                Nothing
-
-                                            else
-                                                doc.details
-                            in
-                            ( D
-                                { doc
-                                    | data =
-                                        undoNew doc.data <|
-                                            \d ->
-                                                { d
-                                                    | gears =
-                                                        d.gears
-                                                            |> Coll.update motherId (Gear.removeFromRefGroup id)
-                                                            |> Coll.remove id
-                                                }
-                                    , playing = List.filter (\el -> el /= id) doc.playing
-                                    , details = details
-                                }
-                            , Cmd.none
-                            )
+                            Just baseId ->
+                                ( D
+                                    { doc
+                                        | data =
+                                            undoNew doc.data <|
+                                                \d ->
+                                                    { d
+                                                        | gears =
+                                                            d.gears
+                                                                |> Coll.update baseId (Gear.removeFromRefGroup id)
+                                                                |> Coll.remove id
+                                                    }
+                                        , details = details
+                                    }
+                                , Cmd.none
+                                )
 
         Undo ->
             ( D { doc | data = Undo.undo doc.data }, Cmd.none )
