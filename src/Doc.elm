@@ -129,12 +129,16 @@ type Msg
 
 update : Msg -> Doc -> ( Doc, Cmd msg )
 update msg (D doc) =
+    let
+        mobile =
+            doc.data.present
+    in
     case msg of
         ChangedTool tool ->
             let
                 ( newEngine, cmd ) =
                     if Engine.isPlaying doc.engine then
-                        Engine.toggle doc.data.present doc.engine
+                        Engine.toggle mobile doc.engine
 
                     else
                         ( doc.engine, Cmd.none )
@@ -157,7 +161,7 @@ update msg (D doc) =
         ToggleEngine ->
             let
                 ( newEngine, cmd ) =
-                    Engine.toggle doc.data.present doc.engine
+                    Engine.toggle mobile doc.engine
             in
             ( D { doc | engine = newEngine }, cmd )
 
@@ -188,7 +192,7 @@ update msg (D doc) =
                             else
                                 doc.details
             in
-            case Coll.get id doc.data.present.gears of
+            case Coll.get id mobile.gears of
                 Nothing ->
                     ( D doc, Cmd.none )
 
@@ -247,7 +251,7 @@ update msg (D doc) =
                         IGear id ->
                             let
                                 ( newGears, cmd ) =
-                                    Engine.mute id doc.data.present.gears doc.engine
+                                    Engine.mute id mobile.gears doc.engine
                             in
                             ( D { doc | data = undoNew doc.data (\m -> { m | gears = newGears }) }, cmd )
 
@@ -268,7 +272,7 @@ update msg (D doc) =
                             update (GearMsg <| ( id, Gear.Move <| Vec.sub newPos oldPos )) <| D doc
 
                         IResizeHandle id add ->
-                            case Coll.get id doc.data.present.gears of
+                            case Coll.get id mobile.gears of
                                 Nothing ->
                                     Gear.debugGear id "No gear to resize" ( D doc, Cmd.none )
 
@@ -285,7 +289,7 @@ update msg (D doc) =
                                                 -d
 
                                         l =
-                                            abs <| dd * 2 + Gear.getLength g doc.data.present.gears
+                                            abs <| dd * 2 + Gear.getLength g mobile.gears
                                     in
                                     ( D
                                         { doc
@@ -321,8 +325,8 @@ update msg (D doc) =
                                                 ( start, newPos )
 
                                     newCuts =
-                                        Engine.getAllLinks doc.data.present.gears
-                                            |> List.filter (Link.cuts cut << Link.toSegment doc.data.present.gears)
+                                        Engine.getAllLinks mobile.gears
+                                            |> List.filter (Link.cuts cut << Link.toSegment mobile.gears)
                                 in
                                 ( D
                                     { doc
@@ -353,7 +357,7 @@ update msg (D doc) =
                 ( _, Interact.DragOut ) ->
                     case doc.futureLink of
                         Just (Complete ( idFrom, idTo )) ->
-                            case Coll.get idTo doc.data.present.gears of
+                            case Coll.get idTo mobile.gears of
                                 Just g ->
                                     ( D { doc | futureLink = Just <| Demi ( idFrom, Gear.getPos g ) }, Cmd.none )
 
@@ -368,7 +372,7 @@ update msg (D doc) =
                         ( Just (Complete l), True ) ->
                             let
                                 ( gears, newEngine, cmd ) =
-                                    Engine.addMotor l doc.data.present.gears doc.engine
+                                    Engine.addMotor l mobile.gears doc.engine
                             in
                             ( D
                                 { doc
@@ -382,7 +386,7 @@ update msg (D doc) =
                         _ ->
                             let
                                 ( gears, engine, cmd ) =
-                                    Engine.rmMotors (Tuple.second doc.cutting) doc.data.present doc.engine
+                                    Engine.rmMotors (Tuple.second doc.cutting) mobile doc.engine
                             in
                             ( D
                                 { doc
@@ -463,6 +467,9 @@ viewExtraTools (D doc) =
 viewContent : Doc -> Interact.Interact String -> Float -> List (Svg Gear.OutMsg)
 viewContent (D doc) inter scale =
     let
+        mobile =
+            doc.data.present
+
         getMod : Interact.Interact String -> Id Gear -> Gear.Mod
         getMod i id =
             case i of
@@ -487,15 +494,15 @@ viewContent (D doc) inter scale =
                             ( _, Interact.Drag ) ->
                                 Gear.Dragged
     in
-    (List.map (\( id, g ) -> Gear.view ( id, g ) doc.data.present.gears (getMod inter id)) <|
-        Coll.toList doc.data.present.gears
+    (List.map (\( id, g ) -> Gear.view ( id, g ) mobile.gears (getMod inter id)) <|
+        Coll.toList mobile.gears
     )
         ++ (case doc.futureLink of
                 Nothing ->
                     []
 
                 Just (Demi ( id, pos )) ->
-                    case Coll.get id doc.data.present.gears of
+                    case Coll.get id mobile.gears of
                         Nothing ->
                             Debug.log ("IMPOSSIBLE future link didn’t found gear " ++ Gear.toUID id) []
 
@@ -504,14 +511,14 @@ viewContent (D doc) inter scale =
                                 Play ->
                                     let
                                         length =
-                                            Gear.getLength g doc.data.present.gears
+                                            Gear.getLength g mobile.gears
                                     in
                                     [ Link.drawMotorLink ( ( Gear.getPos g, length ), ( pos, length ) ) ]
 
                                 Link ->
                                     [ Link.drawRawLink
                                         ( Gear.getPos g, pos )
-                                        (Gear.getLength g doc.data.present.gears)
+                                        (Gear.getLength g mobile.gears)
                                     ]
 
                                 _ ->
@@ -520,23 +527,23 @@ viewContent (D doc) inter scale =
                 Just (Complete l) ->
                     case doc.tool of
                         Play ->
-                            Link.viewMotorLink doc.data.present.gears [] l
+                            Link.viewMotorLink mobile.gears [] l
 
                         Link ->
-                            Link.viewFractLink doc.data.present.gears l
+                            Link.viewFractLink mobile.gears l
 
                         _ ->
                             []
            )
         ++ (case doc.tool of
                 Play ->
-                    List.concatMap (Link.viewMotorLink doc.data.present.gears (Tuple.second doc.cutting)) <|
-                        Engine.getAllLinks doc.data.present.gears
+                    List.concatMap (Link.viewMotorLink mobile.gears (Tuple.second doc.cutting)) <|
+                        Engine.getAllLinks mobile.gears
 
                 Link ->
-                    List.concatMap (Link.viewFractLink doc.data.present.gears) <|
+                    List.concatMap (Link.viewFractLink mobile.gears) <|
                         List.concatMap Gear.getGearLinks <|
-                            Coll.values doc.data.present.gears
+                            Coll.values mobile.gears
 
                 _ ->
                     []
