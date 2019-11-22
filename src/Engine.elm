@@ -92,15 +92,15 @@ mute id gears (E e) =
     in
     ( Coll.update id (Gear.setMute newMute) gears
     , if isPlaying (E e) then
-        Cmd.none
-
-      else
         toEngine <|
             E.object
                 [ ( "action", E.string "mute" )
                 , ( "gearId", E.string <| Gear.toUID id )
                 , ( "value", E.bool newMute )
                 ]
+
+      else
+        Cmd.none
     )
 
 
