@@ -43,7 +43,8 @@ type Tool
 
 
 type Interactable
-    = IGear (Id Gear)
+    = ISurface
+    | IGear (Id Gear)
     | IResizeHandle (Id Gear) Bool
     | INothing
 
@@ -66,25 +67,29 @@ new =
 
 interactableFromUID : String -> Interactable
 interactableFromUID uid =
-    case String.split "-" uid of
-        stringType :: int :: _ ->
-            if stringType == Gear.stringType then
-                IGear (Coll.forgeId int)
+    if uid == "svg" then
+        ISurface
 
-            else
-                case String.split "." stringType of
-                    "resize" :: dir :: strType :: _ ->
-                        if strType == Gear.stringType then
-                            IResizeHandle (Coll.forgeId int) (dir == "right")
+    else
+        case String.split "-" uid of
+            stringType :: int :: _ ->
+                if stringType == Gear.stringType then
+                    IGear (Coll.forgeId int)
 
-                        else
-                            Debug.log ("ERROR Unrecognized UID resize type " ++ strType) INothing
+                else
+                    case String.split "." stringType of
+                        "resize" :: dir :: strType :: _ ->
+                            if strType == Gear.stringType then
+                                IResizeHandle (Coll.forgeId int) (dir == "right")
 
-                    _ ->
-                        Debug.log ("ERROR Unrecognized UID type " ++ stringType) INothing
+                            else
+                                Debug.log ("ERROR Unrecognized UID resize type " ++ strType) INothing
 
-        _ ->
-            Debug.log ("ERROR Unrecognized UID " ++ uid) INothing
+                        _ ->
+                            Debug.log ("ERROR Unrecognized UID type " ++ stringType) INothing
+
+            _ ->
+                Debug.log ("ERROR Unrecognized UID " ++ uid) INothing
 
 
 addNewGear : Sound -> Doc -> ( Doc, Vec2 )

@@ -171,7 +171,11 @@ hoverEvents id =
 
 draggableEvents : item -> List (Html.Attribute (Msg item))
 draggableEvents id =
-    [ Mouse.onDown <| StartClick id << vecFromTuple << .offsetPos ]
+    [ Mouse.onWithOptions "mousedown" { stopPropagation = True, preventDefault = False } <|
+        StartClick id
+            << vecFromTuple
+            << .offsetPos
+    ]
 
 
 
