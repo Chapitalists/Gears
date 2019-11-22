@@ -16,11 +16,16 @@ import TypedSvg.Core exposing (Svg)
 import UndoList as Undo exposing (UndoList)
 
 
+
+-- TODO futureLink and cutting could be a single Variant as it’s impossible to drag 2 things at the same time
+
+
 type Doc
     = D
         { data : UndoList Mobile
         , playing : List (Id Gear)
         , futureLink : Maybe FutureLink
+        , cutting : ( Maybe ( Vec2, Vec2 ), List Link )
         , tool : Tool
         , engine : Engine
         , details : Maybe (Id Gear)
@@ -59,6 +64,7 @@ new =
         { data = Undo.fresh { gears = Coll.empty, motor = Coll.startId }
         , playing = []
         , futureLink = Nothing
+        , cutting = ( Nothing, [] )
         , tool = Play
         , engine = Engine.init
         , details = Nothing
@@ -143,6 +149,7 @@ update msg (D doc) =
                         else
                             doc.futureLink
                     , engine = newEngine
+                    , cutting = ( Nothing, [] )
                 }
             , cmd
             )
@@ -282,17 +289,42 @@ update msg (D doc) =
                             ( D doc, Cmd.none )
 
                 ( _, Interact.Dragged uid oldPos newPos ) ->
-                    case doc.futureLink of
-                        Just (Complete _) ->
-                            ( D doc, Cmd.none )
-
-                        _ ->
-                            case interactableFromUID uid of
-                                IGear id ->
-                                    ( D { doc | futureLink = Just <| Demi ( id, newPos ) }, Cmd.none )
+                    case interactableFromUID uid of
+                        IGear id ->
+                            case doc.futureLink of
+                                Just (Complete _) ->
+                                    ( D doc, Cmd.none )
 
                                 _ ->
-                                    ( D doc, Cmd.none )
+                                    ( D { doc | futureLink = Just <| Demi ( id, newPos ) }, Cmd.none )
+
+                        ISurface ->
+                            if doc.tool == Play then
+                                let
+                                    cut =
+                                        case Tuple.first doc.cutting of
+                                            Nothing ->
+                                                ( oldPos, newPos )
+
+                                            Just ( start, _ ) ->
+                                                ( start, newPos )
+
+                                    newCuts =
+                                        Engine.getAllLinks doc.data.present.gears
+                                            |> List.filter (Link.cuts cut << Link.toSegment doc.data.present.gears)
+                                in
+                                ( D
+                                    { doc
+                                        | cutting = ( Just cut, newCuts )
+                                    }
+                                , Cmd.none
+                                )
+
+                            else
+                                ( D doc, Cmd.none )
+
+                        _ ->
+                            ( D doc, Cmd.none )
 
                 ( _, Interact.DragIn uid ) ->
                     case doc.futureLink of
@@ -337,7 +369,19 @@ update msg (D doc) =
                             )
 
                         _ ->
-                            ( D { doc | futureLink = Nothing }, Cmd.none )
+                            let
+                                ( gears, engine, cmd ) =
+                                    Engine.rmMotors (Tuple.second doc.cutting) doc.data.present doc.engine
+                            in
+                            ( D
+                                { doc
+                                    | futureLink = Nothing
+                                    , data = undoNew doc.data (\m -> { m | gears = gears })
+                                    , engine = engine
+                                    , cutting = ( Nothing, [] )
+                                }
+                            , cmd
+                            )
 
                 ( Link, Interact.DragEnded valid ) ->
                     case ( doc.futureLink, valid ) of
@@ -405,8 +449,8 @@ viewExtraTools (D doc) =
         )
 
 
-viewContent : Doc -> Interact.Interact String -> List (Svg Gear.OutMsg)
-viewContent (D doc) inter =
+viewContent : Doc -> Interact.Interact String -> Float -> List (Svg Gear.OutMsg)
+viewContent (D doc) inter scale =
     let
         getMod : Interact.Interact String -> Id Gear -> Gear.Mod
         getMod i id =
@@ -465,7 +509,7 @@ viewContent (D doc) inter =
                 Just (Complete l) ->
                     case doc.tool of
                         Play ->
-                            Link.viewMotorLink doc.data.present.gears l
+                            Link.viewMotorLink doc.data.present.gears [] l
 
                         Link ->
                             Link.viewFractLink doc.data.present.gears l
@@ -475,13 +519,20 @@ viewContent (D doc) inter =
            )
         ++ (case doc.tool of
                 Play ->
-                    List.concatMap (Link.viewMotorLink doc.data.present.gears) <|
+                    List.concatMap (Link.viewMotorLink doc.data.present.gears (Tuple.second doc.cutting)) <|
                         Engine.getAllLinks doc.data.present.gears
 
                 Link ->
                     List.concatMap (Link.viewFractLink doc.data.present.gears) <|
                         List.concatMap Gear.getGearLinks <|
                             Coll.values doc.data.present.gears
+
+                _ ->
+                    []
+           )
+        ++ (case doc.cutting of
+                ( Just seg, _ ) ->
+                    [ Link.drawCut seg scale ]
 
                 _ ->
                     []

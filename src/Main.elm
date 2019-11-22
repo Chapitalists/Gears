@@ -301,7 +301,7 @@ viewDoc model =
                             (Interact.draggableEvents svgId)
                     )
                 <|
-                    (Doc.viewContent model.doc (Interact.getInteract model.interact)
+                    (Doc.viewContent model.doc (Interact.getInteract model.interact) (getScale model)
                         |> List.map (SS.map forwardGearOutMsg)
                     )
         , Doc.viewExtraTools model.doc

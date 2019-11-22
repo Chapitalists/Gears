@@ -36,7 +36,7 @@ toggle { gears, motor } (E e) =
     else
         let
             ( addPlaying, cmd ) =
-                playPause motor gears
+                playPauseLinked motor gears
         in
         ( E { e | playing = addPlaying }, cmd )
 
@@ -47,10 +47,10 @@ addMotor l gears (E e) =
         ( addPlaying, cmd ) =
             case ( List.member (Tuple.first l) e.playing, List.member (Tuple.second l) e.playing ) of
                 ( True, False ) ->
-                    playPause (Tuple.second l) gears
+                    playPauseLinked (Tuple.second l) gears
 
                 ( False, True ) ->
-                    playPause (Tuple.first l) gears
+                    playPauseLinked (Tuple.first l) gears
 
                 _ ->
                     ( [], Cmd.none )
@@ -59,6 +59,26 @@ addMotor l gears (E e) =
     , E { e | playing = e.playing ++ addPlaying }
     , cmd
     )
+
+
+rmMotors : List Link -> { a | gears : Coll Gear, motor : Id Gear } -> Engine -> ( Coll Gear, Engine, Cmd msg )
+rmMotors ls { gears, motor } (E e) =
+    let
+        newGears =
+            List.foldl Gear.rmMotorLink gears ls
+    in
+    if isPlaying (E e) then
+        let
+            motored =
+                visitMotors newGears motor []
+        in
+        ( newGears
+        , E { e | playing = motored }
+        , playPause (List.filter (\el -> not <| List.member el motored) e.playing) gears
+        )
+
+    else
+        ( newGears, E e, Cmd.none )
 
 
 mute : Id Gear -> Coll Gear -> Engine -> ( Coll Gear, Cmd msg )
@@ -86,19 +106,24 @@ mute id gears (E e) =
             )
 
 
-playPause : Id Gear -> Coll Gear -> ( List (Id Gear), Cmd msg )
-playPause motor gears =
+playPauseLinked : Id Gear -> Coll Gear -> ( List (Id Gear), Cmd msg )
+playPauseLinked motor gears =
     let
         changed =
             visitMotors gears motor []
     in
     ( changed
-    , toEngine <|
+    , playPause changed gears
+    )
+
+
+playPause : List (Id Gear) -> Coll Gear -> Cmd msg
+playPause ids gears =
+    toEngine <|
         E.object
             [ ( "action", E.string "playPause" )
-            , ( "gears", E.list (\id -> Gear.encoder id gears) changed )
+            , ( "gears", E.list (\id -> Gear.encoder id gears) ids )
             ]
-    )
 
 
 stop : Cmd msg

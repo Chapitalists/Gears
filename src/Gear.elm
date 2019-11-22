@@ -56,6 +56,25 @@ addMotorLink l coll =
             debugGear (Tuple.first l) "Didn’t found gears to add Motor" coll
 
 
+rmMotorLink : Link -> Coll Gear -> Coll Gear
+rmMotorLink l coll =
+    let
+        getGear id =
+            Coll.get id coll
+
+        rmMotor id (G g) =
+            G { g | motors = List.filter (\el -> el /= id) g.motors }
+    in
+    case Tuple.mapBoth getGear getGear l of
+        ( Just _, Just _ ) ->
+            coll
+                |> Coll.update (Tuple.first l) (rmMotor <| Tuple.second l)
+                |> Coll.update (Tuple.second l) (rmMotor <| Tuple.first l)
+
+        _ ->
+            debugGear (Tuple.first l) "Didn’t found gears to rm Motor" coll
+
+
 type Ref
     = Other (Id Gear)
     | Self
