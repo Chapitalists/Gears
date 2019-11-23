@@ -6,7 +6,7 @@ import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
 import Engine exposing (Engine)
-import Fraction as Fract
+import Fraction as Fract exposing (Fraction)
 import Gear exposing (Gear, Ref)
 import Interact
 import Link exposing (Link)
@@ -57,7 +57,7 @@ type Interactable
 type Detailed
     = DNothing
     | DGear (Id Gear)
-    | DHarmolink Link
+    | DHarmolink Link (Maybe Fraction)
 
 
 new : Doc
@@ -123,6 +123,8 @@ type Msg
     | StopGear (Id Gear)
     | CopyGear (Id Gear)
     | DeleteGear (Id Gear)
+    | EnteredFract Bool String -- True for Numerator
+    | AppliedFract Link Fraction
     | Undo
     | Redo
     | GearMsg ( Id Gear, Gear.Msg )
@@ -223,6 +225,49 @@ update msg (D doc) =
                             }
                         , Cmd.none
                         )
+
+        EnteredFract isNumerator str ->
+            case ( doc.details, String.toInt str ) of
+                ( DHarmolink l (Just fract), Just i ) ->
+                    ( D
+                        { doc
+                            | details =
+                                DHarmolink l <|
+                                    Just <|
+                                        Fract.fromRecord <|
+                                            if isNumerator then
+                                                { num = i, den = Fract.getDenominator fract }
+
+                                            else
+                                                { num = Fract.getNumerator fract, den = i }
+                        }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( D doc, Cmd.none )
+
+        AppliedFract l fract ->
+            let
+                newFract =
+                    Fract.multiplication fract <| Gear.getFract <| Coll.get (Tuple.first l) mobile.gears
+            in
+            ( D
+                { doc
+                    | data =
+                        undoNew doc.data
+                            (\m ->
+                                { m
+                                    | gears =
+                                        Coll.update
+                                            (Tuple.second l)
+                                            (Gear.setFract newFract)
+                                            m.gears
+                                }
+                            )
+                }
+            , Cmd.none
+            )
 
         Undo ->
             ( D { doc | data = Undo.undo doc.data }, Cmd.none )
@@ -414,11 +459,21 @@ update msg (D doc) =
 
                                     else
                                         doc.data
+
+                                mayFract =
+                                    if Tuple.first bases == Tuple.second bases then
+                                        Just <|
+                                            Fract.division
+                                                (Gear.getFract <| Coll.get (Tuple.second l) mobile.gears)
+                                                (Gear.getFract <| Coll.get (Tuple.first l) mobile.gears)
+
+                                    else
+                                        Nothing
                             in
                             ( D
                                 { doc
                                     | futureLink = Nothing
-                                    , details = DHarmolink l
+                                    , details = DHarmolink l <| Debug.log "fract" mayFract
                                     , data = upData
                                 }
                             , Cmd.none
@@ -610,6 +665,34 @@ viewDetails (D doc) =
                     , label = text "Supprimer"
                     }
                 ]
+            ]
+
+        DHarmolink l mayFract ->
+            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+                ([ text <| (Gear.toUID <| Tuple.first l) ++ (Gear.toUID <| Tuple.second l) ]
+                    ++ (case mayFract of
+                            Nothing ->
+                                [ text "Unrelated" ]
+
+                            Just fract ->
+                                [ Input.text [ Font.color (rgb 0 0 0) ]
+                                    { text = String.fromInt <| Fract.getNumerator fract
+                                    , onChange = EnteredFract True
+                                    , label = Input.labelHidden "Numerator"
+                                    , placeholder = Nothing
+                                    }
+                                , text "/"
+                                , Input.text [ Font.color (rgb 0 0 0) ]
+                                    { text = String.fromInt <| Fract.getDenominator fract
+                                    , onChange = EnteredFract False
+                                    , label = Input.labelHidden "Denominator"
+                                    , placeholder = Nothing
+                                    }
+                                , Input.button [] { label = text "Change", onPress = Just <| AppliedFract l fract }
+                                ]
+                       )
+                    ++ [ row [] [] ]
+                )
             ]
 
         _ ->
