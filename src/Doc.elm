@@ -551,7 +551,7 @@ viewContent (D doc) inter scale =
 
                     else
                         case ( doc.tool, mode ) of
-                            ( Edit, Interact.Hover ) ->
+                            ( Link, Interact.Hover ) ->
                                 Gear.Resizable
 
                             ( _, Interact.Hover ) ->
