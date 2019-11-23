@@ -215,17 +215,20 @@ copy id coll =
         (G g) =
             Coll.get id coll
 
+        base =
+            Maybe.withDefault id <| getBaseId (G g)
+
         newG =
             G
                 { g
                     | pos = add g.pos (vec2 (getLength (G g) coll * 1.1) 0)
-                    , ref = Other id
+                    , ref = Other base
                 }
 
         ( newId, newColl ) =
             Coll.insertTellId newG coll
     in
-    Coll.update id (addToRefGroup newId >> addLink ( id, newId )) newColl
+    Coll.update base (addToRefGroup newId >> addLink ( id, newId )) newColl
 
 
 resizeFree : Id Gear -> Float -> Coll Gear -> Coll Gear
