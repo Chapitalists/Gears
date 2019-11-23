@@ -6,7 +6,7 @@ import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
 import Engine exposing (Engine)
-import Fraction as Fract
+import Fraction as Fract exposing (Fraction)
 import Gear exposing (Gear, Ref)
 import Interact
 import Link exposing (Link)
@@ -17,7 +17,7 @@ import UndoList as Undo exposing (UndoList)
 
 
 
--- TODO Engine Module
+-- TODO futureLink and cutting could be a single Variant as it’s impossible to drag 2 things at the same time
 
 
 type Doc
@@ -25,9 +25,10 @@ type Doc
         { data : UndoList Mobile
         , playing : List (Id Gear)
         , futureLink : Maybe FutureLink
+        , cutting : ( Maybe ( Vec2, Vec2 ), List Link )
         , tool : Tool
         , engine : Engine
-        , details : Maybe (Id Gear)
+        , details : Detailed
         }
 
 
@@ -47,48 +48,56 @@ type Tool
 
 
 type Interactable
-    = IGear (Id Gear)
+    = INothing
+    | ISurface
+    | IGear (Id Gear)
     | IResizeHandle (Id Gear) Bool
-    | INothing
 
 
-type HasDetails
-    = DGear (Id Gear)
+type Detailed
+    = DNothing
+    | DGear (Id Gear)
+    | DHarmolink Link (Maybe Fraction)
 
 
 new : Doc
 new =
     D
-        { data = Undo.fresh { gears = Coll.empty, motor = Coll.startId }
+        { data = Undo.fresh { gears = Coll.empty Gear.default, motor = Coll.startId }
         , playing = []
         , futureLink = Nothing
+        , cutting = ( Nothing, [] )
         , tool = Play
         , engine = Engine.init
-        , details = Nothing
+        , details = DNothing
         }
 
 
 interactableFromUID : String -> Interactable
 interactableFromUID uid =
-    case String.split "-" uid of
-        stringType :: int :: _ ->
-            if stringType == Gear.stringType then
-                IGear (Coll.forgeId int)
+    if uid == "svg" then
+        ISurface
 
-            else
-                case String.split "." stringType of
-                    "resize" :: dir :: strType :: _ ->
-                        if strType == Gear.stringType then
-                            IResizeHandle (Coll.forgeId int) (dir == "right")
+    else
+        case String.split "-" uid of
+            stringType :: int :: _ ->
+                if stringType == Gear.stringType then
+                    IGear (Coll.forgeId int)
 
-                        else
-                            Debug.log ("ERROR Unrecognized UID resize type " ++ strType) INothing
+                else
+                    case String.split "." stringType of
+                        "resize" :: dir :: strType :: _ ->
+                            if strType == Gear.stringType then
+                                IResizeHandle (Coll.forgeId int) (dir == "right")
 
-                    _ ->
-                        Debug.log ("ERROR Unrecognized UID type " ++ stringType) INothing
+                            else
+                                Debug.log ("ERROR Unrecognized UID resize type " ++ strType) INothing
 
-        _ ->
-            Debug.log ("ERROR Unrecognized UID " ++ uid) INothing
+                        _ ->
+                            Debug.log ("ERROR Unrecognized UID type " ++ stringType) INothing
+
+            _ ->
+                Debug.log ("ERROR Unrecognized UID " ++ uid) INothing
 
 
 addNewGear : Sound -> Doc -> ( Doc, Vec2 )
@@ -114,6 +123,8 @@ type Msg
     | StopGear (Id Gear)
     | CopyGear (Id Gear)
     | DeleteGear (Id Gear)
+    | EnteredFract Bool String -- True for Numerator
+    | AppliedFract Link Fraction
     | Undo
     | Redo
     | GearMsg ( Id Gear, Gear.Msg )
@@ -122,12 +133,16 @@ type Msg
 
 update : Msg -> Doc -> ( Doc, Cmd msg )
 update msg (D doc) =
+    let
+        mobile =
+            doc.data.present
+    in
     case msg of
         ChangedTool tool ->
             let
                 ( newEngine, cmd ) =
                     if Engine.isPlaying doc.engine then
-                        Engine.toggle doc.data.present doc.engine
+                        Engine.toggle mobile doc.engine
 
                     else
                         ( doc.engine, Cmd.none )
@@ -142,6 +157,7 @@ update msg (D doc) =
                         else
                             doc.futureLink
                     , engine = newEngine
+                    , cutting = ( Nothing, [] )
                 }
             , cmd
             )
@@ -149,7 +165,7 @@ update msg (D doc) =
         ToggleEngine ->
             let
                 ( newEngine, cmd ) =
-                    Engine.toggle doc.data.present doc.engine
+                    Engine.toggle mobile doc.engine
             in
             ( D { doc | engine = newEngine }, cmd )
 
@@ -167,45 +183,91 @@ update msg (D doc) =
             ( D { doc | data = undoNew doc.data (\m -> { m | gears = Gear.copy id m.gears }) }, Cmd.none )
 
         DeleteGear id ->
-            case Coll.get id doc.data.present.gears of
-                Nothing ->
-                    ( D doc, Cmd.none )
+            let
+                details =
+                    if doc.details == DGear id then
+                        DNothing
 
-                Just g ->
-                    case Gear.getMotherId g doc.data.present.gears of
-                        Nothing ->
-                            Debug.log "TODO delete mother" ( D doc, Cmd.none )
+                    else
+                        doc.details
 
-                        Just motherId ->
-                            let
-                                details =
-                                    case doc.details of
-                                        Nothing ->
-                                            Nothing
+                g =
+                    Coll.get id mobile.gears
+            in
+            if Gear.hasHarmonics g then
+                -- TODO
+                Debug.log "TODO delete base" ( D doc, Cmd.none )
 
-                                        Just d ->
-                                            if d == id then
-                                                Nothing
+            else
+                case Gear.getBaseId g of
+                    Nothing ->
+                        ( D
+                            { doc
+                                | data = undoNew doc.data (\d -> { d | gears = Coll.remove id d.gears })
+                                , details = details
+                            }
+                        , Cmd.none
+                        )
+
+                    Just baseId ->
+                        ( D
+                            { doc
+                                | data =
+                                    undoNew doc.data <|
+                                        \d ->
+                                            { d
+                                                | gears =
+                                                    d.gears
+                                                        |> Coll.update baseId (Gear.removeFromRefGroup id)
+                                                        |> Coll.remove id
+                                            }
+                                , details = details
+                            }
+                        , Cmd.none
+                        )
+
+        EnteredFract isNumerator str ->
+            case ( doc.details, String.toInt str ) of
+                ( DHarmolink l (Just fract), Just i ) ->
+                    ( D
+                        { doc
+                            | details =
+                                DHarmolink l <|
+                                    Just <|
+                                        Fract.fromRecord <|
+                                            if isNumerator then
+                                                { num = i, den = Fract.getDenominator fract }
 
                                             else
-                                                doc.details
-                            in
-                            ( D
-                                { doc
-                                    | data =
-                                        undoNew doc.data <|
-                                            \d ->
-                                                { d
-                                                    | gears =
-                                                        d.gears
-                                                            |> Coll.update motherId (Gear.removeFromRefGroup id)
-                                                            |> Coll.remove id
-                                                }
-                                    , playing = List.filter (\el -> el /= id) doc.playing
-                                    , details = details
+                                                { num = Fract.getNumerator fract, den = i }
+                        }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( D doc, Cmd.none )
+
+        AppliedFract l fract ->
+            let
+                newFract =
+                    Fract.multiplication fract <| Gear.getFract <| Coll.get (Tuple.first l) mobile.gears
+            in
+            ( D
+                { doc
+                    | data =
+                        undoNew doc.data
+                            (\m ->
+                                { m
+                                    | gears =
+                                        Coll.update
+                                            (Tuple.second l)
+                                            (Gear.setFract newFract)
+                                            m.gears
                                 }
-                            , Cmd.none
                             )
+                }
+            , Cmd.none
+            )
 
         Undo ->
             ( D { doc | data = Undo.undo doc.data }, Cmd.none )
@@ -221,6 +283,7 @@ update msg (D doc) =
                     }
                 )
 
+        -- TODO Find good pattern for big mess there
         InteractEvent event ->
             case ( doc.tool, event ) of
                 ( Play, Interact.Clicked uid ) ->
@@ -228,9 +291,19 @@ update msg (D doc) =
                         IGear id ->
                             let
                                 ( newGears, cmd ) =
-                                    Engine.mute id doc.data.present.gears doc.engine
+                                    Engine.mute id mobile.gears doc.engine
                             in
                             ( D { doc | data = undoNew doc.data (\m -> { m | gears = newGears }) }, cmd )
+
+                        _ ->
+                            ( D doc, Cmd.none )
+
+                ( Link, Interact.Clicked uid ) ->
+                    case interactableFromUID uid of
+                        IGear id ->
+                            ( D { doc | data = undoNew doc.data (\m -> { m | gears = Gear.copy id m.gears }) }
+                            , Cmd.none
+                            )
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -238,7 +311,7 @@ update msg (D doc) =
                 ( Edit, Interact.Clicked uid ) ->
                     case interactableFromUID uid of
                         IGear id ->
-                            ( D { doc | details = Just id }, Cmd.none )
+                            ( D { doc | details = DGear id }, Cmd.none )
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -248,50 +321,77 @@ update msg (D doc) =
                         IGear id ->
                             update (GearMsg <| ( id, Gear.Move <| Vec.sub newPos oldPos )) <| D doc
 
-                        IResizeHandle id add ->
-                            case Coll.get id doc.data.present.gears of
-                                Nothing ->
-                                    Gear.debugGear id "No gear to resize" ( D doc, Cmd.none )
-
-                                Just g ->
-                                    let
-                                        d =
-                                            Vec.getX newPos - Vec.getX oldPos
-
-                                        dd =
-                                            if add then
-                                                d
-
-                                            else
-                                                -d
-
-                                        l =
-                                            abs <| dd * 2 + Gear.getLength g doc.data.present.gears
-                                    in
-                                    ( D
-                                        { doc
-                                            | data =
-                                                undoNew doc.data
-                                                    (\m -> { m | gears = Gear.resizeFree id l m.gears })
-                                        }
-                                    , Cmd.none
-                                    )
-
                         _ ->
                             ( D doc, Cmd.none )
 
                 ( _, Interact.Dragged uid oldPos newPos ) ->
-                    case doc.futureLink of
-                        Just (Complete _) ->
-                            ( D doc, Cmd.none )
-
-                        _ ->
-                            case interactableFromUID uid of
-                                IGear id ->
-                                    ( D { doc | futureLink = Just <| Demi ( id, newPos ) }, Cmd.none )
+                    case interactableFromUID uid of
+                        IGear id ->
+                            case doc.futureLink of
+                                Just (Complete _) ->
+                                    ( D doc, Cmd.none )
 
                                 _ ->
-                                    ( D doc, Cmd.none )
+                                    ( D { doc | futureLink = Just <| Demi ( id, newPos ) }, Cmd.none )
+
+                        ISurface ->
+                            if doc.tool == Play then
+                                let
+                                    cut =
+                                        case Tuple.first doc.cutting of
+                                            Nothing ->
+                                                ( oldPos, newPos )
+
+                                            Just ( start, _ ) ->
+                                                ( start, newPos )
+
+                                    newCuts =
+                                        Engine.getAllLinks mobile.gears
+                                            |> List.filter (Link.cuts cut << Link.toSegment mobile.gears)
+                                in
+                                ( D
+                                    { doc
+                                        | cutting = ( Just cut, newCuts )
+                                    }
+                                , Cmd.none
+                                )
+
+                            else
+                                ( D doc, Cmd.none )
+
+                        IResizeHandle id add ->
+                            if doc.tool == Link then
+                                let
+                                    g =
+                                        Coll.get id mobile.gears
+
+                                    d =
+                                        Vec.getX newPos - Vec.getX oldPos
+
+                                    dd =
+                                        if add then
+                                            d
+
+                                        else
+                                            -d
+
+                                    l =
+                                        abs <| dd * 2 + Gear.getLength g mobile.gears
+                                in
+                                ( D
+                                    { doc
+                                        | data =
+                                            undoNew doc.data
+                                                (\m -> { m | gears = Gear.resizeFree id l m.gears })
+                                    }
+                                , Cmd.none
+                                )
+
+                            else
+                                ( D doc, Cmd.none )
+
+                        _ ->
+                            ( D doc, Cmd.none )
 
                 ( _, Interact.DragIn uid ) ->
                     case doc.futureLink of
@@ -309,12 +409,7 @@ update msg (D doc) =
                 ( _, Interact.DragOut ) ->
                     case doc.futureLink of
                         Just (Complete ( idFrom, idTo )) ->
-                            case Coll.get idTo doc.data.present.gears of
-                                Just g ->
-                                    ( D { doc | futureLink = Just <| Demi ( idFrom, Gear.getPos g ) }, Cmd.none )
-
-                                Nothing ->
-                                    ( D doc, Cmd.none )
+                            ( D { doc | futureLink = Just <| Demi ( idFrom, Gear.getPos <| Coll.get idTo mobile.gears ) }, Cmd.none )
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -324,7 +419,7 @@ update msg (D doc) =
                         ( Just (Complete l), True ) ->
                             let
                                 ( gears, newEngine, cmd ) =
-                                    Engine.addMotor l doc.data.present.gears doc.engine
+                                    Engine.addMotor l mobile.gears doc.engine
                             in
                             ( D
                                 { doc
@@ -336,13 +431,67 @@ update msg (D doc) =
                             )
 
                         _ ->
-                            ( D { doc | futureLink = Nothing }, Cmd.none )
+                            let
+                                ( gears, engine, cmd ) =
+                                    Engine.rmMotors (Tuple.second doc.cutting) mobile doc.engine
+                            in
+                            ( D
+                                { doc
+                                    | futureLink = Nothing
+                                    , data = undoNew doc.data (\m -> { m | gears = gears })
+                                    , engine = engine
+                                    , cutting = ( Nothing, [] )
+                                }
+                            , cmd
+                            )
 
                 ( Link, Interact.DragEnded valid ) ->
                     case ( doc.futureLink, valid ) of
                         ( Just (Complete l), True ) ->
-                            --TODO
-                            ( D { doc | futureLink = Nothing }, Cmd.none )
+                            let
+                                base id =
+                                    Maybe.withDefault id <| Gear.getBaseId <| Coll.get id mobile.gears
+
+                                bases =
+                                    Tuple.mapBoth base base l
+
+                                upData =
+                                    if
+                                        (Tuple.first bases == Tuple.second bases)
+                                            && (not <| Gear.isActiveLink l <| Coll.get (Tuple.first bases) mobile.gears)
+                                    then
+                                        undoNew doc.data
+                                            (\m ->
+                                                { m
+                                                    | gears =
+                                                        Coll.update
+                                                            (Tuple.first bases)
+                                                            (Gear.addLink l)
+                                                            mobile.gears
+                                                }
+                                            )
+
+                                    else
+                                        doc.data
+
+                                mayFract =
+                                    if Tuple.first bases == Tuple.second bases then
+                                        Just <|
+                                            Fract.division
+                                                (Gear.getFract <| Coll.get (Tuple.second l) mobile.gears)
+                                                (Gear.getFract <| Coll.get (Tuple.first l) mobile.gears)
+
+                                    else
+                                        Nothing
+                            in
+                            ( D
+                                { doc
+                                    | futureLink = Nothing
+                                    , details = DHarmolink l <| Debug.log "fract" mayFract
+                                    , data = upData
+                                }
+                            , Cmd.none
+                            )
 
                         _ ->
                             ( D { doc | futureLink = Nothing }, Cmd.none )
@@ -357,9 +506,9 @@ viewTools (D doc) =
         [ Input.radioRow [ spacing 30 ]
             { onChange = ChangedTool
             , options =
-                [ Input.option Play <| text "Jouer"
-                , Input.option Edit <| text "Éditer"
-                , Input.option Link <| text "Lier"
+                [ Input.option Play <| text "Jeu"
+                , Input.option Link <| text "Harmonie"
+                , Input.option Edit <| text "Édition"
                 ]
             , selected = Just doc.tool
             , label = Input.labelHidden "Outils"
@@ -404,9 +553,12 @@ viewExtraTools (D doc) =
         )
 
 
-viewContent : Doc -> Interact.Interact String -> List (Svg Gear.OutMsg)
-viewContent (D doc) inter =
+viewContent : Doc -> Interact.Interact String -> Float -> List (Svg Gear.OutMsg)
+viewContent (D doc) inter scale =
     let
+        mobile =
+            doc.data.present
+
         getMod : Interact.Interact String -> Id Gear -> Gear.Mod
         getMod i id =
             case i of
@@ -431,56 +583,62 @@ viewContent (D doc) inter =
                             ( _, Interact.Drag ) ->
                                 Gear.Dragged
     in
-    (List.map (\( id, g ) -> Gear.view ( id, g ) doc.data.present.gears (getMod inter id)) <|
-        Coll.toList doc.data.present.gears
+    (List.map (\( id, g ) -> Gear.view ( id, g ) mobile.gears (getMod inter id)) <|
+        Coll.toList mobile.gears
     )
         ++ (case doc.futureLink of
                 Nothing ->
                     []
 
                 Just (Demi ( id, pos )) ->
-                    case Coll.get id doc.data.present.gears of
-                        Nothing ->
-                            Debug.log ("IMPOSSIBLE future link didn’t found gear " ++ Gear.toUID id) []
+                    let
+                        g =
+                            Coll.get id mobile.gears
+                    in
+                    case doc.tool of
+                        Play ->
+                            let
+                                length =
+                                    Gear.getLength g mobile.gears
+                            in
+                            [ Link.drawMotorLink ( ( Gear.getPos g, length ), ( pos, length ) ) ]
 
-                        Just g ->
-                            case doc.tool of
-                                Play ->
-                                    let
-                                        length =
-                                            Gear.getLength g doc.data.present.gears
-                                    in
-                                    [ Link.drawMotorLink ( ( Gear.getPos g, length ), ( pos, length ) ) ]
+                        Link ->
+                            [ Link.drawRawLink
+                                ( Gear.getPos g, pos )
+                                (Gear.getLength g mobile.gears)
+                            ]
 
-                                Link ->
-                                    [ Link.drawRawLink
-                                        ( Gear.getPos g, pos )
-                                        (Gear.getLength g doc.data.present.gears)
-                                    ]
-
-                                _ ->
-                                    []
+                        _ ->
+                            []
 
                 Just (Complete l) ->
                     case doc.tool of
                         Play ->
-                            Link.viewMotorLink doc.data.present.gears l
+                            Link.viewMotorLink mobile.gears [] l
 
                         Link ->
-                            Link.viewFractLink doc.data.present.gears l
+                            Link.viewFractLink mobile.gears l
 
                         _ ->
                             []
            )
         ++ (case doc.tool of
                 Play ->
-                    List.concatMap (Link.viewMotorLink doc.data.present.gears) <|
-                        Engine.getAllLinks doc.data.present.gears
+                    List.concatMap (Link.viewMotorLink mobile.gears (Tuple.second doc.cutting)) <|
+                        Engine.getAllLinks mobile.gears
 
                 Link ->
-                    List.concatMap (Link.viewFractLink doc.data.present.gears) <|
+                    List.concatMap (Link.viewFractLink mobile.gears) <|
                         List.concatMap Gear.getGearLinks <|
-                            Coll.values doc.data.present.gears
+                            Coll.values mobile.gears
+
+                _ ->
+                    []
+           )
+        ++ (case doc.cutting of
+                ( Just seg, _ ) ->
+                    [ Link.drawCut seg scale ]
 
                 _ ->
                     []
@@ -490,46 +648,69 @@ viewContent (D doc) inter =
 viewDetails : Doc -> List (Element Msg)
 viewDetails (D doc) =
     case doc.details of
-        Nothing ->
+        DGear id ->
+            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+                [ text <| Gear.toUID id
+                , Input.button []
+                    (if List.member id doc.playing then
+                        { label = text "Stop"
+                        , onPress = Just <| StopGear id
+                        }
+
+                     else
+                        { label = text "Play"
+                        , onPress = Just <| PlayGear id
+                        }
+                    )
+                , Input.button []
+                    { label = text "Copie"
+                    , onPress = Just <| CopyGear id
+                    }
+                , Input.button []
+                    { label = text "x 2"
+                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer 2 )
+                    }
+                , Input.button []
+                    { label = text "/ 2"
+                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit 2 )
+                    }
+                , Input.button []
+                    { onPress = Just <| DeleteGear id
+                    , label = text "Supprimer"
+                    }
+                ]
+            ]
+
+        DHarmolink l mayFract ->
+            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+                ([ text <| (Gear.toUID <| Tuple.first l) ++ (Gear.toUID <| Tuple.second l) ]
+                    ++ (case mayFract of
+                            Nothing ->
+                                [ text "Unrelated" ]
+
+                            Just fract ->
+                                [ Input.text [ Font.color (rgb 0 0 0) ]
+                                    { text = String.fromInt <| Fract.getNumerator fract
+                                    , onChange = EnteredFract True
+                                    , label = Input.labelHidden "Numerator"
+                                    , placeholder = Nothing
+                                    }
+                                , text "/"
+                                , Input.text [ Font.color (rgb 0 0 0) ]
+                                    { text = String.fromInt <| Fract.getDenominator fract
+                                    , onChange = EnteredFract False
+                                    , label = Input.labelHidden "Denominator"
+                                    , placeholder = Nothing
+                                    }
+                                , Input.button [] { label = text "Change", onPress = Just <| AppliedFract l fract }
+                                ]
+                       )
+                    ++ [ row [] [] ]
+                )
+            ]
+
+        _ ->
             []
-
-        Just id ->
-            case Coll.get id doc.data.present.gears of
-                Nothing ->
-                    Debug.log ("IMPOSSIBLE No gear for details of " ++ Gear.toUID id) []
-
-                Just g ->
-                    [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
-                        [ text <| Gear.toUID id
-                        , Input.button []
-                            (if List.member id doc.playing then
-                                { label = text "Stop"
-                                , onPress = Just <| StopGear id
-                                }
-
-                             else
-                                { label = text "Play"
-                                , onPress = Just <| PlayGear id
-                                }
-                            )
-                        , Input.button []
-                            { label = text "Copie"
-                            , onPress = Just <| CopyGear id
-                            }
-                        , Input.button []
-                            { label = text "x 2"
-                            , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer 2 )
-                            }
-                        , Input.button []
-                            { label = text "/ 2"
-                            , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit 2 )
-                            }
-                        , Input.button []
-                            { onPress = Just <| DeleteGear id
-                            , label = text "Supprimer"
-                            }
-                        ]
-                    ]
 
 
 undoNew : UndoList model -> (model -> model) -> UndoList model

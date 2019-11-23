@@ -18,36 +18,35 @@ type alias Link =
 viewFractLink : Coll Gear -> Link -> List (Svg msg)
 viewFractLink gears l =
     let
-        getGear id =
-            Coll.get id gears
+        ( g, gg ) =
+            toGears gears l
     in
-    case Tuple.mapBoth getGear getGear l of
-        ( Just g, Just gg ) ->
-            [ drawRawLink ( Gear.getPos g, Gear.getPos gg ) <|
-                (Gear.getLength g gears + Gear.getLength gg gears)
-                    / 2
-            ]
-
-        _ ->
-            Debug.log "Didn’t found both gears to draw algebraic link" []
+    [ drawRawLink ( Gear.getPos g, Gear.getPos gg ) <|
+        ((Gear.getLength g gears + Gear.getLength gg gears) / 2)
+    ]
 
 
-viewMotorLink : Coll Gear -> Link -> List (Svg msg)
-viewMotorLink gears l =
+viewMotorLink : Coll Gear -> List Link -> Link -> List (Svg msg)
+viewMotorLink gears cutting l =
     let
-        getGear id =
-            Coll.get id gears
+        ( g, gg ) =
+            toGears gears l
     in
-    case Tuple.mapBoth getGear getGear l of
-        ( Just g, Just gg ) ->
-            [ drawMotorLink
-                ( ( Gear.getPos g, Gear.getLength g gears )
-                , ( Gear.getPos gg, Gear.getLength gg gears )
-                )
-            ]
+    [ S.g
+        [ SA.opacity <|
+            TypedSvg.Types.Opacity <|
+                if List.any (equal l) cutting then
+                    0.5
 
-        _ ->
-            Debug.log "Didn’t found both gears to draw motor link" []
+                else
+                    1
+        ]
+        [ drawMotorLink
+            ( ( Gear.getPos g, Gear.getLength g gears )
+            , ( Gear.getPos gg, Gear.getLength gg gears )
+            )
+        ]
+    ]
 
 
 drawMotorLink : ( ( Vec2, Float ), ( Vec2, Float ) ) -> Svg msg
@@ -73,11 +72,42 @@ drawRawLink : ( Vec2, Vec2 ) -> Float -> Svg msg
 drawRawLink ( p1, p2 ) gearL =
     S.polyline
         [ SA.points [ tupleFromVec p1, tupleFromVec p2 ]
-        , SA.stroke <| Color.brown
+        , SA.stroke Color.brown
         , SA.strokeWidth <| Num (gearL / 30)
         , SA.strokeLinecap TypedSvg.Types.StrokeLinecapRound
         ]
         []
+
+
+drawCut : ( Vec2, Vec2 ) -> Float -> Svg msg
+drawCut ( p1, p2 ) scale =
+    S.polyline
+        [ SA.points [ tupleFromVec p1, tupleFromVec p2 ]
+        , SA.strokeWidth <| Num (1 * scale)
+        , SA.stroke Color.black
+        , SA.shapeRendering <| TypedSvg.Types.RenderCrispEdges
+        ]
+        []
+
+
+equal : Link -> Link -> Bool
+equal l1 l2 =
+    (Tuple.first l1 == Tuple.first l2 && Tuple.second l1 == Tuple.second l2)
+        || (Tuple.first l1 == Tuple.second l2 && Tuple.first l2 == Tuple.second l1)
+
+
+toGears : Coll Gear -> Link -> ( Gear, Gear )
+toGears gears l =
+    let
+        getGear id =
+            Coll.get id gears
+    in
+    Tuple.mapBoth getGear getGear l
+
+
+toSegment : Coll Gear -> Link -> ( Vec2, Vec2 )
+toSegment gears l =
+    Tuple.mapBoth Gear.getPos Gear.getPos <| toGears gears l
 
 
 tupleFromVec : Vec2 -> ( Float, Float )
@@ -92,3 +122,45 @@ rotate90 v clockWise =
 
     else
         vec2 -(Vec.getY v) (Vec.getX v)
+
+
+
+-- from https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
+
+
+cuts : ( Vec2, Vec2 ) -> ( Vec2, Vec2 ) -> Bool
+cuts ( p, p2 ) ( q, q2 ) =
+    let
+        r =
+            Vec.sub p2 p
+
+        s =
+            Vec.sub q2 q
+
+        rs =
+            crossProductLength r s
+    in
+    if rs == 0 then
+        False
+
+    else
+        let
+            qp =
+                Vec.sub q p
+
+            t =
+                crossProductLength qp s / rs
+
+            u =
+                crossProductLength qp r / rs
+        in
+        if (t > 0) && (t < 1) && (u > 0) && (u < 1) then
+            True
+
+        else
+            False
+
+
+crossProductLength : Vec2 -> Vec2 -> Float
+crossProductLength v w =
+    Vec.getX v * Vec.getY w - Vec.getY v * Vec.getX w

@@ -56,6 +56,11 @@ type Msg item
     | NOOP
 
 
+
+-- TODO Event = E {action = Action, target = Maybe item, oldPos = Maybe Vec2, newPos = Maybe Vec2}
+-- In order to make sure mapping every coords in Main.update, or case on item first in Doc.update
+
+
 type Event item
     = NoEvent
     | Clicked item
@@ -171,7 +176,11 @@ hoverEvents id =
 
 draggableEvents : item -> List (Html.Attribute (Msg item))
 draggableEvents id =
-    [ Mouse.onDown <| StartClick id << vecFromTuple << .offsetPos ]
+    [ Mouse.onWithOptions "mousedown" { stopPropagation = True, preventDefault = False } <|
+        StartClick id
+            << vecFromTuple
+            << .offsetPos
+    ]
 
 
 

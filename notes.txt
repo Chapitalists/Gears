@@ -1,4 +1,4 @@
-elm-live src/Main.elm -s ports.html --hot -v -- --debug --output=elmApp.js
+elm-live src/Main.elm -s ports.html -- --debug --output=elmApp.js
 
 
 Type Data avec tout ce qui doit être sauvegardé et undo/redo (est-ce bien les mêmes choses ?)

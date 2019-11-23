@@ -72,6 +72,11 @@ type alias Model =
     }
 
 
+svgId : String
+svgId =
+    "svg"
+
+
 type alias ViewPos =
     { c : Vec2, smallestSize : Float }
 
@@ -283,7 +288,7 @@ viewDoc model =
         , el [ width fill, height fill, Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver" ] <|
             Element.html <|
                 S.svg
-                    ([ Html.Attributes.id "svg"
+                    ([ Html.Attributes.id svgId
                      , SS.attribute "width" "100%"
                      , SS.attribute "height" "100%"
                      , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
@@ -292,9 +297,11 @@ viewDoc model =
                      ]
                         ++ List.map (Html.Attributes.map InteractMsg)
                             (Interact.dragSpaceEvents model.interact)
+                        ++ List.map (Html.Attributes.map InteractMsg)
+                            (Interact.draggableEvents svgId)
                     )
                 <|
-                    (Doc.viewContent model.doc (Interact.getInteract model.interact)
+                    (Doc.viewContent model.doc (Interact.getInteract model.interact) (getScale model)
                         |> List.map (SS.map forwardGearOutMsg)
                     )
         , Doc.viewExtraTools model.doc

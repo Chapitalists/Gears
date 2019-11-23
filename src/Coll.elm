@@ -1,4 +1,4 @@
-module Coll exposing (Coll, Id, empty, fillReserved, filter, forgeId, get, idToString, ids, insert, insertTellId, remove, reserve, startId, toList, update, values)
+module Coll exposing (Coll, Id, empty, fillReserved, filter, forgeId, get, idToString, ids, insert, insertTellId, maybeGet, remove, reserve, startId, toList, update, values)
 
 import Dict exposing (Dict)
 
@@ -33,24 +33,37 @@ forgeId str =
 
 
 type Coll item
-    = C { nextId : Int, d : Dict Int item }
+    = C { nextId : Int, d : Dict Int item, default : item }
 
 
-empty : Coll item
-empty =
-    C { nextId = 1, d = Dict.empty }
+startInt : Int
+startInt =
+    1
 
 
 startId : Id item
 startId =
-    case empty of
-        C c ->
-            opacifyId c.nextId
+    opacifyId startInt
 
 
-get : Id item -> Coll item -> Maybe item
+empty : item -> Coll item
+empty default =
+    C { nextId = startInt, d = Dict.empty, default = default }
+
+
+get : Id item -> Coll item -> item
 get id (C coll) =
-    Dict.get (getIdInternal id) coll.d
+    case maybeGet id (C coll) of
+        Nothing ->
+            Debug.log ("No item for id " ++ (String.fromInt <| getIdInternal id)) coll.default
+
+        Just item ->
+            item
+
+
+maybeGet : Id item -> Coll item -> Maybe item
+maybeGet id (C { d }) =
+    Dict.get (getIdInternal id) d
 
 
 insert : item -> Coll item -> Coll item

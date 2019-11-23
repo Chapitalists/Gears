@@ -22,6 +22,10 @@ type alias SoundInternal =
 -}
 
 
+noSound =
+    S { path = "NO_SOUND", length = 0 }
+
+
 length : Sound -> Float
 length (S s) =
     s.length
