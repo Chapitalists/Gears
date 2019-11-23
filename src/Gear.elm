@@ -254,6 +254,11 @@ getFract (G g) =
     g.fract
 
 
+setFract : Fraction -> Gear -> Gear
+setFract f (G g) =
+    G { g | fract = f }
+
+
 getLength : Gear -> Coll Gear -> Float
 getLength (G g) coll =
     case g.ref of
