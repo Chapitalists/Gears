@@ -41,6 +41,7 @@ port newSVGSize : (D.Value -> msg) -> Sub msg
 -- TODO check msg or Msg in types, if unused, maybe replace by x
 -- TODO clean all module exposings decl
 -- TODO is "No error handling in update, everything comes Checked before" is a good pattern ?
+-- TODO change all debug and silent edge or fail (_/NOOP) to debug.log
 -- MAIN
 
 
@@ -67,8 +68,7 @@ type alias Model =
     , doc : Doc
     , viewPos : ViewPos
     , svgSize : Size
-    , interact : Interact.State String
-    , debug : String -- TODO change all debug and silent edge or fail (_/NOOP) to debug.log
+    , interact : Interact.State Doc.Interactable
     }
 
 
@@ -119,7 +119,7 @@ type alias ClickState =
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url _ =
-    ( Model False url Set.empty [] Doc.new (ViewPos (vec2 0 0) 10) (Size 0 0) Interact.init ""
+    ( Model False url Set.empty [] Doc.new (ViewPos (vec2 0 0) 10) (Size 0 0) Interact.init
     , fetchSoundList url
     )
 
@@ -138,9 +138,8 @@ type Msg
     | Zoom Float
     | GotSVGSize (Result D.Error Size)
     | DocMsg Doc.Msg
-    | InteractMsg (Interact.Msg String)
+    | InteractMsg (Interact.Msg Doc.Interactable)
     | NOOP
-    | Problem String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -175,7 +174,7 @@ update msg model =
         SoundLoaded res ->
             case res of
                 Result.Err e ->
-                    ( { model | debug = D.errorToString e }, Cmd.none )
+                    Debug.log (D.errorToString e) ( model, Cmd.none )
 
                 Result.Ok s ->
                     ( { model | loadedSoundList = s :: model.loadedSoundList }, Cmd.none )
@@ -203,7 +202,7 @@ update msg model =
         GotSVGSize res ->
             case res of
                 Result.Err e ->
-                    ( { model | debug = D.errorToString e }, Cmd.none )
+                    Debug.log (D.errorToString e) ( model, Cmd.none )
 
                 Result.Ok s ->
                     ( { model | svgSize = s }, Cmd.none )
@@ -235,9 +234,6 @@ update msg model =
 
         NOOP ->
             ( model, Cmd.none )
-
-        Problem str ->
-            ( { model | debug = str }, Cmd.none )
 
 
 
@@ -298,7 +294,7 @@ viewDoc model =
                         ++ List.map (Html.Attributes.map InteractMsg)
                             (Interact.dragSpaceEvents model.interact)
                         ++ List.map (Html.Attributes.map InteractMsg)
-                            (Interact.draggableEvents svgId)
+                            (Interact.draggableEvents Doc.ISurface)
                     )
                 <|
                     (Doc.viewContent model.doc (Interact.getInteract model.interact) (getScale model)
@@ -312,13 +308,7 @@ viewDoc model =
 viewSoundLib : Model -> Element Msg
 viewSoundLib model =
     column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
-        [ text <|
-            if String.isEmpty model.debug then
-                "Fine"
-
-            else
-                model.debug
-        , Input.button
+        [ Input.button
             [ Font.color <|
                 if model.connected then
                     rgb 0 0 0
@@ -383,14 +373,9 @@ computeViewBox { viewPos, svgSize } =
             SA.viewBox y x h w
 
 
-forwardGearOutMsg : Gear.OutMsg -> Msg
+forwardGearOutMsg : Interact.Msg Gear.Interactable -> Msg
 forwardGearOutMsg msg =
-    case msg of
-        Gear.InteractMsg m ->
-            InteractMsg m
-
-        Gear.GearMsg m ->
-            DocMsg <| Doc.GearMsg m
+    InteractMsg <| Interact.map Doc.fromGearInteractable msg
 
 
 

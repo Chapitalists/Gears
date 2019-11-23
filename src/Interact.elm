@@ -56,6 +56,31 @@ type Msg item
     | NOOP
 
 
+map : (a -> b) -> Msg a -> Msg b
+map f m =
+    case m of
+        HoverIn a ->
+            HoverIn (f a)
+
+        StartClick a v ->
+            StartClick (f a) v
+
+        HoverOut ->
+            HoverOut
+
+        ClickMove v ->
+            ClickMove v
+
+        EndClick ->
+            EndClick
+
+        AbortClick ->
+            AbortClick
+
+        NOOP ->
+            NOOP
+
+
 
 -- TODO Event = E {action = Action, target = Maybe item, oldPos = Maybe Vec2, newPos = Maybe Vec2}
 -- In order to make sure mapping every coords in Main.update, or case on item first in Doc.update

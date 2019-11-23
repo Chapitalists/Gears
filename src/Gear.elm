@@ -327,12 +327,12 @@ update msg (G g) =
             G { g | fract = Fract.multiplication g.fract f }
 
 
-type OutMsg
-    = InteractMsg (Interact.Msg String)
-    | GearMsg ( Id Gear, Msg )
+type Interactable
+    = Gear (Id Gear)
+    | ResizeHandle (Id Gear) Bool -- True = Right
 
 
-view : ( Id Gear, Gear ) -> Coll Gear -> Mod -> Svg OutMsg
+view : ( Id Gear, Gear ) -> Coll Gear -> Mod -> Svg (Interact.Msg Interactable)
 view ( id, G g ) coll mod =
     let
         length =
@@ -346,9 +346,7 @@ view ( id, G g ) coll mod =
     in
     S.g
         ([ SA.transform [ Translate (getX g.pos) (getY g.pos) ] ]
-            ++ (List.map (Html.Attributes.map InteractMsg) <|
-                    Interact.hoverEvents (toUID id)
-               )
+            ++ Interact.hoverEvents (Gear id)
         )
         ([ S.g [ Html.Attributes.id <| toUID id ]
             [ S.circle
@@ -356,9 +354,7 @@ view ( id, G g ) coll mod =
                  , SA.cy <| Num 0
                  , SA.r <| Num (length / 2)
                  ]
-                    ++ (List.map (Html.Attributes.map InteractMsg) <|
-                            Interact.draggableEvents (toUID id)
-                       )
+                    ++ Interact.draggableEvents (Gear id)
                 )
                 []
             , S.rect
@@ -391,9 +387,7 @@ view ( id, G g ) coll mod =
                          , SA.cy <| Num 0
                          , SA.r <| Num (tickW * 2)
                          ]
-                            ++ (List.map (Html.Attributes.map InteractMsg) <|
-                                    Interact.draggableEvents ("resize.left." ++ toUID id)
-                               )
+                            ++ Interact.draggableEvents (ResizeHandle id False)
                         )
                         []
                     , S.circle
@@ -401,9 +395,7 @@ view ( id, G g ) coll mod =
                          , SA.cy <| Num 0
                          , SA.r <| Num (tickW * 2)
                          ]
-                            ++ (List.map (Html.Attributes.map InteractMsg) <|
-                                    Interact.draggableEvents ("resize.right." ++ toUID id)
-                               )
+                            ++ Interact.draggableEvents (ResizeHandle id True)
                         )
                         []
                     ]

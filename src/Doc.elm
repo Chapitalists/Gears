@@ -54,6 +54,16 @@ type Interactable
     | IResizeHandle (Id Gear) Bool
 
 
+fromGearInteractable : Gear.Interactable -> Interactable
+fromGearInteractable i =
+    case i of
+        Gear.Gear id ->
+            IGear id
+
+        Gear.ResizeHandle id bool ->
+            IResizeHandle id bool
+
+
 type Detailed
     = DNothing
     | DGear (Id Gear)
@@ -71,33 +81,6 @@ new =
         , engine = Engine.init
         , details = DNothing
         }
-
-
-interactableFromUID : String -> Interactable
-interactableFromUID uid =
-    if uid == "svg" then
-        ISurface
-
-    else
-        case String.split "-" uid of
-            stringType :: int :: _ ->
-                if stringType == Gear.stringType then
-                    IGear (Coll.forgeId int)
-
-                else
-                    case String.split "." stringType of
-                        "resize" :: dir :: strType :: _ ->
-                            if strType == Gear.stringType then
-                                IResizeHandle (Coll.forgeId int) (dir == "right")
-
-                            else
-                                Debug.log ("ERROR Unrecognized UID resize type " ++ strType) INothing
-
-                        _ ->
-                            Debug.log ("ERROR Unrecognized UID type " ++ stringType) INothing
-
-            _ ->
-                Debug.log ("ERROR Unrecognized UID " ++ uid) INothing
 
 
 addNewGear : Sound -> Doc -> ( Doc, Vec2 )
@@ -128,7 +111,7 @@ type Msg
     | Undo
     | Redo
     | GearMsg ( Id Gear, Gear.Msg )
-    | InteractEvent (Interact.Event String)
+    | InteractEvent (Interact.Event Interactable)
 
 
 update : Msg -> Doc -> ( Doc, Cmd msg )
@@ -286,8 +269,8 @@ update msg (D doc) =
         -- TODO Find good pattern for big mess there
         InteractEvent event ->
             case ( doc.tool, event ) of
-                ( Play, Interact.Clicked uid ) ->
-                    case interactableFromUID uid of
+                ( Play, Interact.Clicked i ) ->
+                    case i of
                         IGear id ->
                             let
                                 ( newGears, cmd ) =
@@ -298,8 +281,8 @@ update msg (D doc) =
                         _ ->
                             ( D doc, Cmd.none )
 
-                ( Link, Interact.Clicked uid ) ->
-                    case interactableFromUID uid of
+                ( Link, Interact.Clicked i ) ->
+                    case i of
                         IGear id ->
                             ( D { doc | data = undoNew doc.data (\m -> { m | gears = Gear.copy id m.gears }) }
                             , Cmd.none
@@ -308,24 +291,24 @@ update msg (D doc) =
                         _ ->
                             ( D doc, Cmd.none )
 
-                ( Edit, Interact.Clicked uid ) ->
-                    case interactableFromUID uid of
+                ( Edit, Interact.Clicked i ) ->
+                    case i of
                         IGear id ->
                             ( D { doc | details = DGear id }, Cmd.none )
 
                         _ ->
                             ( D doc, Cmd.none )
 
-                ( Edit, Interact.Dragged uid oldPos newPos ) ->
-                    case interactableFromUID uid of
+                ( Edit, Interact.Dragged i oldPos newPos ) ->
+                    case i of
                         IGear id ->
                             update (GearMsg <| ( id, Gear.Move <| Vec.sub newPos oldPos )) <| D doc
 
                         _ ->
                             ( D doc, Cmd.none )
 
-                ( _, Interact.Dragged uid oldPos newPos ) ->
-                    case interactableFromUID uid of
+                ( _, Interact.Dragged i oldPos newPos ) ->
+                    case i of
                         IGear id ->
                             case doc.futureLink of
                                 Just (Complete _) ->
@@ -393,10 +376,10 @@ update msg (D doc) =
                         _ ->
                             ( D doc, Cmd.none )
 
-                ( _, Interact.DragIn uid ) ->
+                ( _, Interact.DragIn i ) ->
                     case doc.futureLink of
                         Just (Demi ( idFrom, _ )) ->
-                            case interactableFromUID uid of
+                            case i of
                                 IGear idTo ->
                                     ( D { doc | futureLink = Just <| Complete ( idFrom, idTo ) }, Cmd.none )
 
@@ -553,25 +536,22 @@ viewExtraTools (D doc) =
         )
 
 
-viewContent : Doc -> Interact.Interact String -> Float -> List (Svg Gear.OutMsg)
+viewContent : Doc -> Interact.Interact Interactable -> Float -> List (Svg (Interact.Msg Gear.Interactable))
 viewContent (D doc) inter scale =
     let
         mobile =
             doc.data.present
 
-        getMod : Interact.Interact String -> Id Gear -> Gear.Mod
+        getMod : Interact.Interact Interactable -> Id Gear -> Gear.Mod
         getMod i id =
             case i of
-                Nothing ->
-                    Gear.None
-
-                Just ( uid, mode ) ->
-                    if uid /= Gear.toUID id then
+                Just ( IGear iid, mode ) ->
+                    if iid /= id then
                         Gear.None
 
                     else
                         case ( doc.tool, mode ) of
-                            ( Edit, Interact.Hover ) ->
+                            ( Link, Interact.Hover ) ->
                                 Gear.Resizable
 
                             ( _, Interact.Hover ) ->
@@ -582,6 +562,9 @@ viewContent (D doc) inter scale =
 
                             ( _, Interact.Drag ) ->
                                 Gear.Dragged
+
+                _ ->
+                    Gear.None
     in
     (List.map (\( id, g ) -> Gear.view ( id, g ) mobile.gears (getMod inter id)) <|
         Coll.toList mobile.gears
