@@ -48,10 +48,10 @@ type Tool
 
 
 type Interactable
-    = ISurface
+    = INothing
+    | ISurface
     | IGear (Id Gear)
     | IResizeHandle (Id Gear) Bool
-    | INothing
 
 
 type Detailed
@@ -506,9 +506,9 @@ viewTools (D doc) =
         [ Input.radioRow [ spacing 30 ]
             { onChange = ChangedTool
             , options =
-                [ Input.option Play <| text "Jouer"
-                , Input.option Edit <| text "Éditer"
-                , Input.option Link <| text "Lier"
+                [ Input.option Play <| text "Jeu"
+                , Input.option Link <| text "Harmonie"
+                , Input.option Edit <| text "Édition"
                 ]
             , selected = Just doc.tool
             , label = Input.labelHidden "Outils"
