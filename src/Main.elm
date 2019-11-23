@@ -68,7 +68,7 @@ type alias Model =
     , doc : Doc
     , viewPos : ViewPos
     , svgSize : Size
-    , interact : Interact.State String
+    , interact : Interact.State Doc.Interactable
     }
 
 
@@ -138,7 +138,7 @@ type Msg
     | Zoom Float
     | GotSVGSize (Result D.Error Size)
     | DocMsg Doc.Msg
-    | InteractMsg (Interact.Msg String)
+    | InteractMsg (Interact.Msg Doc.Interactable)
     | NOOP
 
 
@@ -294,7 +294,7 @@ viewDoc model =
                         ++ List.map (Html.Attributes.map InteractMsg)
                             (Interact.dragSpaceEvents model.interact)
                         ++ List.map (Html.Attributes.map InteractMsg)
-                            (Interact.draggableEvents svgId)
+                            (Interact.draggableEvents Doc.ISurface)
                     )
                 <|
                     (Doc.viewContent model.doc (Interact.getInteract model.interact) (getScale model)
@@ -373,14 +373,9 @@ computeViewBox { viewPos, svgSize } =
             SA.viewBox y x h w
 
 
-forwardGearOutMsg : Gear.OutMsg -> Msg
+forwardGearOutMsg : Interact.Msg Gear.Interactable -> Msg
 forwardGearOutMsg msg =
-    case msg of
-        Gear.InteractMsg m ->
-            InteractMsg m
-
-        Gear.GearMsg m ->
-            DocMsg <| Doc.GearMsg m
+    InteractMsg <| Interact.map Doc.fromGearInteractable msg
 
 
 

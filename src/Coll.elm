@@ -1,4 +1,4 @@
-module Coll exposing (Coll, Id, empty, fillReserved, filter, forgeId, get, idToString, ids, insert, insertTellId, maybeGet, remove, reserve, startId, toList, update, values)
+module Coll exposing (Coll, Id, empty, fillReserved, filter, get, idToString, ids, insert, insertTellId, maybeGet, remove, reserve, startId, toList, update, values)
 
 import Dict exposing (Dict)
 
@@ -20,16 +20,6 @@ opacifyId i =
 idToString : Id x -> String
 idToString (Id i) =
     String.fromInt i
-
-
-forgeId : String -> Id x
-forgeId str =
-    case String.toInt str of
-        Just i ->
-            Id i
-
-        Nothing ->
-            Debug.log ("ERROR Tried to forge id with " ++ str) (Id 0)
 
 
 type Coll item
