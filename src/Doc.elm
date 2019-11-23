@@ -321,33 +321,6 @@ update msg (D doc) =
                         IGear id ->
                             update (GearMsg <| ( id, Gear.Move <| Vec.sub newPos oldPos )) <| D doc
 
-                        IResizeHandle id add ->
-                            let
-                                g =
-                                    Coll.get id mobile.gears
-
-                                d =
-                                    Vec.getX newPos - Vec.getX oldPos
-
-                                dd =
-                                    if add then
-                                        d
-
-                                    else
-                                        -d
-
-                                l =
-                                    abs <| dd * 2 + Gear.getLength g mobile.gears
-                            in
-                            ( D
-                                { doc
-                                    | data =
-                                        undoNew doc.data
-                                            (\m -> { m | gears = Gear.resizeFree id l m.gears })
-                                }
-                            , Cmd.none
-                            )
-
                         _ ->
                             ( D doc, Cmd.none )
 
@@ -379,6 +352,37 @@ update msg (D doc) =
                                 ( D
                                     { doc
                                         | cutting = ( Just cut, newCuts )
+                                    }
+                                , Cmd.none
+                                )
+
+                            else
+                                ( D doc, Cmd.none )
+
+                        IResizeHandle id add ->
+                            if doc.tool == Link then
+                                let
+                                    g =
+                                        Coll.get id mobile.gears
+
+                                    d =
+                                        Vec.getX newPos - Vec.getX oldPos
+
+                                    dd =
+                                        if add then
+                                            d
+
+                                        else
+                                            -d
+
+                                    l =
+                                        abs <| dd * 2 + Gear.getLength g mobile.gears
+                                in
+                                ( D
+                                    { doc
+                                        | data =
+                                            undoNew doc.data
+                                                (\m -> { m | gears = Gear.resizeFree id l m.gears })
                                     }
                                 , Cmd.none
                                 )
