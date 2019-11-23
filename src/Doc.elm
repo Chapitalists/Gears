@@ -298,6 +298,16 @@ update msg (D doc) =
                         _ ->
                             ( D doc, Cmd.none )
 
+                ( Link, Interact.Clicked uid ) ->
+                    case interactableFromUID uid of
+                        IGear id ->
+                            ( D { doc | data = undoNew doc.data (\m -> { m | gears = Gear.copy id m.gears }) }
+                            , Cmd.none
+                            )
+
+                        _ ->
+                            ( D doc, Cmd.none )
+
                 ( Edit, Interact.Clicked uid ) ->
                     case interactableFromUID uid of
                         IGear id ->
