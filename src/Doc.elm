@@ -23,7 +23,6 @@ import UndoList as Undo exposing (UndoList)
 type Doc
     = D
         { data : UndoList Mobile
-        , playing : List (Id Gear)
         , futureLink : Maybe FutureLink
         , cutting : ( Maybe ( Vec2, Vec2 ), List Link )
         , tool : Tool
@@ -74,7 +73,6 @@ new : Doc
 new =
     D
         { data = Undo.fresh { gears = Coll.empty Gear.default, motor = Coll.startId }
-        , playing = []
         , futureLink = Nothing
         , cutting = ( Nothing, [] )
         , tool = Play
@@ -153,13 +151,13 @@ update msg (D doc) =
             ( D { doc | engine = newEngine }, cmd )
 
         PlayGear id ->
-            ( D { doc | playing = id :: doc.playing }
-            , Cmd.none
+            ( D doc
+            , Engine.playPause [ id ] mobile.gears
             )
 
         StopGear id ->
-            ( D { doc | playing = List.filter (\el -> el /= id) doc.playing }
-            , Cmd.none
+            ( D doc
+            , Engine.stop
             )
 
         CopyGear id ->
@@ -635,16 +633,13 @@ viewDetails (D doc) =
             [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
                 [ text <| Gear.toUID id
                 , Input.button []
-                    (if List.member id doc.playing then
-                        { label = text "Stop"
-                        , onPress = Just <| StopGear id
-                        }
-
-                     else
-                        { label = text "Play"
-                        , onPress = Just <| PlayGear id
-                        }
-                    )
+                    { label = text "PlayPause"
+                    , onPress = Just <| PlayGear id
+                    }
+                , Input.button []
+                    { label = text "Stop"
+                    , onPress = Just <| StopGear id
+                    }
                 , Input.button []
                     { label = text "Copie"
                     , onPress = Just <| CopyGear id
