@@ -33,15 +33,7 @@ type Gear
 
 
 default =
-    G
-        { ref = newSelfRef 0
-        , fract = Fract.integer 0
-        , motors = []
-        , pos = vec2 0 0
-        , startPercent = 0
-        , sound = Sound.noSound
-        , mute = False
-        }
+    fromSound Sound.noSound <| vec2 0 0
 
 
 getMotors : Gear -> List (Id Gear)
