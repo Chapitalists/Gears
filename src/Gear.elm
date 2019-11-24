@@ -11,7 +11,7 @@ import Sound exposing (Sound)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core exposing (..)
-import TypedSvg.Types exposing (Length(..), Transform(..))
+import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
 
 
 
@@ -353,6 +353,18 @@ view ( id, G g ) coll mod =
                 ([ SA.cx <| Num 0
                  , SA.cy <| Num 0
                  , SA.r <| Num (length / 2)
+                 , SA.stroke <|
+                    if id == Coll.startId then
+                        Color.red
+
+                    else
+                        Color.black
+                 , SA.strokeWidth <| Num tickW
+                 , if g.mute then
+                    SA.fill <| Fill Color.white
+
+                   else
+                    SA.fill <| Fill Color.black
                  ]
                     ++ Interact.draggableEvents (Gear id)
                 )
@@ -369,7 +381,7 @@ view ( id, G g ) coll mod =
                 , SA.height <| Num tickH
                 , SA.x <| Num (tickW / -2)
                 , SA.y <| Num (tickH / -2)
-                , SA.fill <| TypedSvg.Types.Fill Color.orange
+                , SA.fill <| Fill Color.orange
                 , SA.transform [ Rotate (g.startPercent * 360) 0 0, Translate 0 ((length / -2) + (tickH / 2)) ]
                 ]
                 []
