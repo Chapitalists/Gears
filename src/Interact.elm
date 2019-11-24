@@ -23,7 +23,7 @@ getInteract (S state) =
         ( Just item, Nothing ) ->
             Just ( item, Hover )
 
-        ( _, Just ( item, _, moved ) ) ->
+        ( _, Just { item, moved } ) ->
             if moved then
                 Just ( item, Drag )
 
@@ -37,8 +37,16 @@ getInteract (S state) =
 type State item
     = S
         { hover : Maybe item
-        , click : Maybe ( item, Vec2, Bool ) -- moved
+        , click : Maybe (ClickState item)
         }
+
+
+type alias ClickState item =
+    { item : item
+    , pos : Vec2
+    , moved : Bool
+    , keys : Mouse.Keys
+    }
 
 
 init : State item
@@ -49,7 +57,7 @@ init =
 type Msg item
     = HoverIn item
     | HoverOut
-    | StartClick item Vec2
+    | StartClick item Vec2 Mouse.Keys
     | ClickMove Vec2
     | EndClick
     | AbortClick
@@ -62,8 +70,8 @@ map f m =
         HoverIn a ->
             HoverIn (f a)
 
-        StartClick a v ->
-            StartClick (f a) v
+        StartClick a v k ->
+            StartClick (f a) v k
 
         HoverOut ->
             HoverOut
@@ -81,84 +89,89 @@ map f m =
             NOOP
 
 
+type alias Event item =
+    { action : Action
+    , item : Maybe item
+    , oldPos : Maybe Vec2
+    , newPos : Maybe Vec2
+    }
 
--- TODO Event = E {action = Action, target = Maybe item, oldPos = Maybe Vec2, newPos = Maybe Vec2}
--- In order to make sure mapping every coords in Main.update, or case on item first in Doc.update
 
-
-type Event item
+type Action
     = NoEvent
-    | Clicked item
-    | Dragged item Vec2 Vec2 -- old new
-    | DragIn item
+    | Clicked Mouse.Keys
+    | Dragged
+    | DragIn
     | DragOut
-    | DragEnded Bool -- True for Up, False for Abort
+    | DragEnded Bool Mouse.Keys -- True for Up, False for Abort
 
 
-update : Msg item -> State item -> ( State item, Event item )
+eventJustAction : Action -> Event item
+eventJustAction a =
+    Event a Nothing Nothing Nothing
+
+
+eventJustItem : Action -> item -> Event item
+eventJustItem a i =
+    Event a (Just i) Nothing Nothing
+
+
+update : Msg item -> State item -> ( State item, Maybe (Event item) )
 update msg (S state) =
     case msg of
         HoverIn id ->
             ( S { state | hover = Just id }
-            , case state.click of
-                Nothing ->
-                    NoEvent
-
-                Just _ ->
-                    DragIn id
+            , Maybe.map (always <| eventJustItem DragIn id) state.click
             )
 
         HoverOut ->
             ( S { state | hover = Nothing }
-            , case state.click of
-                Nothing ->
-                    NoEvent
-
-                Just _ ->
-                    DragOut
+            , Maybe.map (always <| eventJustAction DragOut) state.click
             )
 
-        StartClick id pos ->
-            ( S { state | click = Just ( id, pos, False ) }, NoEvent )
+        StartClick id pos keys ->
+            ( S { state | click = Just <| ClickState id pos False keys }, Nothing )
 
         ClickMove pos ->
             case state.click of
-                Just ( item, oldPos, moved ) ->
-                    ( S { state | click = Just ( item, pos, True ) }, Dragged item oldPos pos )
+                Just click ->
+                    ( S { state | click = Just { click | pos = pos, moved = True } }
+                    , Just <| Event Dragged (Just click.item) (Just click.pos) (Just pos)
+                    )
 
                 _ ->
-                    Debug.log "IMPOSSIBLE ClickMove without state.pos or state.click" ( S state, NoEvent )
+                    ( S state, Nothing )
 
         EndClick ->
             ( S { state | click = Nothing }
             , case state.click of
-                Just ( item, oldPos, moved ) ->
+                Just { item, moved, keys } ->
                     if moved then
-                        DragEnded True
+                        Just <| eventJustAction <| DragEnded True keys
 
                     else
-                        Clicked item
+                        Just <| eventJustItem (Clicked keys) item
 
                 _ ->
-                    Debug.log "IMPOSSIBLE EndClick without state.click" NoEvent
+                    Debug.log "IMPOSSIBLE EndClick without state.click" Nothing
             )
 
         AbortClick ->
             ( S { state | click = Nothing }
             , case state.click of
-                Just ( item, oldPos, moved ) ->
+                Just { moved, keys } ->
                     if moved then
-                        DragEnded False
+                        Just <| eventJustAction <| DragEnded False keys
 
                     else
-                        NoEvent
+                        Nothing
 
                 _ ->
-                    Debug.log "IMPOSSIBLE AbortClick without state.click" NoEvent
+                    Debug.log "IMPOSSIBLE AbortClick without state.click" Nothing
             )
 
         NOOP ->
-            ( S state, NoEvent )
+            ( S state, Nothing )
 
 
 subs : State item -> List (Sub (Msg item))
@@ -202,9 +215,7 @@ hoverEvents id =
 draggableEvents : item -> List (Html.Attribute (Msg item))
 draggableEvents id =
     [ Mouse.onWithOptions "mousedown" { stopPropagation = True, preventDefault = False } <|
-        StartClick id
-            << vecFromTuple
-            << .offsetPos
+        \e -> StartClick id (vecFromTuple e.offsetPos) e.keys
     ]
 
 
