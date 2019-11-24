@@ -11,7 +11,7 @@ import Sound exposing (Sound)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core exposing (..)
-import TypedSvg.Types exposing (Fill(..), Length(..), Transform(..))
+import TypedSvg.Types exposing (Fill(..), Length(..), Opacity(..), Transform(..))
 
 
 
@@ -27,6 +27,7 @@ type Gear
         , motors : List (Id Gear)
         , pos : Vec2
         , startPercent : Float
+        , volume : Float
         , sound : Sound
         , mute : Bool
         }
@@ -186,6 +187,7 @@ fromSound s p =
         , motors = []
         , pos = p
         , startPercent = 0
+        , volume = 1
         , sound = s
         , mute = False
         }
@@ -251,6 +253,11 @@ setFract f (G g) =
     G { g | fract = f }
 
 
+getVolume : Gear -> Float
+getVolume (G g) =
+    g.volume
+
+
 getLength : Gear -> Coll Gear -> Float
 getLength (G g) coll =
     case g.ref of
@@ -293,6 +300,7 @@ encoder id coll =
             , ( "length", E.float length )
             , ( "soundName", E.string <| Sound.toString g.sound )
             , ( "mute", E.bool g.mute )
+            , ( "volume", E.float g.volume )
             ]
 
 
@@ -307,6 +315,7 @@ type Mod
 type Msg
     = Move Vec2
     | ResizeFract Fraction
+    | ChangeVolume Float
 
 
 update : Msg -> Gear -> Gear
@@ -317,6 +326,9 @@ update msg (G g) =
 
         ResizeFract f ->
             G { g | fract = Fract.multiplication g.fract f }
+
+        ChangeVolume v ->
+            G { g | volume = clamp 0 1 v }
 
 
 type Interactable
@@ -352,11 +364,13 @@ view ( id, G g ) coll mod =
                     else
                         Color.black
                  , SA.strokeWidth <| Num tickW
-                 , if g.mute then
-                    SA.fill <| Fill Color.white
+                 , SA.fill <|
+                    if g.mute then
+                        Fill Color.white
 
-                   else
-                    SA.fill <| Fill Color.black
+                    else
+                        Fill Color.black
+                 , SA.fillOpacity <| Opacity (0.2 + 0.8 * g.volume)
                  ]
                     ++ Interact.draggableEvents (Gear id)
                 )

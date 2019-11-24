@@ -64,6 +64,7 @@ function play(id) {
     g.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).loop()
     s.loop = true
     s.mute = model.mute
+    s.volume.value = (model.volume - 1) * 60
     s.playbackRate = model.rate = s.buffer.duration / model.length
     s.start()
     model.startTime = Tone.context.now()

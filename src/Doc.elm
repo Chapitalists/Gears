@@ -640,6 +640,15 @@ viewDetails (D doc) =
                     { label = text "Stop"
                     , onPress = Just <| StopGear id
                     }
+                , Input.slider []
+                    { label = Input.labelAbove [] <| text "Volume"
+                    , onChange = \f -> GearMsg ( id, Gear.ChangeVolume f )
+                    , value = Gear.getVolume (Coll.get id doc.data.present.gears)
+                    , min = 0
+                    , max = 1
+                    , step = Just 0.01
+                    , thumb = Input.defaultThumb
+                    }
                 , Input.button []
                     { label = text "Copie"
                     , onPress = Just <| CopyGear id
