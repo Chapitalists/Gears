@@ -96,8 +96,8 @@ type alias Event item =
 
 
 type Action
-    = Clicked Mouse.Keys
-    | Dragged Vec2 Vec2 Mouse.Keys -- oldPos newPos
+    = Clicked ( Bool, Bool, Bool )
+    | Dragged Vec2 Vec2 ( Bool, Bool, Bool ) -- oldPos newPos
     | DragIn
     | DragOut
     | DragEnded Bool -- True for Up, False for Abort
@@ -128,7 +128,7 @@ update msg (S state) =
             case state.click of
                 Just click ->
                     ( S { state | click = Just { click | pos = pos, moved = True } }
-                    , Just <| Event (Dragged click.pos pos click.keys) click.item
+                    , Just <| Event (Dragged click.pos pos <| tupleFromKeys click.keys) click.item
                     )
 
                 _ ->
@@ -142,7 +142,7 @@ update msg (S state) =
                         Just <| Event (DragEnded True) item
 
                       else
-                        Just <| Event (Clicked keys) item
+                        Just <| Event (Clicked <| tupleFromKeys keys) item
                     )
 
                 _ ->
@@ -213,6 +213,11 @@ draggableEvents id =
 
 
 -- MISC
+
+
+tupleFromKeys : Mouse.Keys -> ( Bool, Bool, Bool )
+tupleFromKeys { alt, shift, ctrl } =
+    ( shift, ctrl, alt )
 
 
 vecFromTuple : ( Float, Float ) -> Vec2
