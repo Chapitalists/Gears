@@ -40,6 +40,7 @@ type Dragging
     | CompleteLink Link
     | Cut ( Vec2, Vec2 ) (List Link)
     | VolumeChange
+    | SizeChange
 
 
 type Tool
@@ -343,14 +344,14 @@ update msg scale (D doc) =
                             )
 
                         -- RESIZE
-                        ( IResizeHandle id add, Interact.Dragged oldPos newPos _, _ ) ->
-                            let
-                                newSize =
-                                    computeResize (Gear.getLengthId id mobile.gears) oldPos newPos add
-                            in
-                            ( D { doc | data = updateGears doc.data <| Gear.resizeFree id newSize }
-                            , Cmd.none
-                            )
+                        ( IResizeHandle id add, Interact.Dragged oldPos newPos _, NoDrag ) ->
+                            ( doResize id oldPos newPos add (D { doc | dragging = SizeChange }), Cmd.none )
+
+                        ( IResizeHandle id add, Interact.Dragged oldPos newPos _, SizeChange ) ->
+                            ( doResize id oldPos newPos add (D doc), Cmd.none )
+
+                        ( _, Interact.DragEnded _, SizeChange ) ->
+                            ( D { doc | dragging = NoDrag, data = Data.do mobile doc.data }, Cmd.none )
 
                         -- LINK -> HARMO
                         ( IGear _, Interact.Dragged _ _ _, CompleteLink _ ) ->
@@ -677,15 +678,14 @@ doVolumeChange id oldPos newPos scale (D doc) =
     )
 
 
-computeCuts : ( Vec2, Vec2 ) -> Coll Gear -> List Link
-computeCuts cut gears =
-    Engine.getAllLinks gears
-        |> List.filter (Link.cuts cut << Link.toSegment gears)
-
-
-computeResize : Float -> Vec2 -> Vec2 -> Bool -> Float
-computeResize length oldPos newPos add =
+doResize id oldPos newPos add (D doc) =
     let
+        gears =
+            (Data.current doc.data).gears
+
+        length =
+            Gear.getLengthId id gears
+
         d =
             Vec.getX newPos - Vec.getX oldPos
 
@@ -695,8 +695,17 @@ computeResize length oldPos newPos add =
 
             else
                 -d
+
+        newSize =
+            abs <| dd * 2 + length
     in
-    abs <| dd * 2 + length
+    D { doc | data = updateGearsGrouping doc.data <| Gear.resizeFree id newSize }
+
+
+computeCuts : ( Vec2, Vec2 ) -> Coll Gear -> List Link
+computeCuts cut gears =
+    Engine.getAllLinks gears
+        |> List.filter (Link.cuts cut << Link.toSegment gears)
 
 
 updateGears : Data Mobile -> (Coll Gear -> Coll Gear) -> Data Mobile
