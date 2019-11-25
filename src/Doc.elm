@@ -107,6 +107,7 @@ type Msg
     | DeleteGear (Id Gear)
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract Link Fraction
+    | SimplifyFractView
     | Undo
     | Redo
     | GearMsg ( Id Gear, Gear.Msg )
@@ -243,6 +244,14 @@ update msg scale (D doc) =
                 }
             , Cmd.none
             )
+
+        SimplifyFractView ->
+            case doc.details of
+                DHarmolink l (Just fract) ->
+                    ( D { doc | details = DHarmolink l <| Just <| Fract.simplify fract }, Cmd.none )
+
+                _ ->
+                    ( D doc, Cmd.none )
 
         Undo ->
             ( D { doc | data = Data.undo doc.data }, Cmd.none )
@@ -633,7 +642,14 @@ viewDetails (D doc) =
                                     , label = Input.labelHidden "Denominator"
                                     , placeholder = Nothing
                                     }
-                                , Input.button [] { label = text "Change", onPress = Just <| AppliedFract l fract }
+                                , Input.button []
+                                    { label = text "Change"
+                                    , onPress = Just <| AppliedFract l fract
+                                    }
+                                , Input.button []
+                                    { label = text "Simplifier"
+                                    , onPress = Just SimplifyFractView
+                                    }
                                 ]
                        )
                     ++ [ row [] [] ]
