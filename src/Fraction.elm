@@ -43,3 +43,29 @@ multiplication (F f1) (F f2) =
 division : Fraction -> Fraction -> Fraction
 division (F num) (F den) =
     F { num = num.num * den.den, den = num.den * den.num }
+
+
+simplify : Fraction -> Fraction
+simplify (F { num, den }) =
+    let
+        common =
+            pgcd num den
+    in
+    F { num = num // common, den = den // common }
+
+
+pgcd : Int -> Int -> Int
+pgcd x y =
+    if x >= y then
+        let
+            rest =
+                modBy y x
+        in
+        if rest == 0 then
+            y
+
+        else
+            pgcd y rest
+
+    else
+        pgcd y x
