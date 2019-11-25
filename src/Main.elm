@@ -182,9 +182,20 @@ update msg model =
         SoundClicked sound ->
             let
                 ( newDoc, newGearPos ) =
-                    Doc.addNewGear sound model.doc
+                    Doc.soundClicked sound model.doc
             in
-            ( { model | doc = newDoc, viewPos = { c = newGearPos, smallestSize = Sound.length sound * 2 * 4 } }, Cmd.none )
+            ( { model
+                | doc = newDoc
+                , viewPos =
+                    case newGearPos of
+                        Just newPos ->
+                            { c = newPos, smallestSize = Sound.length sound * 2 * 4 }
+
+                        Nothing ->
+                            model.viewPos
+              }
+            , Cmd.none
+            )
 
         UpdateViewPos vp ->
             ( { model | viewPos = vp }, Cmd.none )

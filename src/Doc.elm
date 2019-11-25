@@ -70,6 +70,7 @@ fromGearInteractable i =
 type Detailed
     = DNothing
     | DGear (Id Gear)
+    | DChangeSound (Id Gear)
     | DHarmolink Link (Maybe Fraction)
 
 
@@ -84,18 +85,26 @@ new =
         }
 
 
-addNewGear : Sound -> Doc -> ( Doc, Vec2 )
-addNewGear sound (D doc) =
-    let
-        pos =
-            vec2 50 50
-    in
-    ( D
-        { doc
-            | data = updateGears doc.data <| Coll.insert <| Gear.fromSound sound pos
-        }
-    , pos
-    )
+soundClicked : Sound -> Doc -> ( Doc, Maybe Vec2 )
+soundClicked sound (D doc) =
+    case doc.details of
+        DChangeSound id ->
+            ( D
+                { doc
+                    | data = updateGears doc.data <| Coll.update id <| Gear.update <| Gear.ChangeSound sound
+                    , details = DGear id
+                }
+            , Nothing
+            )
+
+        _ ->
+            let
+                pos =
+                    vec2 50 50
+            in
+            ( D { doc | data = updateGears doc.data <| Coll.insert <| Gear.fromSound sound pos }
+            , Just pos
+            )
 
 
 type Msg
@@ -104,6 +113,8 @@ type Msg
     | PlayGear (Id Gear)
     | StopGear (Id Gear)
     | CopyGear (Id Gear)
+    | ChangeSound (Id Gear)
+    | ChangeSoundCanceled (Id Gear)
     | DeleteGear (Id Gear)
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract Link Fraction
@@ -168,6 +179,12 @@ update msg scale (D doc) =
 
         CopyGear id ->
             ( D { doc | data = updateGears doc.data <| Gear.copy id }, Cmd.none )
+
+        ChangeSound id ->
+            ( D { doc | details = DChangeSound id }, Cmd.none )
+
+        ChangeSoundCanceled id ->
+            ( D { doc | details = DGear id }, Cmd.none )
 
         DeleteGear id ->
             let
@@ -615,8 +632,23 @@ viewDetails (D doc) =
                     , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit 2 )
                     }
                 , Input.button []
+                    { label = text "Changer son"
+                    , onPress = Just <| ChangeSound id
+                    }
+                , Input.button []
                     { onPress = Just <| DeleteGear id
                     , label = text "Supprimer"
+                    }
+                ]
+            ]
+
+        DChangeSound id ->
+            [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+                [ text <| Gear.toUID id
+                , text "Choisir un son chargé"
+                , Input.button []
+                    { label = text "Annuler"
+                    , onPress = Just <| ChangeSoundCanceled id
                     }
                 ]
             ]

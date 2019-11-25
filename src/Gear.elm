@@ -321,6 +321,7 @@ type Msg
     = Move Vec2
     | ResizeFract Fraction
     | ChangeVolume Float
+    | ChangeSound Sound
 
 
 update : Msg -> Gear -> Gear
@@ -334,6 +335,9 @@ update msg (G g) =
 
         ChangeVolume v ->
             G { g | volume = clamp 0 1 v }
+
+        ChangeSound s ->
+            G { g | sound = s }
 
 
 type Interactable
