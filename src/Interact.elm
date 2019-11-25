@@ -91,29 +91,16 @@ map f m =
 
 type alias Event item =
     { action : Action
-    , item : Maybe item
-    , oldPos : Maybe Vec2
-    , newPos : Maybe Vec2
+    , item : item
     }
 
 
 type Action
-    = NoEvent
-    | Clicked Mouse.Keys
-    | Dragged
+    = Clicked Mouse.Keys
+    | Dragged Vec2 Vec2 Mouse.Keys -- oldPos newPos
     | DragIn
     | DragOut
-    | DragEnded Bool Mouse.Keys -- True for Up, False for Abort
-
-
-eventJustAction : Action -> Event item
-eventJustAction a =
-    Event a Nothing Nothing Nothing
-
-
-eventJustItem : Action -> item -> Event item
-eventJustItem a i =
-    Event a (Just i) Nothing Nothing
+    | DragEnded Bool -- True for Up, False for Abort
 
 
 update : Msg item -> State item -> ( State item, Maybe (Event item) )
@@ -121,13 +108,18 @@ update msg (S state) =
     case msg of
         HoverIn id ->
             ( S { state | hover = Just id }
-            , Maybe.map (always <| eventJustItem DragIn id) state.click
+            , Maybe.map (always <| Event DragIn id) state.click
             )
 
         HoverOut ->
-            ( S { state | hover = Nothing }
-            , Maybe.map (always <| eventJustAction DragOut) state.click
-            )
+            case state.hover of
+                Just id ->
+                    ( S { state | hover = Nothing }
+                    , Maybe.map (always <| Event DragOut id) state.click
+                    )
+
+                Nothing ->
+                    ( S state, Nothing )
 
         StartClick id pos keys ->
             ( S { state | click = Just <| ClickState id pos False keys }, Nothing )
@@ -136,39 +128,39 @@ update msg (S state) =
             case state.click of
                 Just click ->
                     ( S { state | click = Just { click | pos = pos, moved = True } }
-                    , Just <| Event Dragged (Just click.item) (Just click.pos) (Just pos)
+                    , Just <| Event (Dragged click.pos pos click.keys) click.item
                     )
 
                 _ ->
                     ( S state, Nothing )
 
         EndClick ->
-            ( S { state | click = Nothing }
-            , case state.click of
+            case state.click of
                 Just { item, moved, keys } ->
-                    if moved then
-                        Just <| eventJustAction <| DragEnded True keys
+                    ( S { state | click = Nothing }
+                    , if moved then
+                        Just <| Event (DragEnded True) item
 
-                    else
-                        Just <| eventJustItem (Clicked keys) item
+                      else
+                        Just <| Event (Clicked keys) item
+                    )
 
                 _ ->
-                    Debug.log "IMPOSSIBLE EndClick without state.click" Nothing
-            )
+                    ( S state, Nothing )
 
         AbortClick ->
-            ( S { state | click = Nothing }
-            , case state.click of
-                Just { moved, keys } ->
-                    if moved then
-                        Just <| eventJustAction <| DragEnded False keys
+            case state.click of
+                Just { item, moved, keys } ->
+                    ( S { state | click = Nothing }
+                    , if moved then
+                        Just <| Event (DragEnded False) item
 
-                    else
+                      else
                         Nothing
+                    )
 
                 _ ->
-                    Debug.log "IMPOSSIBLE AbortClick without state.click" Nothing
-            )
+                    ( S state, Nothing )
 
         NOOP ->
             ( S state, Nothing )
