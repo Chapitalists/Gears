@@ -45,6 +45,8 @@ function engine(o) {
     case "mute" :
         mute(o.gearId, o.value)
         break;
+    case "volume" :
+        changeVolume(o.gearId, o.value)
     }
 }
 
@@ -63,7 +65,7 @@ function play(id) {
     model.paused = false
     g.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).loop()
     s.loop = true
-    s.mute = model.mute
+    setVolume(s, model.volume, model.mute)
     s.playbackRate = model.rate = s.buffer.duration / model.length
     s.start()
     model.startTime = Tone.context.now()
@@ -96,6 +98,16 @@ function stop(id) {
 function mute(id, mute) {
     let model = playing[id]
     if (!model) return;
-    model.mute = mute
-    model.player.mute = mute
+    setVolume(model.player, model.volume, mute)
+}
+
+function changeVolume(id, volume) {
+    let model = playing[id]
+    if (!model) return;
+    model.volume = volume
+    setVolume(model.player, volume, model.mute)
+}
+
+function setVolume(source, volume, mute) {
+    mute ? source.mute = true : source.volume.value = (volume - 1) * 60
 }

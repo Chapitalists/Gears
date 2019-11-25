@@ -1,4 +1,4 @@
-port module Engine exposing (Engine, addMotor, getAllLinks, init, isPlaying, mute, rmMotors, toggle)
+port module Engine exposing (Engine, addMotor, getAllLinks, init, isPlaying, mute, playPause, rmMotors, stop, toggle, volumeChanged)
 
 import Coll exposing (Coll, Id)
 import Gear exposing (Gear, getMotors)
@@ -102,6 +102,20 @@ mute id gears (E e) =
       else
         Cmd.none
     )
+
+
+volumeChanged : Id Gear -> Float -> Engine -> Cmd msg
+volumeChanged id volume e =
+    if isPlaying e then
+        toEngine <|
+            E.object
+                [ ( "action", E.string "volume" )
+                , ( "gearId", E.string <| Gear.toUID id )
+                , ( "value", E.float volume )
+                ]
+
+    else
+        Cmd.none
 
 
 playPauseLinked : Id Gear -> Coll Gear -> ( List (Id Gear), Cmd msg )
