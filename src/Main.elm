@@ -218,19 +218,25 @@ update msg model =
             let
                 ( interact, event ) =
                     Interact.update subMsg model.interact
-
-                svgEvent =
-                    case event of
-                        Interact.Dragged item pos1 pos2 ->
-                            Interact.Dragged item (posToSvg pos1 model) (posToSvg pos2 model)
-
-                        _ ->
-                            event
-
-                ( doc, cmd ) =
-                    Doc.update (Doc.InteractEvent svgEvent) model.doc
             in
-            ( { model | interact = interact, doc = doc }, cmd )
+            case event of
+                Just e ->
+                    let
+                        svgEvent =
+                            case e.action of
+                                Interact.Dragged pos1 pos2 k ->
+                                    { e | action = Interact.Dragged (posToSvg pos1 model) (posToSvg pos2 model) k }
+
+                                _ ->
+                                    e
+
+                        ( doc, cmd ) =
+                            Doc.update (Doc.InteractEvent svgEvent) model.doc
+                    in
+                    ( { model | interact = interact, doc = doc }, cmd )
+
+                Nothing ->
+                    ( { model | interact = interact }, Cmd.none )
 
         NOOP ->
             ( model, Cmd.none )
