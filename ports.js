@@ -45,6 +45,8 @@ function engine(o) {
     case "mute" :
         mute(o.gearId, o.value)
         break;
+    case "volume" :
+        changeVolume(o.gearId, o.value)
     }
 }
 
@@ -97,6 +99,13 @@ function mute(id, mute) {
     let model = playing[id]
     if (!model) return;
     setVolume(model.player, model.volume, mute)
+}
+
+function changeVolume(id, volume) {
+    let model = playing[id]
+    if (!model) return;
+    model.volume = volume
+    setVolume(model.player, volume, model.mute)
 }
 
 function setVolume(source, volume, mute) {

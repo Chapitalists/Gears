@@ -112,8 +112,8 @@ type Msg
     | InteractEvent (Interact.Event Interactable)
 
 
-update : Msg -> Doc -> ( Doc, Cmd msg )
-update msg (D doc) =
+update : Msg -> Float -> Doc -> ( Doc, Cmd msg )
+update msg scale (D doc) =
     let
         mobile =
             doc.data.present
@@ -262,6 +262,7 @@ update msg (D doc) =
 
         GearMsg ( id, subMsg ) ->
             update (StopGear id)
+                scale
                 (D
                     { doc
                         | data = undoNew doc.data <| \d -> { d | gears = Coll.update id (Gear.update subMsg) d.gears }
@@ -298,6 +299,19 @@ update msg (D doc) =
                                     , engine = engine
                                 }
                             , cmd
+                            )
+
+                        -- VOLUME
+                        ( IGear id, Interact.Dragged oldPos newPos ( True, _, _ ), NoDrag ) ->
+                            let
+                                volume =
+                                    computeVolume (Gear.getVolume <| Coll.get id mobile.gears) oldPos newPos scale
+
+                                gears =
+                                    Coll.update id (Gear.update <| Gear.ChangeVolume volume) mobile.gears
+                            in
+                            ( D { doc | data = undoNew doc.data (\m -> { m | gears = gears }) }
+                            , Engine.volumeChanged id volume doc.engine
                             )
 
                         -- LINK -> MOTOR
@@ -409,7 +423,7 @@ update msg (D doc) =
 
                         -- MOVE
                         ( IGear id, Interact.Dragged oldPos newPos _ ) ->
-                            update (GearMsg <| ( id, Gear.Move <| Vec.sub newPos oldPos )) <| D doc
+                            update (GearMsg <| ( id, Gear.Move <| Vec.sub newPos oldPos )) scale <| D doc
 
                         _ ->
                             ( D doc, Cmd.none )
@@ -687,6 +701,10 @@ computeResize length oldPos newPos add =
                 -d
     in
     abs <| dd * 2 + length
+
+
+computeVolume volume oldPos newPos scale =
+    volume + (Vec.getY oldPos - Vec.getY newPos) / scale / 100
 
 
 undoNew : UndoList model -> (model -> model) -> UndoList model
