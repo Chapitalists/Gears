@@ -258,6 +258,11 @@ getVolume (G g) =
     g.volume
 
 
+getLengthId : Id Gear -> Coll Gear -> Float
+getLengthId id coll =
+    getLength (Coll.get id coll) coll
+
+
 getLength : Gear -> Coll Gear -> Float
 getLength (G g) coll =
     case g.ref of
