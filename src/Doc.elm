@@ -1,6 +1,7 @@
 module Doc exposing (..)
 
 import Coll exposing (Coll, Id)
+import Data exposing (Data)
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Font as Font
@@ -13,7 +14,6 @@ import Link exposing (Link)
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Sound exposing (Sound)
 import TypedSvg.Core exposing (Svg)
-import UndoList as Undo exposing (UndoList)
 
 
 
@@ -22,7 +22,7 @@ import UndoList as Undo exposing (UndoList)
 
 type Doc
     = D
-        { data : UndoList Mobile
+        { data : Data Mobile
         , dragging : Dragging
         , tool : Tool
         , engine : Engine
@@ -73,7 +73,7 @@ type Detailed
 new : Doc
 new =
     D
-        { data = Undo.fresh { gears = Coll.empty Gear.default, motor = Coll.startId }
+        { data = Data.init { gears = Coll.empty Gear.default, motor = Coll.startId }
         , dragging = NoDrag
         , tool = Play
         , engine = Engine.init
@@ -89,9 +89,7 @@ addNewGear sound (D doc) =
     in
     ( D
         { doc
-            | data =
-                undoNew doc.data <|
-                    \m -> { m | gears = Coll.insert (Gear.fromSound sound pos) m.gears }
+            | data = updateGears doc.data <| Coll.insert <| Gear.fromSound sound pos
         }
     , pos
     )
@@ -116,7 +114,7 @@ update : Msg -> Float -> Doc -> ( Doc, Cmd msg )
 update msg scale (D doc) =
     let
         mobile =
-            doc.data.present
+            Data.current doc.data
     in
     case msg of
         ChangedTool tool ->
@@ -165,7 +163,7 @@ update msg scale (D doc) =
             )
 
         CopyGear id ->
-            ( D { doc | data = undoNew doc.data (\m -> { m | gears = Gear.copy id m.gears }) }, Cmd.none )
+            ( D { doc | data = updateGears doc.data <| Gear.copy id }, Cmd.none )
 
         DeleteGear id ->
             let
@@ -188,7 +186,7 @@ update msg scale (D doc) =
                     Nothing ->
                         ( D
                             { doc
-                                | data = undoNew doc.data (\d -> { d | gears = Coll.remove id d.gears })
+                                | data = updateGears doc.data <| Coll.remove id
                                 , details = details
                             }
                         , Cmd.none
@@ -198,14 +196,9 @@ update msg scale (D doc) =
                         ( D
                             { doc
                                 | data =
-                                    undoNew doc.data <|
-                                        \d ->
-                                            { d
-                                                | gears =
-                                                    d.gears
-                                                        |> Coll.update baseId (Gear.removeFromRefGroup id)
-                                                        |> Coll.remove id
-                                            }
+                                    updateGears doc.data <|
+                                        Coll.update baseId (Gear.removeFromRefGroup id)
+                                            >> Coll.remove id
                                 , details = details
                             }
                         , Cmd.none
@@ -240,34 +233,24 @@ update msg scale (D doc) =
             ( D
                 { doc
                     | data =
-                        undoNew doc.data
-                            (\m ->
-                                { m
-                                    | gears =
-                                        Coll.update
-                                            (Tuple.second l)
-                                            (Gear.setFract newFract)
-                                            m.gears
-                                }
-                            )
+                        updateGears doc.data <|
+                            Coll.update
+                                (Tuple.second l)
+                                (Gear.setFract newFract)
                 }
             , Cmd.none
             )
 
         Undo ->
-            ( D { doc | data = Undo.undo doc.data }, Cmd.none )
+            ( D { doc | data = Data.undo doc.data }, Cmd.none )
 
         Redo ->
-            ( D { doc | data = Undo.redo doc.data }, Cmd.none )
+            ( D { doc | data = Data.redo doc.data }, Cmd.none )
 
         GearMsg ( id, subMsg ) ->
             update (StopGear id)
                 scale
-                (D
-                    { doc
-                        | data = undoNew doc.data <| \d -> { d | gears = Coll.update id (Gear.update subMsg) d.gears }
-                    }
-                )
+                (D { doc | data = updateGears doc.data <| Coll.update id (Gear.update subMsg) })
 
         -- TODO Find good pattern for big mess there
         InteractEvent event ->
@@ -281,7 +264,7 @@ update msg scale (D doc) =
                                 ( newGears, cmd ) =
                                     Engine.mute id mobile.gears doc.engine
                             in
-                            ( D { doc | data = undoNew doc.data (\m -> { m | gears = newGears }) }, cmd )
+                            ( D { doc | data = updateGears doc.data <| always newGears }, cmd )
 
                         -- CUT
                         ( ISurface, Interact.Dragged _ p2 _, Cut ( p1, _ ) _ ) ->
@@ -295,7 +278,7 @@ update msg scale (D doc) =
                             ( D
                                 { doc
                                     | dragging = NoDrag
-                                    , data = undoNew doc.data (\m -> { m | gears = gears })
+                                    , data = updateGears doc.data <| always gears
                                     , engine = engine
                                 }
                             , cmd
@@ -339,7 +322,7 @@ update msg scale (D doc) =
                             ( D
                                 { doc
                                     | dragging = NoDrag
-                                    , data = undoNew doc.data (\m -> { m | gears = gears })
+                                    , data = updateGears doc.data <| always gears
                                     , engine = newEngine
                                 }
                             , cmd
@@ -357,7 +340,7 @@ update msg scale (D doc) =
                     case ( event.item, event.action, doc.dragging ) of
                         -- COPY
                         ( IGear id, Interact.Clicked _, _ ) ->
-                            ( D { doc | data = undoNew doc.data (\m -> { m | gears = Gear.copy id m.gears }) }
+                            ( D { doc | data = updateGears doc.data <| Gear.copy id }
                             , Cmd.none
                             )
 
@@ -367,12 +350,7 @@ update msg scale (D doc) =
                                 newSize =
                                     computeResize (Gear.getLengthId id mobile.gears) oldPos newPos add
                             in
-                            ( D
-                                { doc
-                                    | data =
-                                        undoNew doc.data
-                                            (\m -> { m | gears = Gear.resizeFree id newSize m.gears })
-                                }
+                            ( D { doc | data = updateGears doc.data <| Gear.resizeFree id newSize }
                             , Cmd.none
                             )
 
@@ -401,7 +379,7 @@ update msg scale (D doc) =
                             ( D
                                 { doc
                                     | dragging = NoDrag
-                                    , data = undoNew doc.data (\m -> { m | gears = newGears })
+                                    , data = updateGears doc.data <| always newGears
                                     , details = DHarmolink l mayFract
                                 }
                             , Cmd.none
@@ -445,7 +423,7 @@ viewTools (D doc) =
         , Input.button [ alignRight ]
             { label = text "Undo"
             , onPress =
-                if Undo.hasPast doc.data then
+                if Data.canUndo doc.data then
                     Just Undo
 
                 else
@@ -454,7 +432,7 @@ viewTools (D doc) =
         , Input.button []
             { label = text "Redo"
             , onPress =
-                if Undo.hasFuture doc.data then
+                if Data.canRedo doc.data then
                     Just Redo
 
                 else
@@ -486,7 +464,7 @@ viewContent : Doc -> Interact.Interact Interactable -> Float -> List (Svg (Inter
 viewContent (D doc) inter scale =
     let
         mobile =
-            doc.data.present
+            Data.current doc.data
 
         getMod : Interact.Interact Interactable -> Id Gear -> Gear.Mod
         getMod i id =
@@ -596,7 +574,7 @@ viewDetails (D doc) =
                 , Input.slider []
                     { label = Input.labelAbove [] <| text "Volume"
                     , onChange = \f -> GearMsg ( id, Gear.ChangeVolume f )
-                    , value = Gear.getVolume (Coll.get id doc.data.present.gears)
+                    , value = Gear.getVolume (Coll.get id (Data.current doc.data).gears)
                     , min = 0
                     , max = 1
                     , step = Just 0.01
@@ -703,15 +681,19 @@ computeResize length oldPos newPos add =
     abs <| dd * 2 + length
 
 
-computeVolume volume oldPos newPos scale =
-    volume + (Vec.getY oldPos - Vec.getY newPos) / scale / 100
+updateGears : Data Mobile -> (Coll Gear -> Coll Gear) -> Data Mobile
+updateGears data f =
+    let
+        mobile =
+            Data.current data
+    in
+    Data.do { mobile | gears = f mobile.gears } data
 
 
-undoNew : UndoList model -> (model -> model) -> UndoList model
-undoNew undo action =
-    Undo.new (action undo.present) undo
-
-
-undont : UndoList model -> (model -> model) -> UndoList model
-undont undo action =
-    { undo | present = action undo.present }
+updateGearsGrouping : Data Mobile -> (Coll Gear -> Coll Gear) -> Data Mobile
+updateGearsGrouping data f =
+    let
+        mobile =
+            Data.current data
+    in
+    Data.group { mobile | gears = f mobile.gears } data
