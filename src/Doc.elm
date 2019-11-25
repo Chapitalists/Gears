@@ -39,6 +39,7 @@ type Dragging
     | HalfLink ( Id Gear, Vec2 )
     | CompleteLink Link
     | Cut ( Vec2, Vec2 ) (List Link)
+    | VolumeChange
 
 
 type Tool
@@ -286,16 +287,13 @@ update msg scale (D doc) =
 
                         -- VOLUME
                         ( IGear id, Interact.Dragged oldPos newPos ( True, _, _ ), NoDrag ) ->
-                            let
-                                volume =
-                                    computeVolume (Gear.getVolume <| Coll.get id mobile.gears) oldPos newPos scale
+                            doVolumeChange id oldPos newPos scale (D { doc | dragging = VolumeChange })
 
-                                gears =
-                                    Coll.update id (Gear.update <| Gear.ChangeVolume volume) mobile.gears
-                            in
-                            ( D { doc | data = undoNew doc.data (\m -> { m | gears = gears }) }
-                            , Engine.volumeChanged id volume doc.engine
-                            )
+                        ( IGear id, Interact.Dragged oldPos newPos _, VolumeChange ) ->
+                            doVolumeChange id oldPos newPos scale (D doc)
+
+                        ( _, Interact.DragEnded _, VolumeChange ) ->
+                            ( D { doc | dragging = NoDrag, data = Data.do mobile doc.data }, Cmd.none )
 
                         -- LINK -> MOTOR
                         ( IGear _, Interact.Dragged _ _ _, CompleteLink _ ) ->
@@ -494,9 +492,6 @@ viewContent (D doc) inter scale =
         Coll.toList mobile.gears
     )
         ++ (case doc.dragging of
-                NoDrag ->
-                    []
-
                 HalfLink ( id, pos ) ->
                     let
                         g =
@@ -532,6 +527,9 @@ viewContent (D doc) inter scale =
 
                 Cut seg _ ->
                     [ Link.drawCut seg scale ]
+
+                _ ->
+                    []
            )
         ++ (case doc.tool of
                 Play ->
@@ -656,6 +654,26 @@ doLinked l gears =
 
       else
         Nothing
+    )
+
+
+doVolumeChange : Id Gear -> Vec2 -> Vec2 -> Float -> Doc -> ( Doc, Cmd msg )
+doVolumeChange id oldPos newPos scale (D doc) =
+    let
+        gears =
+            (Data.current doc.data).gears
+
+        oldVolume =
+            Gear.getVolume <| Coll.get id gears
+
+        volume =
+            oldVolume + (Vec.getY oldPos - Vec.getY newPos) / scale / 100
+
+        newGears =
+            Coll.update id (Gear.update <| Gear.ChangeVolume volume) gears
+    in
+    ( D { doc | data = updateGearsGrouping doc.data <| always newGears }
+    , Engine.volumeChanged id volume doc.engine
     )
 
 
