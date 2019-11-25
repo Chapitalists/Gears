@@ -41,6 +41,7 @@ type Dragging
     | Cut ( Vec2, Vec2 ) (List Link)
     | VolumeChange
     | SizeChange
+    | Moving
 
 
 type Tool
@@ -393,14 +394,27 @@ update msg scale (D doc) =
 
                 -- EDIT --------
                 Edit ->
-                    case ( event.item, event.action ) of
+                    case ( event.item, event.action, doc.dragging ) of
                         -- DETAIL
-                        ( IGear id, Interact.Clicked _ ) ->
+                        ( IGear id, Interact.Clicked _, _ ) ->
                             ( D { doc | details = DGear id }, Cmd.none )
 
                         -- MOVE
-                        ( IGear id, Interact.Dragged oldPos newPos _ ) ->
-                            update (GearMsg <| ( id, Gear.Move <| Vec.sub newPos oldPos )) scale <| D doc
+                        ( IGear id, Interact.Dragged oldPos newPos _, _ ) ->
+                            let
+                                gearUp =
+                                    Gear.update <| Gear.Move <| Vec.sub newPos oldPos
+                            in
+                            ( D
+                                { doc
+                                    | dragging = Moving
+                                    , data = updateGearsGrouping doc.data <| Coll.update id gearUp
+                                }
+                            , Cmd.none
+                            )
+
+                        ( _, Interact.DragEnded _, Moving ) ->
+                            ( D { doc | dragging = NoDrag, data = Data.do mobile doc.data }, Cmd.none )
 
                         _ ->
                             ( D doc, Cmd.none )
