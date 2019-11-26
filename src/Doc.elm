@@ -125,7 +125,7 @@ type Msg
     | InteractEvent (Interact.Event Interactable)
 
 
-update : Msg -> Float -> Doc -> ( Doc, Cmd msg )
+update : Msg -> Float -> Doc -> ( Doc, Cmd Msg )
 update msg scale (D doc) =
     let
         mobile =

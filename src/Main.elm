@@ -223,7 +223,7 @@ update msg model =
                 ( doc, cmd ) =
                     Doc.update subMsg (getScale model) model.doc
             in
-            ( { model | doc = doc }, cmd )
+            ( { model | doc = doc }, Cmd.map DocMsg cmd )
 
         InteractMsg subMsg ->
             let
@@ -244,7 +244,7 @@ update msg model =
                         ( doc, cmd ) =
                             Doc.update (Doc.InteractEvent svgEvent) (getScale model) model.doc
                     in
-                    ( { model | interact = interact, doc = doc }, cmd )
+                    ( { model | interact = interact, doc = doc }, Cmd.map DocMsg cmd )
 
                 Nothing ->
                     ( { model | interact = interact }, Cmd.none )
