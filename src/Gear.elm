@@ -287,8 +287,8 @@ getPos (G g) =
     g.pos
 
 
-encoder : Id Gear -> Coll Gear -> E.Value
-encoder id coll =
+encoderToEngine : Id Gear -> Coll Gear -> E.Value
+encoderToEngine id coll =
     let
         (G g) =
             Coll.get id coll

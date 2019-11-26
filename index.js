@@ -11,7 +11,6 @@ function soundExtensionFilter (name) {
 }
 
 
-
 const fs = require('fs')
     , staticCallback = require('static-route')()
 
@@ -20,23 +19,23 @@ const fs = require('fs')
     , dynamicCallbacks = {
       
         test : (req, res) => {
-          console.log('got a test')
-          res.write('Stringlist')
-          res.end()
+            console.log('got a test')
+            res.write('Stringlist')
+            res.end()
         }
       
-      , soundList : (req, res) => {
-        res.write(fs.readdirSync(soundPath)
-            .filter(soundExtensionFilter)
-            .join('\\'))
-        res.end()
-      }
+        , soundList : (req, res) => {
+            res.write(fs.readdirSync(soundPath)
+                .filter(soundExtensionFilter)
+                .join('\\'))
+            res.end()
+        }
 
-      , saveFile : (req, res) => {
-        if (req.method == 'POST') {
-            let data = ""
+        , saveFile : (req, res) => {
+            if (req.method == 'POST') {
+                let data = ""
 
-            req.on('data', chunk => data += chunk)
+                req.on('data', chunk => data += chunk)
 
             req.on('end', () => console.log(data))
         }

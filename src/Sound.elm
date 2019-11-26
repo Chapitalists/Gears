@@ -1,6 +1,6 @@
 module Sound exposing (..)
 
-import Json.Decode as D exposing (Decoder)
+import Json.Decode as D
 import Json.Decode.Pipeline exposing (..)
 
 

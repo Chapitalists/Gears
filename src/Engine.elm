@@ -134,7 +134,7 @@ playPause ids gears =
     toEngine <|
         E.object
             [ ( "action", E.string "playPause" )
-            , ( "gears", E.list (\id -> Gear.encoder id gears) ids )
+            , ( "gears", E.list (\id -> Gear.encoderToEngine id gears) ids )
             ]
 
 
