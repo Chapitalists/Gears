@@ -10,6 +10,7 @@ import Engine exposing (Engine)
 import Fraction as Fract exposing (Fraction)
 import Gear exposing (Gear, Ref)
 import Interact
+import Json.Encode as E
 import Link exposing (Link)
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Sound exposing (Sound)
@@ -110,6 +111,9 @@ soundClicked sound (D doc) =
 
 type Msg
     = ChangedTool Tool
+    | EnteredFileName String
+    | Save
+    | Saved
     | ToggleEngine
     | PlayGear (Id Gear)
     | StopGear (Id Gear)
@@ -160,6 +164,24 @@ update msg scale (D doc) =
                 }
             , cmd
             )
+
+        EnteredFileName name ->
+            if String.all (\c -> Char.isAlphaNum c || c == '-') name then
+                ( D { doc | data = Data.setName name doc.data }, Cmd.none )
+
+            else
+                ( D doc, Cmd.none )
+
+        Save ->
+            let
+                ( data, cmd ) =
+                    Data.save doc.data (always E.null) Saved
+            in
+            ( D { doc | data = data }, cmd )
+
+        Saved ->
+            --TODO handle server response
+            ( D doc, Cmd.none )
 
         ToggleEngine ->
             let
@@ -459,6 +481,24 @@ viewTools (D doc) =
                 ]
             , selected = Just doc.tool
             , label = Input.labelHidden "Outils"
+            }
+        , Input.text [ centerX ]
+            { label = Input.labelHidden "Nom du fichier"
+            , text = Data.getName doc.data
+            , placeholder = Just <| Input.placeholder [] <| text "nom-a-sauvegarder"
+            , onChange = EnteredFileName
+            }
+        , Input.button
+            [ centerX
+            , Font.color <|
+                if Data.isSaved doc.data then
+                    rgb 0 0 0
+
+                else
+                    rgb 0 1 1
+            ]
+            { label = text "Sauvegarder"
+            , onPress = Just Save
             }
         , Input.button [ alignRight ]
             { label = text "Undo"

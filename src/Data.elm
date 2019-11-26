@@ -1,11 +1,9 @@
-port module Data exposing (..)
+module Data exposing (..)
 
+import Http
 import Json.Encode as E
 import UndoList as Undo exposing (UndoList)
 import Url exposing (Url)
-
-
-port saveFile : E.Value -> Cmd msg
 
 
 type Data data
@@ -13,6 +11,7 @@ type Data data
         { undoList : UndoList data
         , grouping : Maybe data
         , saved : Bool
+        , name : String
         , serverUrl : Maybe Url
         }
 
@@ -23,6 +22,7 @@ init data url =
         { undoList = Undo.fresh data
         , grouping = Nothing
         , saved = False
+        , name = "non-titre"
         , serverUrl = url
         }
 
@@ -35,6 +35,21 @@ current (D d) =
 
         Just data ->
             data
+
+
+isSaved : Data a -> Bool
+isSaved (D d) =
+    d.saved
+
+
+getName : Data a -> String
+getName (D d) =
+    d.name
+
+
+setName : String -> Data a -> Data a
+setName n (D d) =
+    D { d | name = n }
 
 
 do : a -> Data a -> Data a
@@ -72,6 +87,23 @@ redo (D d) =
     D { d | saved = False, undoList = Undo.redo d.undoList, grouping = Nothing }
 
 
-save : Data a -> ( Data a, Cmd msg )
-save (D d) =
-    ( D { d | saved = True }, saveFile E.null )
+save : Data a -> (a -> E.Value) -> msg -> ( Data a, Cmd msg )
+save (D d) encoder cb =
+    case d.serverUrl of
+        Just url ->
+            ( D { d | saved = True }
+            , Http.post
+                { url = Url.toString { url | path = "/saveFile" }
+                , body =
+                    Http.jsonBody <|
+                        E.object
+                            [ ( "name", E.string d.name )
+                            , ( "data", encoder d.undoList.present )
+                            ]
+                , expect = Http.expectWhatever <| always cb -- TODO handle response
+                }
+            )
+
+        Nothing ->
+            -- TODO DL file on client
+            ( D d, Cmd.none )

@@ -31,8 +31,18 @@ const fs = require('fs')
             .join('\\'))
         res.end()
       }
-      
+
+      , saveFile : (req, res) => {
+        if (req.method == 'POST') {
+            let data = ""
+
+            req.on('data', chunk => data += chunk)
+
+            req.on('end', () => console.log(data))
+        }
       }
+      
+    }
 
 
 
