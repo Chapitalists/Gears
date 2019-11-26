@@ -2,6 +2,7 @@ module Sound exposing (..)
 
 import Json.Decode as D
 import Json.Decode.Pipeline exposing (..)
+import Json.Encode as E
 
 
 type Sound
@@ -45,3 +46,11 @@ decoder v =
                 |> required "length" D.float
             )
             v
+
+
+encoder : Sound -> E.Value
+encoder (S s) =
+    E.object <|
+        [ ( "path", E.string s.path )
+        , ( "length", E.float s.length )
+        ]

@@ -1,5 +1,7 @@
 module Fraction exposing (..)
 
+import Json.Encode as E
+
 
 type Fraction
     = F { num : Int, den : Int }
@@ -69,3 +71,11 @@ pgcd x y =
 
     else
         pgcd y x
+
+
+encoder : Fraction -> E.Value
+encoder (F f) =
+    E.object <|
+        [ ( "num", E.int f.num )
+        , ( "den", E.int f.den )
+        ]

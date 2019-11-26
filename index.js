@@ -5,6 +5,9 @@ Copyright ou © ou Copr. Clément Bossut, (2018)
 
 const soundPath = './sons/'
     , soundExtensions = ['.wav']
+    , savePath = './saves/'
+    , backupPath = './backup/'
+    , saveExtension = '.gears'
 
 function soundExtensionFilter (name) {
   return soundExtensions.some(ext=>name.toLowerCase().endsWith(ext))
@@ -37,9 +40,9 @@ const fs = require('fs')
 
                 req.on('data', chunk => data += chunk)
 
-            req.on('end', () => console.log(data))
+                req.on('end', () => writeFile(JSON.parse(data)))
+            }
         }
-      }
       
     }
 
@@ -49,5 +52,22 @@ const fs = require('fs')
       const cb = dynamicCallbacks[req.url.slice(1)]
       ;(cb || staticCallback)(req, res)
     }
+
+
+function writeFile (data) {
+    if (!fs.existsSync(savePath)) fs.mkdirSync(savePath)
+    if (!fs.existsSync(backupPath)) fs.mkdirSync(backupPath)
+
+    let filePath = savePath + data.name + saveExtension
+        dateStr = new Date().toISOString()
+            .replace(':', '-').replace(/\..+/, '')
+    if (fs.existsSync(filePath))
+        fs.copyFileSync(
+            filePath,
+            backupPath + data.name + dateStr + saveExtension
+        )
+
+    fs.writeFileSync(filePath, JSON.stringify(data.data, null, 2))
+}
 
 require('http').createServer(callback).listen(12345)

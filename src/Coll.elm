@@ -1,6 +1,7 @@
-module Coll exposing (Coll, Id, empty, fillReserved, filter, get, idToString, ids, insert, insertTellId, maybeGet, remove, reserve, startId, toList, update, values)
+module Coll exposing (Coll, Id, empty, fillReserved, filter, get, idEncoder, idToString, ids, insert, insertTellId, maybeGet, remove, reserve, startId, toList, update, values)
 
 import Dict exposing (Dict)
+import Json.Encode as E
 
 
 type Id x
@@ -20,6 +21,11 @@ opacifyId i =
 idToString : Id x -> String
 idToString (Id i) =
     String.fromInt i
+
+
+idEncoder : Id x -> E.Value
+idEncoder (Id i) =
+    E.int i
 
 
 type Coll item

@@ -36,6 +36,18 @@ type alias Mobile =
     { gears : Coll Gear, motor : Id Gear }
 
 
+mobileEncoder : Mobile -> E.Value
+mobileEncoder m =
+    E.object
+        [ ( "motor", Coll.idEncoder m.motor )
+        , ( "gears"
+          , E.object <|
+                List.map (\( id, g ) -> ( Coll.idToString id, Gear.encoderToSave g )) <|
+                    Coll.toList m.gears
+          )
+        ]
+
+
 type Dragging
     = NoDrag
     | HalfLink ( Id Gear, Vec2 )
@@ -175,7 +187,7 @@ update msg scale (D doc) =
         Save ->
             let
                 ( data, cmd ) =
-                    Data.save doc.data (always E.null) Saved
+                    Data.save doc.data mobileEncoder Saved
             in
             ( D { doc | data = data }, cmd )
 

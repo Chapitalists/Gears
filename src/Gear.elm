@@ -309,6 +309,39 @@ encoderToEngine id coll =
             ]
 
 
+encoderToSave : Gear -> E.Value
+encoderToSave (G g) =
+    E.object <|
+        [ ( "ref", refEncoder g.ref )
+        , ( "fract", Fract.encoder g.fract )
+        , ( "motors", E.list Coll.idEncoder g.motors )
+        , ( "pos"
+          , E.object
+                [ ( "x", E.float <| getX g.pos )
+                , ( "y", E.float <| getY g.pos )
+                ]
+          )
+        , ( "startPercent", E.float g.startPercent )
+        , ( "volume", E.float g.volume )
+        , ( "sound", Sound.encoder g.sound )
+        , ( "mute", E.bool g.mute )
+        ]
+
+
+refEncoder : Ref -> E.Value
+refEncoder ref =
+    case ref of
+        Other id ->
+            E.object [ ( "other", Coll.idEncoder id ) ]
+
+        Self r ->
+            E.object <|
+                [ ( "unit", E.float r.unit )
+                , ( "group", E.list Coll.idEncoder r.group )
+                , ( "links", E.list (\( a, b ) -> E.list Coll.idEncoder [ a, b ]) r.links )
+                ]
+
+
 type Mod
     = None
     | Hovered
