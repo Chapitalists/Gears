@@ -26,7 +26,9 @@ const fs = require('fs')
         }
       
       , soundList : (req, res) => {
-        res.write(fs.readdirSync(soundPath).filter(soundExtensionFilter).join(' '))
+        res.write(fs.readdirSync(soundPath)
+            .filter(soundExtensionFilter)
+            .join('\\'))
         res.end()
       }
       
@@ -38,4 +40,5 @@ const fs = require('fs')
       const cb = dynamicCallbacks[req.url.slice(1)]
       ;(cb || staticCallback)(req, res)
     }
+
 require('http').createServer(callback).listen(12345)

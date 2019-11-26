@@ -149,7 +149,7 @@ update msg model =
             case result of
                 Ok stringList ->
                     ( { model
-                        | soundList = Set.union model.soundList <| Set.fromList <| String.split " " stringList
+                        | soundList = Set.union model.soundList <| Set.fromList <| String.split "\\" stringList
                         , connected = True
                       }
                     , Cmd.none
