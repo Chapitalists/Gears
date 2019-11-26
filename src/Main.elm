@@ -65,6 +65,7 @@ type alias Model =
     , currentUrl : Url.Url
     , soundList : Set String
     , loadedSoundList : List Sound
+    , savesList : Set String
     , doc : Doc
     , viewPos : ViewPos
     , svgSize : Size
@@ -119,7 +120,7 @@ type alias ClickState =
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url _ =
-    ( Model False url Set.empty [] (Doc.new <| Just url) (ViewPos (vec2 0 0) 10) (Size 0 0) Interact.init
+    ( Model False url Set.empty [] Set.empty (Doc.new <| Just url) (ViewPos (vec2 0 0) 10) (Size 0 0) Interact.init
     , fetchSoundList url
     )
 
@@ -132,6 +133,10 @@ type Msg
     = GotSoundList (Result Http.Error String)
     | RequestSoundList
     | RequestSoundLoad String
+    | RequestSavesList
+    | RequestSaveLoad String
+    | GotSavesList (Result Http.Error String)
+    | GotLoadedFile (Result Http.Error Doc.Mobile)
     | SoundLoaded (Result D.Error Sound)
     | SoundClicked Sound
     | UpdateViewPos ViewPos
@@ -158,6 +163,31 @@ update msg model =
                 Err _ ->
                     ( { model | connected = False }, Cmd.none )
 
+        GotSavesList result ->
+            case result of
+                Ok stringList ->
+                    ( { model
+                        | savesList = Set.union model.savesList <| Set.fromList <| String.split "\\" stringList
+                        , connected = True
+                      }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( { model | connected = False, savesList = Set.empty }, Cmd.none )
+
+        GotLoadedFile result ->
+            case result of
+                Ok m ->
+                    ( { model
+                        | connected = True
+                      }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( { model | connected = False }, Cmd.none )
+
         RequestSoundList ->
             ( model, fetchSoundList model.currentUrl )
 
@@ -166,6 +196,19 @@ update msg model =
             ( model
             , if Set.member n model.soundList then
                 loadSound n
+
+              else
+                Cmd.none
+            )
+
+        RequestSavesList ->
+            ( model, fetchSavesList model.currentUrl )
+
+        RequestSaveLoad n ->
+            -- TODO handle no response
+            ( model
+            , if Set.member n model.savesList then
+                fetchSaveFile model.currentUrl n
 
               else
                 Cmd.none
@@ -282,7 +325,7 @@ view model =
     , body =
         [ layout [] <|
             row [ height fill, width fill ]
-                ([ viewSoundLib model
+                ([ viewFileExplorer model
                  , viewDoc model
                  ]
                     ++ (Doc.viewDetails model.doc
@@ -322,29 +365,35 @@ viewDoc model =
         ]
 
 
-viewSoundLib : Model -> Element Msg
-viewSoundLib model =
-    column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
-        [ Input.button
-            [ Font.color <|
-                if model.connected then
-                    rgb 0 0 0
+viewFileExplorer : Model -> Element Msg
+viewFileExplorer model =
+    column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ] <|
+        viewSoundLib model
+            ++ viewSaveFiles model
 
-                else
-                    rgb 1 0 0
-            ]
-            { onPress = Just RequestSoundList
-            , label = text "Actualiser"
-            }
-        , column [ spacing 5 ] <|
-            text "Sons"
-                :: (List.map (\s -> el [ onClick (RequestSoundLoad s) ] (text s)) <|
-                        Set.toList model.soundList
-                   )
-        , column [ spacing 10 ] <|
-            text "Chargés"
-                :: List.map soundView model.loadedSoundList
+
+viewSoundLib : Model -> List (Element Msg)
+viewSoundLib model =
+    [ Input.button
+        [ Font.color <|
+            if model.connected then
+                rgb 0 0 0
+
+            else
+                rgb 1 0 0
         ]
+        { onPress = Just RequestSoundList
+        , label = text "Actualiser"
+        }
+    , column [ spacing 5 ] <|
+        text "Sons"
+            :: (List.map (\s -> el [ onClick (RequestSoundLoad s) ] (text s)) <|
+                    Set.toList model.soundList
+               )
+    , column [ spacing 10 ] <|
+        text "Chargés"
+            :: List.map soundView model.loadedSoundList
+    ]
 
 
 soundView : Sound -> Element Msg
@@ -352,6 +401,27 @@ soundView s =
     el
         [ onClick <| SoundClicked s ]
         (text (Sound.toString s))
+
+
+viewSaveFiles : Model -> List (Element Msg)
+viewSaveFiles model =
+    [ Input.button
+        [ Font.color <|
+            if model.connected then
+                rgb 0 0 0
+
+            else
+                rgb 1 0 0
+        ]
+        { onPress = Just RequestSavesList
+        , label = text "Actualiser"
+        }
+    , column [ spacing 5 ] <|
+        text "Fichiers"
+            :: (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| String.dropRight 6 s)) <|
+                    Set.toList model.savesList
+               )
+    ]
 
 
 computeViewBox : Model -> SS.Attribute Msg
@@ -404,4 +474,20 @@ fetchSoundList url =
     Http.get
         { url = Url.toString { url | path = "/soundList" }
         , expect = Http.expectString GotSoundList
+        }
+
+
+fetchSavesList : Url.Url -> Cmd Msg
+fetchSavesList url =
+    Http.get
+        { url = Url.toString { url | path = "/savesList" }
+        , expect = Http.expectString GotSavesList
+        }
+
+
+fetchSaveFile : Url.Url -> String -> Cmd Msg
+fetchSaveFile url name =
+    Http.get
+        { url = Url.toString { url | path = "/saves/" ++ name }
+        , expect = Http.expectJson GotLoadedFile <| D.succeed { gears = Coll.empty Gear.default, motor = Coll.startId }
         }

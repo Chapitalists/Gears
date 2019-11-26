@@ -13,6 +13,10 @@ function soundExtensionFilter (name) {
   return soundExtensions.some(ext=>name.toLowerCase().endsWith(ext))
 }
 
+function saveExtensionFilter (name) {
+  return name.toLowerCase().endsWith(saveExtension)
+}
+
 
 const fs = require('fs')
     , staticCallback = require('static-route')()
@@ -30,6 +34,13 @@ const fs = require('fs')
         , soundList : (req, res) => {
             res.write(fs.readdirSync(soundPath)
                 .filter(soundExtensionFilter)
+                .join('\\'))
+            res.end()
+        }
+
+        , savesList : (req, res) => {
+            res.write(fs.readdirSync(savePath)
+                .filter(saveExtensionFilter)
                 .join('\\'))
             res.end()
         }
