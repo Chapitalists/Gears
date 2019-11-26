@@ -119,7 +119,7 @@ type alias ClickState =
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url _ =
-    ( Model False url Set.empty [] Doc.new (ViewPos (vec2 0 0) 10) (Size 0 0) Interact.init
+    ( Model False url Set.empty [] (Doc.new <| Just url) (ViewPos (vec2 0 0) 10) (Size 0 0) Interact.init
     , fetchSoundList url
     )
 

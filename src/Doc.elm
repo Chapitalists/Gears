@@ -14,6 +14,7 @@ import Link exposing (Link)
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Sound exposing (Sound)
 import TypedSvg.Core exposing (Svg)
+import Url exposing (Url)
 
 
 
@@ -74,10 +75,10 @@ type Detailed
     | DHarmolink Link (Maybe Fraction)
 
 
-new : Doc
-new =
+new : Maybe Url -> Doc
+new url =
     D
-        { data = Data.init { gears = Coll.empty Gear.default, motor = Coll.startId }
+        { data = Data.init { gears = Coll.empty Gear.default, motor = Coll.startId } url
         , dragging = NoDrag
         , tool = Play
         , engine = Engine.init

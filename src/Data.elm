@@ -2,6 +2,7 @@ port module Data exposing (..)
 
 import Json.Encode as E
 import UndoList as Undo exposing (UndoList)
+import Url exposing (Url)
 
 
 port saveFile : E.Value -> Cmd msg
@@ -12,15 +13,17 @@ type Data data
         { undoList : UndoList data
         , grouping : Maybe data
         , saved : Bool
+        , serverUrl : Maybe Url
         }
 
 
-init : a -> Data a
-init data =
+init : a -> Maybe Url -> Data a
+init data url =
     D
         { undoList = Undo.fresh data
         , grouping = Nothing
         , saved = False
+        , serverUrl = url
         }
 
 
