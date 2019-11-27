@@ -344,10 +344,9 @@ refEncoder ref =
 
 type Mod
     = None
-    | Hovered
-    | Clicked
-    | Dragged
-    | Resizable
+    | Selectable
+    | Selected
+    | Resizing
 
 
 type Msg
@@ -389,6 +388,9 @@ view ( id, G g ) coll mod =
 
         tickW =
             length / 30
+
+        circum =
+            length * pi
     in
     S.g
         ([ SA.transform [ Translate (getX g.pos) (getY g.pos) ] ]
@@ -405,7 +407,17 @@ view ( id, G g ) coll mod =
 
                     else
                         Color.black
-                 , SA.strokeWidth <| Num tickW
+                 , SA.strokeWidth <|
+                    Num <|
+                        if mod == Selectable then
+                            tickW * 2
+
+                        else
+                            tickW
+                 , SA.strokeDasharray <|
+                    String.fromFloat (circum / 40 * 3 / 4)
+                        ++ ","
+                        ++ String.fromFloat (circum / 40 * 1 / 4)
                  , SA.fill <|
                     if g.mute then
                         Fill Color.white
@@ -435,7 +447,22 @@ view ( id, G g ) coll mod =
                 []
             ]
          ]
-            ++ (if mod == Resizable then
+            ++ (if mod == Selected then
+                    [ S.circle
+                        [ SA.cx <| Num 0
+                        , SA.cy <| Num 0
+                        , SA.r <| Num (length / 2 + tickW * 2)
+                        , SA.strokeWidth <| Num (tickW / 2)
+                        , SA.stroke Color.black
+                        , SA.fill FillNone
+                        ]
+                        []
+                    ]
+
+                else
+                    []
+               )
+            ++ (if mod == Resizing then
                     [ S.polyline
                         [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
                         , SA.stroke Color.red

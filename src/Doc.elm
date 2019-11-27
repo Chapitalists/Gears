@@ -29,6 +29,7 @@ type Doc
         , tool : Tool
         , engine : Engine
         , details : Detailed
+        , resizing : Maybe (Id Gear)
         }
 
 
@@ -96,6 +97,7 @@ new url =
         , tool = Play
         , engine = Engine.init
         , details = DNothing
+        , resizing = Nothing
         }
 
 
@@ -560,27 +562,35 @@ viewContent (D doc) inter scale =
 
         getMod : Interact.Interact Interactable -> Id Gear -> Gear.Mod
         getMod i id =
-            case i of
-                Just ( IGear iid, mode ) ->
-                    if iid /= id then
+            if doc.details == DGear id then
+                Gear.Selected
+
+            else
+                case i of
+                    Just ( IGear iid, mode ) ->
+                        if iid /= id then
+                            Gear.None
+
+                        else
+                            case ( doc.tool, mode ) of
+                                ( Link, Interact.Hover ) ->
+                                    Gear.Resizing
+
+                                ( Edit, Interact.Hover ) ->
+                                    Gear.Selectable
+
+                                _ ->
+                                    Gear.None
+
+                    Just ( IResizeHandle iid _, mode ) ->
+                        if iid /= id then
+                            Gear.None
+
+                        else
+                            Gear.Resizing
+
+                    _ ->
                         Gear.None
-
-                    else
-                        case ( doc.tool, mode ) of
-                            ( Link, Interact.Hover ) ->
-                                Gear.Resizable
-
-                            ( _, Interact.Hover ) ->
-                                Gear.Hovered
-
-                            ( _, Interact.Click ) ->
-                                Gear.Clicked
-
-                            ( _, Interact.Drag ) ->
-                                Gear.Dragged
-
-                _ ->
-                    Gear.None
     in
     (List.map (\( id, g ) -> Gear.view ( id, g ) mobile.gears (getMod inter id)) <|
         Coll.toList mobile.gears
