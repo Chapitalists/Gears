@@ -487,9 +487,9 @@ viewTools (D doc) =
         [ Input.radioRow [ spacing 30 ]
             { onChange = ChangedTool
             , options =
-                [ Input.option Play <| text "Jeu"
-                , Input.option Link <| text "Harmonie"
-                , Input.option Edit <| text "Édition"
+                [ Input.option Play <| text "Jeu (W)"
+                , Input.option Link <| text "Harmonie (X)"
+                , Input.option Edit <| text "Édition (C)"
                 ]
             , selected = Just doc.tool
             , label = Input.labelHidden "Outils"

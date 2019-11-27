@@ -1,6 +1,7 @@
 port module Main exposing (..)
 
 import Browser
+import Browser.Events as BE
 import Browser.Navigation as Nav
 import Coll exposing (Coll, Id)
 import Doc exposing (Doc, Interactable)
@@ -304,8 +305,33 @@ subs { interact } =
     Sub.batch <|
         [ soundLoaded (Sound.decoder >> SoundLoaded)
         , newSVGSize (sizeDecoder >> GotSVGSize)
+        , BE.onKeyPress shortcutDecoder
         ]
             ++ List.map (Sub.map InteractMsg) (Interact.subs interact)
+
+
+shortcutDecoder : D.Decoder Msg
+shortcutDecoder =
+    D.map keyCodeToMsg <| D.field "code" D.string
+
+
+keyCodeToMsg : String -> Msg
+keyCodeToMsg str =
+    case str of
+        "KeyZ" ->
+            DocMsg <| Doc.ChangedTool Doc.Play
+
+        "KeyX" ->
+            DocMsg <| Doc.ChangedTool Doc.Link
+
+        "KeyC" ->
+            DocMsg <| Doc.ChangedTool Doc.Edit
+
+        "Space" ->
+            DocMsg <| Doc.ToggleEngine
+
+        _ ->
+            NOOP
 
 
 
