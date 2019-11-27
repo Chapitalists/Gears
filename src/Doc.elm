@@ -657,6 +657,13 @@ viewContent (D doc) inter scale =
                 _ ->
                     []
            )
+        ++ (case doc.details of
+                DHarmolink l _ ->
+                    Link.viewSelectedLink mobile.gears l
+
+                _ ->
+                    []
+           )
 
 
 viewDetails : Doc -> List (Element Msg)

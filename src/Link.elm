@@ -49,6 +49,25 @@ viewMotorLink gears cutting l =
     ]
 
 
+viewSelectedLink : Coll Gear -> Link -> List (Svg msg)
+viewSelectedLink gears l =
+    let
+        ( g, gg ) =
+            toGears gears l
+
+        w =
+            (Gear.getLength g gears + Gear.getLength gg gears) / 30
+    in
+    [ S.polyline
+        [ SA.points [ tupleFromVec <| Gear.getPos g, tupleFromVec <| Gear.getPos gg ]
+        , SA.stroke Color.red
+        , SA.strokeWidth <| Num w
+        , SA.strokeLinecap TypedSvg.Types.StrokeLinecapRound
+        ]
+        []
+    ]
+
+
 drawMotorLink : ( ( Vec2, Float ), ( Vec2, Float ) ) -> Svg msg
 drawMotorLink ( ( p1, d1 ), ( p2, d2 ) ) =
     let
