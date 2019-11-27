@@ -141,7 +141,7 @@ type Msg
     | SoundLoaded (Result D.Error Sound)
     | SoundClicked Sound
     | UpdateViewPos ViewPos
-    | Zoom Float
+    | Zoom Float ( Float, Float )
     | GotSVGSize (Result D.Error Size)
     | DocMsg Doc.Msg
     | InteractMsg (Interact.Msg Doc.Interactable)
@@ -244,15 +244,27 @@ update msg model =
         UpdateViewPos vp ->
             ( { model | viewPos = vp }, Cmd.none )
 
-        Zoom f ->
+        Zoom f ( x, y ) ->
             let
                 vp =
                     model.viewPos
 
                 factor =
                     1 + f / 1000
+
+                p =
+                    Vec.sub (posToSvg (vec2 x y) model) vp.c
+
+                nS =
+                    vp.smallestSize * factor
+
+                scale =
+                    nS / vp.smallestSize - 1
+
+                nC =
+                    Vec.sub vp.c <| Vec.scale scale p
             in
-            ( { model | viewPos = { vp | smallestSize = model.viewPos.smallestSize * factor } }, Cmd.none )
+            ( { model | viewPos = { c = nC, smallestSize = nS } }, Cmd.none )
 
         GotSVGSize res ->
             case res of
@@ -375,7 +387,7 @@ viewDoc model =
                      , SS.attribute "height" "100%"
                      , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
                      , computeViewBox model
-                     , Wheel.onWheel (Zoom << .deltaY)
+                     , Wheel.onWheel (\e -> Zoom e.deltaY e.mouseEvent.offsetPos)
                      ]
                         ++ List.map (Html.Attributes.map InteractMsg)
                             (Interact.dragSpaceEvents model.interact)
