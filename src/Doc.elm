@@ -39,6 +39,11 @@ type alias Mobile =
     { gears : Coll Gear, motor : Id Gear }
 
 
+changeMobile : Mobile -> String -> Maybe Url -> Doc -> Doc
+changeMobile m name url (D d) =
+    D { d | data = Data.load m name url }
+
+
 mobileEncoder : Mobile -> E.Value
 mobileEncoder m =
     E.object

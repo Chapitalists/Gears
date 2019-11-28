@@ -137,7 +137,7 @@ type Msg
     | RequestSavesList
     | RequestSaveLoad String
     | GotSavesList (Result Http.Error String)
-    | GotLoadedFile (Result Http.Error Doc.Mobile)
+    | GotLoadedFile String (Result Http.Error Doc.Mobile)
     | SoundLoaded (Result D.Error Sound)
     | SoundClicked Sound
     | UpdateViewPos ViewPos
@@ -177,14 +177,22 @@ update msg model =
                 Err _ ->
                     ( { model | connected = False, savesList = Set.empty }, Cmd.none )
 
-        GotLoadedFile result ->
+        GotLoadedFile name result ->
             case result of
                 Ok m ->
                     ( { model
                         | connected = True
+                        , doc = Doc.changeMobile m name (Just model.currentUrl) model.doc
+                        , viewPos =
+                            { c = Gear.getPos <| Coll.get m.motor m.gears
+                            , smallestSize = Gear.getLengthId m.motor m.gears * 2 * 4
+                            }
                       }
                     , Cmd.none
                     )
+
+                Err (Http.BadBody err) ->
+                    Debug.log err ( model, Cmd.none )
 
                 Err _ ->
                     ( { model | connected = False }, Cmd.none )
@@ -456,7 +464,7 @@ viewSaveFiles model =
         }
     , column [ spacing 5 ] <|
         text "Fichiers"
-            :: (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| String.dropRight 6 s)) <|
+            :: (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutGearsExtension s)) <|
                     Set.toList model.savesList
                )
     ]
@@ -527,5 +535,10 @@ fetchSaveFile : Url.Url -> String -> Cmd Msg
 fetchSaveFile url name =
     Http.get
         { url = Url.toString { url | path = "/saves/" ++ name }
-        , expect = Http.expectJson GotLoadedFile <| D.succeed { gears = Coll.empty Gear.default, motor = Coll.startId }
+        , expect = Http.expectJson (GotLoadedFile <| cutGearsExtension name) Doc.mobileDecoder
         }
+
+
+cutGearsExtension : String -> String
+cutGearsExtension =
+    String.dropRight 6
