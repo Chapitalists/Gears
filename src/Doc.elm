@@ -270,12 +270,11 @@ update msg scale (D doc) =
                             | details =
                                 DHarmolink l <|
                                     Just <|
-                                        Fract.fromRecord <|
-                                            if isNumerator then
-                                                { num = i, den = Fract.getDenominator fract }
+                                        if isNumerator then
+                                            { num = i, den = fract.den }
 
-                                            else
-                                                { num = Fract.getNumerator fract, den = i }
+                                        else
+                                            { num = fract.num, den = i }
                         }
                     , Cmd.none
                     )
@@ -732,14 +731,14 @@ viewDetails (D doc) =
 
                             Just fract ->
                                 [ Input.text [ Font.color (rgb 0 0 0) ]
-                                    { text = String.fromInt <| Fract.getNumerator fract
+                                    { text = String.fromInt fract.num
                                     , onChange = EnteredFract True
                                     , label = Input.labelHidden "Numerator"
                                     , placeholder = Nothing
                                     }
                                 , text "/"
                                 , Input.text [ Font.color (rgb 0 0 0) ]
-                                    { text = String.fromInt <| Fract.getDenominator fract
+                                    { text = String.fromInt fract.den
                                     , onChange = EnteredFract False
                                     , label = Input.labelHidden "Denominator"
                                     , placeholder = Nothing
