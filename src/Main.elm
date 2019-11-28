@@ -315,7 +315,7 @@ update msg model =
 
 subs { interact } =
     Sub.batch <|
-        [ soundLoaded (Sound.decoder >> SoundLoaded)
+        [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , newSVGSize (sizeDecoder >> GotSVGSize)
         , BE.onKeyPress shortcutDecoder
         ]

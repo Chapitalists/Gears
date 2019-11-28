@@ -24,6 +24,7 @@
             "ljuglaret/fraction": "1.0.0",
             "mdgriffith/elm-ui": "1.1.5",
             "mpizenberg/elm-pointer-events": "4.0.1",
+            "webbhuset/elm-json-decode": "1.0.2",
             "zaboco/elm-draggable": "4.0.5"
         },
         "indirect": {
