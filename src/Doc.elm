@@ -506,7 +506,7 @@ update msg scale (D doc) =
 
 viewTools : Doc -> Element Msg
 viewTools (D doc) =
-    row [ width fill, padding 10, spacing 20 ]
+    row [ width fill, padding 10, spacing 20, Font.size 14 ]
         [ Input.radioRow [ spacing 30 ]
             { onChange = ChangedTool
             , options =
@@ -695,7 +695,7 @@ viewDetails (D doc) =
                 g =
                     Coll.get id (Data.current doc.data).gears
             in
-            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ]
                 [ text <| Gear.toUID id
                 , text <| Sound.toString g.sound
                 , Input.button []

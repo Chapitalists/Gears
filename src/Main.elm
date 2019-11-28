@@ -459,8 +459,8 @@ viewDoc model =
 
 viewFileExplorer : Model -> Element Msg
 viewFileExplorer model =
-    column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ] <|
-        ([ row [ Font.size 18, spacing 20 ]
+    column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ] <|
+        ([ row [ Font.size 14, spacing 20 ]
             [ Input.button
                 (if model.fileExplorerTab == Sounds then
                     [ padding 5, Bg.color (rgb 0.2 0.2 0.2) ]
