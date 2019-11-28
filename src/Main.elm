@@ -69,7 +69,8 @@ type alias Model =
     , savesList : Set String
     , doc : Doc
     , viewPos : ViewPos
-    , svgSize : Size
+    , svgSize : Size Float
+    , screenSize : Size Int
     , interact : Interact.State Doc.Interactable
     }
 
@@ -101,13 +102,13 @@ posToSvg pos { viewPos, svgSize } =
                 (vec2 (svgSize.width / 2) (svgSize.height / 2))
 
 
-type alias Size =
-    { width : Float
-    , height : Float
+type alias Size number =
+    { width : number
+    , height : number
     }
 
 
-sizeDecoder : D.Value -> Result D.Error Size
+sizeDecoder : D.Value -> Result D.Error (Size Float)
 sizeDecoder =
     D.decodeValue <| D.map2 Size (D.field "width" D.float) (D.field "height" D.float)
 
@@ -119,9 +120,9 @@ type alias ClickState =
     }
 
 
-init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
-init _ url _ =
-    ( Model False url Set.empty [] Set.empty (Doc.new <| Just url) (ViewPos (vec2 0 0) 10) (Size 0 0) Interact.init
+init : Size Int -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
+init screen url _ =
+    ( Model False url Set.empty [] Set.empty (Doc.new <| Just url) (ViewPos (vec2 0 0) 10) (Size 0 0) screen Interact.init
     , fetchSoundList url
     )
 
@@ -142,7 +143,8 @@ type Msg
     | SoundClicked Sound
     | UpdateViewPos ViewPos
     | Zoom Float ( Float, Float )
-    | GotSVGSize (Result D.Error Size)
+    | GotSVGSize (Result D.Error (Size Float))
+    | GotScreenSize (Size Int)
     | DocMsg Doc.Msg
     | InteractMsg (Interact.Msg Doc.Interactable)
     | NOOP
@@ -295,6 +297,9 @@ update msg model =
                 Result.Ok s ->
                     ( { model | svgSize = s }, Cmd.none )
 
+        GotScreenSize size ->
+            ( { model | screenSize = size }, Cmd.none )
+
         DocMsg subMsg ->
             let
                 ( doc, cmd ) =
@@ -339,6 +344,7 @@ subs { interact } =
         [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , newSVGSize (sizeDecoder >> GotSVGSize)
         , BE.onKeyPress shortcutDecoder
+        , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
         ]
             ++ List.map (Sub.map InteractMsg) (Interact.subs interact)
 
@@ -383,7 +389,7 @@ view model =
                )
     , body =
         [ layout [] <|
-            row [ height fill, width fill ]
+            row [ height <| px model.screenSize.height, width <| px model.screenSize.width ]
                 ([ viewFileExplorer model
                  , viewDoc model
                  ]
@@ -433,25 +439,27 @@ viewFileExplorer model =
 
 viewSoundLib : Model -> List (Element Msg)
 viewSoundLib model =
-    [ Input.button
-        [ Font.color <|
-            if model.connected then
-                rgb 0 0 0
+    [ column [ width fill, height <| fillPortion 2, spacing 20, scrollbarY ]
+        [ Input.button
+            [ Font.color <|
+                if model.connected then
+                    rgb 0 0 0
 
-            else
-                rgb 1 0 0
+                else
+                    rgb 1 0 0
+            ]
+            { onPress = Just RequestSoundList
+            , label = text "Actualiser"
+            }
+        , text "Sons"
+        , column [ width fill, height <| fillPortion 1, spacing 5, padding 2, scrollbarY ] <|
+            (List.map (\s -> el [ onClick (RequestSoundLoad s) ] (text s)) <|
+                Set.toList model.soundList
+            )
+        , text "Chargés"
+        , column [ width fill, height <| fillPortion 1, spacing 10, padding 2, scrollbarY ] <|
+            List.map soundView model.loadedSoundList
         ]
-        { onPress = Just RequestSoundList
-        , label = text "Actualiser"
-        }
-    , column [ spacing 5 ] <|
-        text "Sons"
-            :: (List.map (\s -> el [ onClick (RequestSoundLoad s) ] (text s)) <|
-                    Set.toList model.soundList
-               )
-    , column [ spacing 10 ] <|
-        text "Chargés"
-            :: List.map soundView model.loadedSoundList
     ]
 
 
@@ -464,22 +472,24 @@ soundView s =
 
 viewSaveFiles : Model -> List (Element Msg)
 viewSaveFiles model =
-    [ Input.button
-        [ Font.color <|
-            if model.connected then
-                rgb 0 0 0
+    [ column [ height <| fillPortion 1, width fill, spacing 20 ]
+        [ Input.button
+            [ Font.color <|
+                if model.connected then
+                    rgb 0 0 0
 
-            else
-                rgb 1 0 0
+                else
+                    rgb 1 0 0
+            ]
+            { onPress = Just RequestSavesList
+            , label = text "Actualiser"
+            }
+        , text "Fichiers"
+        , column [ width fill, spacing 5, padding 2, scrollbarY ] <|
+            (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutGearsExtension s)) <|
+                Set.toList model.savesList
+            )
         ]
-        { onPress = Just RequestSavesList
-        , label = text "Actualiser"
-        }
-    , column [ spacing 5 ] <|
-        text "Fichiers"
-            :: (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutGearsExtension s)) <|
-                    Set.toList model.savesList
-               )
     ]
 
 
