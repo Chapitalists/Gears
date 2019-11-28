@@ -71,8 +71,15 @@ type alias Model =
     , viewPos : ViewPos
     , svgSize : Size Float
     , screenSize : Size Int
+    , fileExplorerTab : ExTab
     , interact : Interact.State Doc.Interactable
     }
+
+
+type ExTab
+    = Sounds
+    | Loaded
+    | Saves
 
 
 svgId : String
@@ -122,7 +129,18 @@ type alias ClickState =
 
 init : Size Int -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init screen url _ =
-    ( Model False url Set.empty [] Set.empty (Doc.new <| Just url) (ViewPos (vec2 0 0) 10) (Size 0 0) screen Interact.init
+    ( Model
+        False
+        url
+        Set.empty
+        []
+        Set.empty
+        (Doc.new <| Just url)
+        (ViewPos (vec2 0 0) 10)
+        (Size 0 0)
+        screen
+        Sounds
+        Interact.init
     , fetchSoundList url
     )
 
@@ -141,6 +159,7 @@ type Msg
     | GotLoadedFile String (Result Http.Error Doc.Mobile)
     | SoundLoaded (Result D.Error Sound)
     | SoundClicked Sound
+    | ChangedExplorerTab ExTab
     | UpdateViewPos ViewPos
     | Zoom Float ( Float, Float )
     | GotSVGSize (Result D.Error (Size Float))
@@ -263,6 +282,9 @@ update msg model =
               }
             , Cmd.none
             )
+
+        ChangedExplorerTab tab ->
+            ( { model | fileExplorerTab = tab }, Cmd.none )
 
         UpdateViewPos vp ->
             ( { model | viewPos = vp }, Cmd.none )
@@ -433,12 +455,54 @@ viewDoc model =
 viewFileExplorer : Model -> Element Msg
 viewFileExplorer model =
     column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ] <|
-        viewSoundLib model
-            ++ viewSaveFiles model
+        ([ row [ Font.size 18, spacing 20 ]
+            [ Input.button
+                (if model.fileExplorerTab == Sounds then
+                    [ padding 5, Bg.color (rgb 0.2 0.2 0.2) ]
+
+                 else
+                    [ padding 5 ]
+                )
+                { label = text "Sons"
+                , onPress = Just <| ChangedExplorerTab Sounds
+                }
+            , Input.button
+                (if model.fileExplorerTab == Loaded then
+                    [ padding 5, Bg.color (rgb 0.1 0.1 0.1) ]
+
+                 else
+                    [ padding 5 ]
+                )
+                { label = text "Chargés"
+                , onPress = Just <| ChangedExplorerTab Loaded
+                }
+            , Input.button
+                (if model.fileExplorerTab == Saves then
+                    [ padding 5, Bg.color (rgb 0.1 0.1 0.1) ]
+
+                 else
+                    [ padding 5 ]
+                )
+                { label = text "Saves"
+                , onPress = Just <| ChangedExplorerTab Saves
+                }
+            ]
+         ]
+            ++ (case model.fileExplorerTab of
+                    Sounds ->
+                        viewSounds model
+
+                    Loaded ->
+                        viewLoaded model
+
+                    Saves ->
+                        viewSaveFiles model
+               )
+        )
 
 
-viewSoundLib : Model -> List (Element Msg)
-viewSoundLib model =
+viewSounds : Model -> List (Element Msg)
+viewSounds model =
     [ column [ width fill, height <| fillPortion 2, spacing 20, scrollbarY ]
         [ Input.button
             [ Font.color <|
@@ -451,15 +515,18 @@ viewSoundLib model =
             { onPress = Just RequestSoundList
             , label = text "Actualiser"
             }
-        , text "Sons"
         , column [ width fill, height <| fillPortion 1, spacing 5, padding 2, scrollbarY ] <|
             (List.map (\s -> el [ onClick (RequestSoundLoad s) ] (text s)) <|
                 Set.toList model.soundList
             )
-        , text "Chargés"
-        , column [ width fill, height <| fillPortion 1, spacing 10, padding 2, scrollbarY ] <|
-            List.map soundView model.loadedSoundList
         ]
+    ]
+
+
+viewLoaded : Model -> List (Element Msg)
+viewLoaded model =
+    [ column [ width fill, height <| fillPortion 3, spacing 10, padding 2, scrollbarY ] <|
+        List.map soundView model.loadedSoundList
     ]
 
 
@@ -484,7 +551,6 @@ viewSaveFiles model =
             { onPress = Just RequestSavesList
             , label = text "Actualiser"
             }
-        , text "Fichiers"
         , column [ width fill, spacing 5, padding 2, scrollbarY ] <|
             (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutGearsExtension s)) <|
                 Set.toList model.savesList
