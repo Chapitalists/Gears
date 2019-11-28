@@ -75,10 +75,10 @@ type Interactable
 fromGearInteractable : Gear.Interactable -> Interactable
 fromGearInteractable i =
     case i of
-        Gear.Gear id ->
+        Gear.IGear id ->
             IGear id
 
-        Gear.ResizeHandle id bool ->
+        Gear.IResizeHandle id bool ->
             IResizeHandle id bool
 
 
