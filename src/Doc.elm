@@ -332,6 +332,9 @@ update msg scale (D doc) =
                             ( D { doc | data = updateGears doc.data <| always newGears }, cmd )
 
                         -- CUT
+                        ( ISurface, Interact.Dragged p1 p2 _, NoDrag ) ->
+                            ( D { doc | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears }, Cmd.none )
+
                         ( ISurface, Interact.Dragged _ p2 _, Cut ( p1, _ ) _ ) ->
                             ( D { doc | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears }, Cmd.none )
 
