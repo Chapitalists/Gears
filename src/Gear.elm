@@ -219,6 +219,7 @@ copy id coll =
             { g
                 | pos = add g.pos (vec2 (getLength g coll * 1.1) 0)
                 , ref = Other base
+                , motors = []
             }
 
         ( newId, newColl ) =
