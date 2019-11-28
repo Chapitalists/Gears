@@ -233,7 +233,7 @@ update msg model =
                 , viewPos =
                     case newGearPos of
                         Just newPos ->
-                            { c = newPos, smallestSize = Sound.length sound * 2 * 4 }
+                            { c = newPos, smallestSize = sound.length * 2 * 4 }
 
                         Nothing ->
                             model.viewPos
@@ -438,7 +438,7 @@ soundView : Sound -> Element Msg
 soundView s =
     el
         [ onClick <| SoundClicked s ]
-        (text (Sound.toString s))
+        (text s.path)
 
 
 viewSaveFiles : Model -> List (Element Msg)

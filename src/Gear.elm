@@ -183,7 +183,7 @@ toUID id =
 
 fromSound : Sound -> Vec2 -> Gear
 fromSound s p =
-    { ref = newSelfRef <| Sound.length s
+    { ref = newSelfRef <| s.length
     , fract = Fract.integer 1
     , motors = []
     , pos = p
@@ -303,7 +303,7 @@ encoderToEngine id coll =
         E.object
             [ ( "id", E.string <| toUID id )
             , ( "length", E.float length )
-            , ( "soundName", E.string <| Sound.toString g.sound )
+            , ( "soundName", E.string <| g.sound.path )
             , ( "mute", E.bool g.mute )
             , ( "volume", E.float g.volume )
             ]

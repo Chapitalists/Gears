@@ -5,51 +5,28 @@ import Json.Decode.Pipeline exposing (..)
 import Json.Encode as E
 
 
-type Sound
-    = S SoundInternal
-
-
-type alias SoundInternal =
+type alias Sound =
     { path : String
     , length : Float
     }
 
 
-
-{- }
-   fromPath : String -> Sound
-   fromPath p =
-       S { path = p }
--}
-
-
 noSound =
-    S { path = "NO_SOUND", length = 0 }
-
-
-length : Sound -> Float
-length (S s) =
-    s.length
-
-
-toString : Sound -> String
-toString (S { path }) =
-    path
+    { path = "NO_SOUND", length = 0 }
 
 
 decoder : D.Value -> Result D.Error Sound
 decoder v =
-    Result.map S <|
-        D.decodeValue
-            (D.succeed SoundInternal
-                |> required "path" D.string
-                |> required "length" D.float
-            )
-            v
+    D.decodeValue
+        (D.succeed Sound
+            |> required "path" D.string
+            |> required "length" D.float
+        )
+        v
 
 
 encoder : Sound -> E.Value
-encoder (S s) =
+encoder s =
     E.object <|
         [ ( "path", E.string s.path )
         , ( "length", E.float s.length )
