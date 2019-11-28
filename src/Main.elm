@@ -180,6 +180,19 @@ update msg model =
         GotLoadedFile name result ->
             case result of
                 Ok m ->
+                    let
+                        cmds =
+                            Cmd.batch <|
+                                List.map
+                                    (\gear ->
+                                        Tuple.second <|
+                                            update
+                                                (RequestSoundLoad <| Sound.toString <| gear.sound)
+                                                model
+                                    )
+                                <|
+                                    Coll.values m.gears
+                    in
                     ( { model
                         | connected = True
                         , doc = Doc.changeMobile m name (Just model.currentUrl) model.doc
@@ -188,7 +201,7 @@ update msg model =
                             , smallestSize = Gear.getLengthId m.motor m.gears * 2 * 4
                             }
                       }
-                    , Cmd.none
+                    , cmds
                     )
 
                 Err (Http.BadBody err) ->
