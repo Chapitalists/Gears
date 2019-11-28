@@ -1,6 +1,8 @@
-module Coll exposing (Coll, Id, empty, fillReserved, filter, get, idEncoder, idToString, ids, insert, insertTellId, maybeGet, remove, reserve, startId, toList, update, values)
+module Coll exposing (Coll, Id, decoder, empty, encoder, fillReserved, filter, get, idDecoder, idEncoder, idToString, ids, insert, insertTellId, maybeGet, remove, reserve, startId, toList, update, values)
 
 import Dict exposing (Dict)
+import Json.Decode as D
+import Json.Decode.Field as Field
 import Json.Encode as E
 
 
@@ -26,6 +28,11 @@ idToString (Id i) =
 idEncoder : Id x -> E.Value
 idEncoder (Id i) =
     E.int i
+
+
+idDecoder : D.Decoder (Id x)
+idDecoder =
+    D.map Id D.int
 
 
 type Coll item
@@ -111,3 +118,46 @@ ids (C { d }) =
 values : Coll item -> List item
 values (C { d }) =
     Dict.values d
+
+
+encoder : Coll item -> (item -> E.Value) -> E.Value
+encoder (C coll) itemEncoder =
+    E.list (keyValueEncoder itemEncoder) (Dict.toList coll.d)
+
+
+decoder : D.Decoder item -> item -> D.Decoder (Coll item)
+decoder itemDecoder defaultItem =
+    D.map (fromKeyValue defaultItem) <| D.list (keyValueDecoder itemDecoder)
+
+
+keyValueEncoder : (item -> E.Value) -> ( Int, item ) -> E.Value
+keyValueEncoder itemEncoder ( i, item ) =
+    E.object [ ( "id", E.int i ), ( "item", itemEncoder item ) ]
+
+
+keyValueDecoder : D.Decoder item -> D.Decoder ( Int, item )
+keyValueDecoder itemDecoder =
+    Field.require "id" D.int <|
+        \i ->
+            Field.require "item" itemDecoder <|
+                \item ->
+                    D.succeed ( i, item )
+
+
+fromKeyValue : item -> List ( Int, item ) -> Coll item
+fromKeyValue default l =
+    let
+        ( ints, _ ) =
+            List.unzip l
+    in
+    C
+        { d = Dict.fromList l
+        , default = default
+        , nextId =
+            case List.maximum ints of
+                Nothing ->
+                    getIdInternal startId
+
+                Just i ->
+                    i + 1
+        }
