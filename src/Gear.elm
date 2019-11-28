@@ -102,6 +102,20 @@ hasHarmonics g =
             False
 
 
+getHarmonicGroup : Id Gear -> Coll Gear -> List (Id Gear)
+getHarmonicGroup id coll =
+    let
+        g =
+            Coll.get id coll
+    in
+    case g.ref of
+        Self { group } ->
+            id :: group
+
+        Other _ ->
+            [ id ]
+
+
 getBaseId : Gear -> Maybe (Id Gear)
 getBaseId g =
     case g.ref of

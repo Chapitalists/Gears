@@ -115,9 +115,18 @@ soundClicked : Sound -> Doc -> ( Doc, Maybe Vec2 )
 soundClicked sound (D doc) =
     case doc.details of
         DChangeSound id ->
+            let
+                harmos =
+                    Gear.getHarmonicGroup id (Data.current doc.data).gears
+
+                chSound =
+                    Gear.update <| Gear.ChangeSound sound
+            in
             ( D
                 { doc
-                    | data = updateGears doc.data <| Coll.update id <| Gear.update <| Gear.ChangeSound sound
+                    | data =
+                        updateGears doc.data <|
+                            \coll -> List.foldl (\el -> Coll.update el chSound) coll harmos
                     , details = DGear id
                 }
             , Nothing
