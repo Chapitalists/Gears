@@ -5,6 +5,8 @@ import Color
 import Fraction as Fract exposing (Fraction)
 import Html.Attributes
 import Interact
+import Json.Decode as D
+import Json.Decode.Field as Field
 import Json.Encode as E
 import Math.Vector2 exposing (..)
 import Sound exposing (Sound)
@@ -328,6 +330,38 @@ encoderToSave g =
         ]
 
 
+decoder : D.Decoder Gear
+decoder =
+    Field.require "ref" refDecoder <|
+        \ref ->
+            Field.require "fract" Fract.decoder <|
+                \fract ->
+                    Field.require "motors" (D.list <| D.map G Coll.idDecoder) <|
+                        \motors ->
+                            Field.requireAt [ "pos", "x" ] D.float <|
+                                \px ->
+                                    Field.requireAt [ "pos", "y" ] D.float <|
+                                        \py ->
+                                            Field.require "startPercent" D.float <|
+                                                \startPercent ->
+                                                    Field.require "volume" D.float <|
+                                                        \volume ->
+                                                            Field.require "sound" Sound.decoder <|
+                                                                \sound ->
+                                                                    Field.require "mute" D.bool <|
+                                                                        \mute ->
+                                                                            D.succeed
+                                                                                { ref = ref
+                                                                                , fract = fract
+                                                                                , motors = motors
+                                                                                , pos = vec2 px py
+                                                                                , startPercent = startPercent
+                                                                                , volume = volume
+                                                                                , sound = sound
+                                                                                , mute = mute
+                                                                                }
+
+
 refEncoder : Ref -> E.Value
 refEncoder ref =
     case ref of
@@ -338,8 +372,48 @@ refEncoder ref =
             E.object <|
                 [ ( "unit", E.float r.unit )
                 , ( "group", E.list Coll.idEncoder r.group )
-                , ( "links", E.list (\( a, b ) -> E.list Coll.idEncoder [ a, b ]) r.links )
+                , ( "links", E.list linkEncoder r.links )
                 ]
+
+
+refDecoder : D.Decoder Ref
+refDecoder =
+    Field.attempt "other" Coll.idDecoder <|
+        \mayId ->
+            case mayId of
+                Just id ->
+                    D.succeed <| Other id
+
+                Nothing ->
+                    Field.require "unit" D.float <|
+                        \unit ->
+                            Field.require "group" (D.list Coll.idDecoder) <|
+                                \group ->
+                                    Field.require "links" (D.list linkDecoder) <|
+                                        \links ->
+                                            D.succeed <|
+                                                Self
+                                                    { unit = unit
+                                                    , group = group
+                                                    , links = links
+                                                    }
+
+
+linkEncoder : Link -> E.Value
+linkEncoder l =
+    E.object
+        [ ( "from", Coll.idEncoder <| Tuple.first l )
+        , ( "to", Coll.idEncoder <| Tuple.second l )
+        ]
+
+
+linkDecoder : D.Decoder Link
+linkDecoder =
+    Field.require "from" Coll.idDecoder <|
+        \from ->
+            Field.require "to" Coll.idDecoder <|
+                \to ->
+                    D.succeed ( from, to )
 
 
 type Mod
