@@ -1,5 +1,6 @@
 module Fraction exposing (..)
 
+import Json.Decode as D
 import Json.Encode as E
 
 
@@ -64,3 +65,8 @@ encoder f =
         [ ( "num", E.int f.num )
         , ( "den", E.int f.den )
         ]
+
+
+decoder : D.Decoder Fraction
+decoder =
+    D.map2 Fraction (D.field "num" D.int) (D.field "den" D.int)
