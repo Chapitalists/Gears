@@ -10,6 +10,8 @@ import Engine exposing (Engine)
 import Fraction as Fract exposing (Fraction)
 import Gear exposing (Gear, Ref)
 import Interact
+import Json.Decode as D
+import Json.Decode.Pipeline exposing (required)
 import Json.Encode as E
 import Link exposing (Link)
 import Math.Vector2 as Vec exposing (Vec2, vec2)
@@ -41,12 +43,15 @@ mobileEncoder : Mobile -> E.Value
 mobileEncoder m =
     E.object
         [ ( "motor", Coll.idEncoder m.motor )
-        , ( "gears"
-          , E.object <|
-                List.map (\( id, g ) -> ( Coll.idToString id, Gear.encoderToSave g )) <|
-                    Coll.toList m.gears
-          )
+        , ( "gears", Coll.encoder m.gears Gear.encoderToSave )
         ]
+
+
+mobileDecoder : D.Decoder Mobile
+mobileDecoder =
+    D.succeed Mobile
+        |> required "gears" (Coll.decoder Gear.decoder Gear.default)
+        |> required "motor" Coll.idDecoder
 
 
 type Dragging
