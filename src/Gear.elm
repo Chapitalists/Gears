@@ -415,9 +415,13 @@ view ( id, g ) coll mod =
                         else
                             tickW
                  , SA.strokeDasharray <|
-                    String.fromFloat (circum / 40 * 3 / 4)
-                        ++ ","
-                        ++ String.fromFloat (circum / 40 * 1 / 4)
+                    if hasHarmonics g then
+                        String.fromFloat (circum / 40 * 3 / 4)
+                            ++ ","
+                            ++ String.fromFloat (circum / 40 * 1 / 4)
+
+                    else
+                        ""
                  , SA.fill <|
                     if g.mute then
                         Fill Color.white
