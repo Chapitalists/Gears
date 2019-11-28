@@ -517,7 +517,7 @@ viewTools (D doc) =
             , selected = Just doc.tool
             , label = Input.labelHidden "Outils"
             }
-        , Input.text [ centerX ]
+        , Input.text [ width (fill |> maximum 500), centerX ]
             { label = Input.labelHidden "Nom du fichier"
             , text = Data.getName doc.data
             , placeholder = Just <| Input.placeholder [] <| text "nom-a-sauvegarder"
@@ -691,8 +691,13 @@ viewDetails : Doc -> List (Element Msg)
 viewDetails (D doc) =
     case doc.details of
         DGear id ->
+            let
+                g =
+                    Coll.get id (Data.current doc.data).gears
+            in
             [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
                 [ text <| Gear.toUID id
+                , text <| Sound.toString g.sound
                 , Input.button []
                     { label = text "PlayPause"
                     , onPress = Just <| PlayGear id
@@ -714,14 +719,26 @@ viewDetails (D doc) =
                     { label = text "Copie"
                     , onPress = Just <| CopyGear id
                     }
-                , Input.button []
-                    { label = text "x 2"
-                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer 2 )
-                    }
-                , Input.button []
-                    { label = text "/ 2"
-                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit 2 )
-                    }
+                , row [ spacing 16 ] <|
+                    text "x"
+                        :: List.map
+                            (\i ->
+                                Input.button []
+                                    { label = text <| String.fromInt i
+                                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer i )
+                                    }
+                            )
+                            [ 2, 3, 5, 7 ]
+                , row [ spacing 16 ] <|
+                    text "/"
+                        :: List.map
+                            (\i ->
+                                Input.button []
+                                    { label = text <| String.fromInt i
+                                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit i )
+                                    }
+                            )
+                            [ 2, 3, 5, 7 ]
                 , Input.button []
                     { label = text "Changer son"
                     , onPress = Just <| ChangeSound id

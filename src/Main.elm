@@ -327,7 +327,12 @@ update msg model =
                 ( doc, cmd ) =
                     Doc.update subMsg (getScale model) model.doc
             in
-            ( { model | doc = doc }, Cmd.map DocMsg cmd )
+            case subMsg of
+                Doc.ChangeSound _ ->
+                    ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
+
+                _ ->
+                    ( { model | doc = doc }, Cmd.map DocMsg cmd )
 
         InteractMsg subMsg ->
             let
@@ -516,7 +521,20 @@ viewSounds model =
             , label = text "Actualiser"
             }
         , column [ width fill, height <| fillPortion 1, spacing 5, padding 2, scrollbarY ] <|
-            (List.map (\s -> el [ onClick (RequestSoundLoad s) ] (text s)) <|
+            (List.map
+                (\s ->
+                    el
+                        [ onClick (RequestSoundLoad s)
+                        , Font.color <|
+                            if List.any ((==) s) <| List.map Sound.toString model.loadedSoundList then
+                                rgb 0.2 0.8 0.2
+
+                            else
+                                rgb 1 1 1
+                        ]
+                        (text s)
+                )
+             <|
                 Set.toList model.soundList
             )
         ]
