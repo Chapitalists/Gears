@@ -27,6 +27,17 @@ init data url =
         }
 
 
+load : a -> String -> Maybe Url -> Data a
+load data name url =
+    D
+        { undoList = Undo.fresh data
+        , grouping = Nothing
+        , saved = True
+        , name = name
+        , serverUrl = url
+        }
+
+
 current : Data a -> a
 current (D d) =
     case d.grouping of
