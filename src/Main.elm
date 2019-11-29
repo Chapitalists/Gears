@@ -610,7 +610,7 @@ computeViewBox { viewPos, svgSize } =
             SA.viewBox x y w h
 
         else
-            SA.viewBox y x h w
+            SA.viewBox x y h w
 
 
 forwardGearOutMsg : Interact.Msg Gear.Interactable -> Msg
