@@ -10,10 +10,14 @@ import Engine exposing (Engine)
 import Fraction as Fract exposing (Fraction)
 import Gear exposing (Gear, Ref)
 import Interact
+import Json.Decode as D
+import Json.Decode.Pipeline exposing (required)
+import Json.Encode as E
 import Link exposing (Link)
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Sound exposing (Sound)
 import TypedSvg.Core exposing (Svg)
+import Url exposing (Url)
 
 
 
@@ -27,11 +31,32 @@ type Doc
         , tool : Tool
         , engine : Engine
         , details : Detailed
+        , resizing : Maybe (Id Gear)
         }
 
 
 type alias Mobile =
     { gears : Coll Gear, motor : Id Gear }
+
+
+changeMobile : Mobile -> String -> Maybe Url -> Doc -> Doc
+changeMobile m name url (D d) =
+    D { d | data = Data.load m name url }
+
+
+mobileEncoder : Mobile -> E.Value
+mobileEncoder m =
+    E.object
+        [ ( "motor", Coll.idEncoder m.motor )
+        , ( "gears", Coll.encoder m.gears Gear.encoderToSave )
+        ]
+
+
+mobileDecoder : D.Decoder Mobile
+mobileDecoder =
+    D.succeed Mobile
+        |> required "gears" (Coll.decoder Gear.decoder Gear.default)
+        |> required "motor" Coll.idDecoder
 
 
 type Dragging
@@ -60,50 +85,74 @@ type Interactable
 fromGearInteractable : Gear.Interactable -> Interactable
 fromGearInteractable i =
     case i of
-        Gear.Gear id ->
+        Gear.IGear id ->
             IGear id
 
-        Gear.ResizeHandle id bool ->
+        Gear.IResizeHandle id bool ->
             IResizeHandle id bool
 
 
 type Detailed
     = DNothing
     | DGear (Id Gear)
+    | DChangeSound (Id Gear)
     | DHarmolink Link (Maybe Fraction)
 
 
-new : Doc
-new =
+new : Maybe Url -> Doc
+new url =
     D
-        { data = Data.init { gears = Coll.empty Gear.default, motor = Coll.startId }
+        { data = Data.init { gears = Coll.empty Gear.default, motor = Coll.startId } url
         , dragging = NoDrag
         , tool = Play
         , engine = Engine.init
         , details = DNothing
+        , resizing = Nothing
         }
 
 
-addNewGear : Sound -> Doc -> ( Doc, Vec2 )
-addNewGear sound (D doc) =
-    let
-        pos =
-            vec2 50 50
-    in
-    ( D
-        { doc
-            | data = updateGears doc.data <| Coll.insert <| Gear.fromSound sound pos
-        }
-    , pos
-    )
+soundClicked : Sound -> Doc -> ( Doc, Maybe Vec2 )
+soundClicked sound (D doc) =
+    case doc.details of
+        DChangeSound id ->
+            let
+                harmos =
+                    Gear.getHarmonicGroup id (Data.current doc.data).gears
+
+                chSound =
+                    Gear.update <| Gear.ChangeSound sound
+            in
+            ( D
+                { doc
+                    | data =
+                        updateGears doc.data <|
+                            \coll -> List.foldl (\el -> Coll.update el chSound) coll harmos
+                    , details = DGear id
+                }
+            , Nothing
+            )
+
+        _ ->
+            let
+                pos =
+                    vec2 50 50
+            in
+            ( D { doc | data = updateGears doc.data <| Coll.insert <| Gear.fromSound sound pos }
+            , Just pos
+            )
 
 
 type Msg
     = ChangedTool Tool
+    | EnteredFileName String
+    | Save
+    | Saved
     | ToggleEngine
     | PlayGear (Id Gear)
     | StopGear (Id Gear)
     | CopyGear (Id Gear)
+    | ChangeSound (Id Gear)
+    | ChangeSoundCanceled (Id Gear)
     | DeleteGear (Id Gear)
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract Link Fraction
@@ -114,7 +163,7 @@ type Msg
     | InteractEvent (Interact.Event Interactable)
 
 
-update : Msg -> Float -> Doc -> ( Doc, Cmd msg )
+update : Msg -> Float -> Doc -> ( Doc, Cmd Msg )
 update msg scale (D doc) =
     let
         mobile =
@@ -149,6 +198,24 @@ update msg scale (D doc) =
             , cmd
             )
 
+        EnteredFileName name ->
+            if String.all (\c -> Char.isAlphaNum c || c == '-') name then
+                ( D { doc | data = Data.setName name doc.data }, Cmd.none )
+
+            else
+                ( D doc, Cmd.none )
+
+        Save ->
+            let
+                ( data, cmd ) =
+                    Data.save doc.data mobileEncoder Saved
+            in
+            ( D { doc | data = data }, cmd )
+
+        Saved ->
+            --TODO handle server response
+            ( D doc, Cmd.none )
+
         ToggleEngine ->
             let
                 ( newEngine, cmd ) =
@@ -168,6 +235,12 @@ update msg scale (D doc) =
 
         CopyGear id ->
             ( D { doc | data = updateGears doc.data <| Gear.copy id }, Cmd.none )
+
+        ChangeSound id ->
+            ( D { doc | details = DChangeSound id }, Cmd.none )
+
+        ChangeSoundCanceled id ->
+            ( D { doc | details = DGear id }, Cmd.none )
 
         DeleteGear id ->
             let
@@ -216,12 +289,11 @@ update msg scale (D doc) =
                             | details =
                                 DHarmolink l <|
                                     Just <|
-                                        Fract.fromRecord <|
-                                            if isNumerator then
-                                                { num = i, den = Fract.getDenominator fract }
+                                        if isNumerator then
+                                            { num = i, den = fract.den }
 
-                                            else
-                                                { num = Fract.getNumerator fract, den = i }
+                                        else
+                                            { num = fract.num, den = i }
                         }
                     , Cmd.none
                     )
@@ -279,6 +351,9 @@ update msg scale (D doc) =
                             ( D { doc | data = updateGears doc.data <| always newGears }, cmd )
 
                         -- CUT
+                        ( ISurface, Interact.Dragged p1 p2 _, NoDrag ) ->
+                            ( D { doc | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears }, Cmd.none )
+
                         ( ISurface, Interact.Dragged _ p2 _, Cut ( p1, _ ) _ ) ->
                             ( D { doc | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears }, Cmd.none )
 
@@ -431,16 +506,34 @@ update msg scale (D doc) =
 
 viewTools : Doc -> Element Msg
 viewTools (D doc) =
-    row [ width fill, padding 10, spacing 20 ]
+    row [ width fill, padding 10, spacing 20, Font.size 14 ]
         [ Input.radioRow [ spacing 30 ]
             { onChange = ChangedTool
             , options =
-                [ Input.option Play <| text "Jeu"
-                , Input.option Link <| text "Harmonie"
-                , Input.option Edit <| text "Édition"
+                [ Input.option Play <| text "Jeu (W)"
+                , Input.option Link <| text "Harmonie (X)"
+                , Input.option Edit <| text "Édition (C)"
                 ]
             , selected = Just doc.tool
             , label = Input.labelHidden "Outils"
+            }
+        , Input.text [ width (fill |> maximum 500), centerX ]
+            { label = Input.labelHidden "Nom du fichier"
+            , text = Data.getName doc.data
+            , placeholder = Just <| Input.placeholder [] <| text "nom-a-sauvegarder"
+            , onChange = EnteredFileName
+            }
+        , Input.button
+            [ centerX
+            , Font.color <|
+                if Data.isSaved doc.data then
+                    rgb 0 0 0
+
+                else
+                    rgb 0 1 1
+            ]
+            { label = text "Sauvegarder"
+            , onPress = Just Save
             }
         , Input.button [ alignRight ]
             { label = text "Undo"
@@ -490,27 +583,35 @@ viewContent (D doc) inter scale =
 
         getMod : Interact.Interact Interactable -> Id Gear -> Gear.Mod
         getMod i id =
-            case i of
-                Just ( IGear iid, mode ) ->
-                    if iid /= id then
+            if doc.details == DGear id then
+                Gear.Selected
+
+            else
+                case i of
+                    Just ( IGear iid, mode ) ->
+                        if iid /= id then
+                            Gear.None
+
+                        else
+                            case ( doc.tool, mode ) of
+                                ( Link, Interact.Hover ) ->
+                                    Gear.Resizing
+
+                                ( Edit, Interact.Hover ) ->
+                                    Gear.Selectable
+
+                                _ ->
+                                    Gear.None
+
+                    Just ( IResizeHandle iid _, mode ) ->
+                        if iid /= id then
+                            Gear.None
+
+                        else
+                            Gear.Resizing
+
+                    _ ->
                         Gear.None
-
-                    else
-                        case ( doc.tool, mode ) of
-                            ( Link, Interact.Hover ) ->
-                                Gear.Resizable
-
-                            ( _, Interact.Hover ) ->
-                                Gear.Hovered
-
-                            ( _, Interact.Click ) ->
-                                Gear.Clicked
-
-                            ( _, Interact.Drag ) ->
-                                Gear.Dragged
-
-                _ ->
-                    Gear.None
     in
     (List.map (\( id, g ) -> Gear.view ( id, g ) mobile.gears (getMod inter id)) <|
         Coll.toList mobile.gears
@@ -577,14 +678,26 @@ viewContent (D doc) inter scale =
                 _ ->
                     []
            )
+        ++ (case doc.details of
+                DHarmolink l _ ->
+                    Link.viewSelectedLink mobile.gears l
+
+                _ ->
+                    []
+           )
 
 
 viewDetails : Doc -> List (Element Msg)
 viewDetails (D doc) =
     case doc.details of
         DGear id ->
-            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+            let
+                g =
+                    Coll.get id (Data.current doc.data).gears
+            in
+            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ]
                 [ text <| Gear.toUID id
+                , text <| Sound.toString g.sound
                 , Input.button []
                     { label = text "PlayPause"
                     , onPress = Just <| PlayGear id
@@ -606,17 +719,44 @@ viewDetails (D doc) =
                     { label = text "Copie"
                     , onPress = Just <| CopyGear id
                     }
+                , row [ spacing 16 ] <|
+                    text "x"
+                        :: List.map
+                            (\i ->
+                                Input.button []
+                                    { label = text <| String.fromInt i
+                                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer i )
+                                    }
+                            )
+                            [ 2, 3, 5, 7 ]
+                , row [ spacing 16 ] <|
+                    text "/"
+                        :: List.map
+                            (\i ->
+                                Input.button []
+                                    { label = text <| String.fromInt i
+                                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit i )
+                                    }
+                            )
+                            [ 2, 3, 5, 7 ]
                 , Input.button []
-                    { label = text "x 2"
-                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer 2 )
-                    }
-                , Input.button []
-                    { label = text "/ 2"
-                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit 2 )
+                    { label = text "Changer son"
+                    , onPress = Just <| ChangeSound id
                     }
                 , Input.button []
                     { onPress = Just <| DeleteGear id
                     , label = text "Supprimer"
+                    }
+                ]
+            ]
+
+        DChangeSound id ->
+            [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+                [ text <| Gear.toUID id
+                , text "Choisir un son chargé"
+                , Input.button []
+                    { label = text "Annuler"
+                    , onPress = Just <| ChangeSoundCanceled id
                     }
                 ]
             ]
@@ -630,14 +770,14 @@ viewDetails (D doc) =
 
                             Just fract ->
                                 [ Input.text [ Font.color (rgb 0 0 0) ]
-                                    { text = String.fromInt <| Fract.getNumerator fract
+                                    { text = String.fromInt fract.num
                                     , onChange = EnteredFract True
                                     , label = Input.labelHidden "Numerator"
                                     , placeholder = Nothing
                                     }
                                 , text "/"
                                 , Input.text [ Font.color (rgb 0 0 0) ]
-                                    { text = String.fromInt <| Fract.getDenominator fract
+                                    { text = String.fromInt fract.den
                                     , onChange = EnteredFract False
                                     , label = Input.labelHidden "Denominator"
                                     , placeholder = Nothing

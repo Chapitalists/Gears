@@ -1,4 +1,4 @@
-const app = Elm.Main.init()
+const app = Elm.Main.init({flags : {width : window.innerWidth, height : window.innerHeight}})
 
 if (app.ports.loadSound) app.ports.loadSound.subscribe(createBuffer)
 if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)

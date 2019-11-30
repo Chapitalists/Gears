@@ -1,17 +1,15 @@
 module Sound exposing (..)
 
-import Json.Decode as D exposing (Decoder)
-import Json.Decode.Pipeline exposing (..)
+import Json.Decode as D
+import Json.Decode.Field as Field
+import Json.Encode as E
 
 
 type Sound
-    = S SoundInternal
-
-
-type alias SoundInternal =
-    { path : String
-    , length : Float
-    }
+    = S
+        { path : String
+        , length : Float
+        }
 
 
 
@@ -36,12 +34,22 @@ toString (S { path }) =
     path
 
 
-decoder : D.Value -> Result D.Error Sound
-decoder v =
-    Result.map S <|
-        D.decodeValue
-            (D.succeed SoundInternal
-                |> required "path" D.string
-                |> required "length" D.float
-            )
-            v
+decoder : D.Decoder Sound
+decoder =
+    Field.require "path" D.string <|
+        \p ->
+            Field.require "length" D.float <|
+                \l ->
+                    D.succeed <|
+                        S
+                            { path = p
+                            , length = l
+                            }
+
+
+encoder : Sound -> E.Value
+encoder (S s) =
+    E.object <|
+        [ ( "path", E.string s.path )
+        , ( "length", E.float s.length )
+        ]

@@ -6,6 +6,8 @@ ref
 
 # data
 sons
+backup
+saves
 
 # compiled
 elmApp.js

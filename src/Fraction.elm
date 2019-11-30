@@ -1,57 +1,45 @@
 module Fraction exposing (..)
 
+import Json.Decode as D
+import Json.Encode as E
 
-type Fraction
-    = F { num : Int, den : Int }
+
+type alias Fraction =
+    { num : Int, den : Int }
 
 
 unit : Int -> Fraction
 unit den =
-    F { num = 1, den = den }
+    { num = 1, den = den }
 
 
 integer : Int -> Fraction
 integer num =
-    F { num = num, den = 1 }
-
-
-fromRecord : { num : Int, den : Int } -> Fraction
-fromRecord =
-    F
+    { num = num, den = 1 }
 
 
 toFloat : Fraction -> Float
-toFloat (F { num, den }) =
+toFloat { num, den } =
     Basics.toFloat num / Basics.toFloat den
 
 
-getNumerator : Fraction -> Int
-getNumerator (F { num }) =
-    num
-
-
-getDenominator : Fraction -> Int
-getDenominator (F { den }) =
-    den
-
-
 multiplication : Fraction -> Fraction -> Fraction
-multiplication (F f1) (F f2) =
-    F { num = f1.num * f2.num, den = f1.den * f2.den }
+multiplication f1 f2 =
+    { num = f1.num * f2.num, den = f1.den * f2.den }
 
 
 division : Fraction -> Fraction -> Fraction
-division (F num) (F den) =
-    F { num = num.num * den.den, den = num.den * den.num }
+division num den =
+    { num = num.num * den.den, den = num.den * den.num }
 
 
 simplify : Fraction -> Fraction
-simplify (F { num, den }) =
+simplify { num, den } =
     let
         common =
             pgcd num den
     in
-    F { num = num // common, den = den // common }
+    { num = num // common, den = den // common }
 
 
 pgcd : Int -> Int -> Int
@@ -69,3 +57,16 @@ pgcd x y =
 
     else
         pgcd y x
+
+
+encoder : Fraction -> E.Value
+encoder f =
+    E.object <|
+        [ ( "num", E.int f.num )
+        , ( "den", E.int f.den )
+        ]
+
+
+decoder : D.Decoder Fraction
+decoder =
+    D.map2 Fraction (D.field "num" D.int) (D.field "den" D.int)

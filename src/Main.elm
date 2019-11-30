@@ -1,6 +1,7 @@
 port module Main exposing (..)
 
 import Browser
+import Browser.Events as BE
 import Browser.Navigation as Nav
 import Coll exposing (Coll, Id)
 import Doc exposing (Doc, Interactable)
@@ -65,11 +66,20 @@ type alias Model =
     , currentUrl : Url.Url
     , soundList : Set String
     , loadedSoundList : List Sound
+    , savesList : Set String
     , doc : Doc
     , viewPos : ViewPos
-    , svgSize : Size
+    , svgSize : Size Float
+    , screenSize : Size Int
+    , fileExplorerTab : ExTab
     , interact : Interact.State Doc.Interactable
     }
+
+
+type ExTab
+    = Sounds
+    | Loaded
+    | Saves
 
 
 svgId : String
@@ -99,13 +109,13 @@ posToSvg pos { viewPos, svgSize } =
                 (vec2 (svgSize.width / 2) (svgSize.height / 2))
 
 
-type alias Size =
-    { width : Float
-    , height : Float
+type alias Size number =
+    { width : number
+    , height : number
     }
 
 
-sizeDecoder : D.Value -> Result D.Error Size
+sizeDecoder : D.Value -> Result D.Error (Size Float)
 sizeDecoder =
     D.decodeValue <| D.map2 Size (D.field "width" D.float) (D.field "height" D.float)
 
@@ -117,9 +127,20 @@ type alias ClickState =
     }
 
 
-init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
-init _ url _ =
-    ( Model False url Set.empty [] Doc.new (ViewPos (vec2 0 0) 10) (Size 0 0) Interact.init
+init : Size Int -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
+init screen url _ =
+    ( Model
+        False
+        url
+        Set.empty
+        []
+        Set.empty
+        (Doc.new <| Just url)
+        (ViewPos (vec2 0 0) 10)
+        (Size 0 0)
+        screen
+        Sounds
+        Interact.init
     , fetchSoundList url
     )
 
@@ -132,11 +153,17 @@ type Msg
     = GotSoundList (Result Http.Error String)
     | RequestSoundList
     | RequestSoundLoad String
+    | RequestSavesList
+    | RequestSaveLoad String
+    | GotSavesList (Result Http.Error String)
+    | GotLoadedFile String (Result Http.Error Doc.Mobile)
     | SoundLoaded (Result D.Error Sound)
     | SoundClicked Sound
+    | ChangedExplorerTab ExTab
     | UpdateViewPos ViewPos
-    | Zoom Float
-    | GotSVGSize (Result D.Error Size)
+    | Zoom Float ( Float, Float )
+    | GotSVGSize (Result D.Error (Size Float))
+    | GotScreenSize (Size Int)
     | DocMsg Doc.Msg
     | InteractMsg (Interact.Msg Doc.Interactable)
     | NOOP
@@ -149,11 +176,57 @@ update msg model =
             case result of
                 Ok stringList ->
                     ( { model
-                        | soundList = Set.union model.soundList <| Set.fromList <| String.split " " stringList
+                        | soundList = Set.union model.soundList <| Set.fromList <| String.split "\\" stringList
                         , connected = True
                       }
                     , Cmd.none
                     )
+
+                Err _ ->
+                    ( { model | connected = False }, Cmd.none )
+
+        GotSavesList result ->
+            case result of
+                Ok stringList ->
+                    ( { model
+                        | savesList = Set.union model.savesList <| Set.fromList <| String.split "\\" stringList
+                        , connected = True
+                      }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( { model | connected = False, savesList = Set.empty }, Cmd.none )
+
+        GotLoadedFile name result ->
+            case result of
+                Ok m ->
+                    let
+                        cmds =
+                            Cmd.batch <|
+                                List.map
+                                    (\gear ->
+                                        Tuple.second <|
+                                            update
+                                                (RequestSoundLoad <| Sound.toString <| gear.sound)
+                                                model
+                                    )
+                                <|
+                                    Coll.values m.gears
+                    in
+                    ( { model
+                        | connected = True
+                        , doc = Doc.changeMobile m name (Just model.currentUrl) model.doc
+                        , viewPos =
+                            { c = Gear.getPos <| Coll.get m.motor m.gears
+                            , smallestSize = Gear.getLengthId m.motor m.gears * 2 * 4
+                            }
+                      }
+                    , cmds
+                    )
+
+                Err (Http.BadBody err) ->
+                    Debug.log err ( model, Cmd.none )
 
                 Err _ ->
                     ( { model | connected = False }, Cmd.none )
@@ -171,6 +244,19 @@ update msg model =
                 Cmd.none
             )
 
+        RequestSavesList ->
+            ( model, fetchSavesList model.currentUrl )
+
+        RequestSaveLoad n ->
+            -- TODO handle no response
+            ( model
+            , if Set.member n model.savesList then
+                fetchSaveFile model.currentUrl n
+
+              else
+                Cmd.none
+            )
+
         SoundLoaded res ->
             case res of
                 Result.Err e ->
@@ -182,22 +268,48 @@ update msg model =
         SoundClicked sound ->
             let
                 ( newDoc, newGearPos ) =
-                    Doc.addNewGear sound model.doc
+                    Doc.soundClicked sound model.doc
             in
-            ( { model | doc = newDoc, viewPos = { c = newGearPos, smallestSize = Sound.length sound * 2 * 4 } }, Cmd.none )
+            ( { model
+                | doc = newDoc
+                , viewPos =
+                    case newGearPos of
+                        Just newPos ->
+                            { c = newPos, smallestSize = Sound.length sound * 2 * 4 }
+
+                        Nothing ->
+                            model.viewPos
+              }
+            , Cmd.none
+            )
+
+        ChangedExplorerTab tab ->
+            ( { model | fileExplorerTab = tab }, Cmd.none )
 
         UpdateViewPos vp ->
             ( { model | viewPos = vp }, Cmd.none )
 
-        Zoom f ->
+        Zoom f ( x, y ) ->
             let
                 vp =
                     model.viewPos
 
                 factor =
                     1 + f / 1000
+
+                p =
+                    Vec.sub (posToSvg (vec2 x y) model) vp.c
+
+                nS =
+                    vp.smallestSize * factor
+
+                scale =
+                    nS / vp.smallestSize - 1
+
+                nC =
+                    Vec.sub vp.c <| Vec.scale scale p
             in
-            ( { model | viewPos = { vp | smallestSize = model.viewPos.smallestSize * factor } }, Cmd.none )
+            ( { model | viewPos = { c = nC, smallestSize = nS } }, Cmd.none )
 
         GotSVGSize res ->
             case res of
@@ -207,12 +319,20 @@ update msg model =
                 Result.Ok s ->
                     ( { model | svgSize = s }, Cmd.none )
 
+        GotScreenSize size ->
+            ( { model | screenSize = size }, Cmd.none )
+
         DocMsg subMsg ->
             let
                 ( doc, cmd ) =
                     Doc.update subMsg (getScale model) model.doc
             in
-            ( { model | doc = doc }, cmd )
+            case subMsg of
+                Doc.ChangeSound _ ->
+                    ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
+
+                _ ->
+                    ( { model | doc = doc }, Cmd.map DocMsg cmd )
 
         InteractMsg subMsg ->
             let
@@ -233,7 +353,7 @@ update msg model =
                         ( doc, cmd ) =
                             Doc.update (Doc.InteractEvent svgEvent) (getScale model) model.doc
                     in
-                    ( { model | interact = interact, doc = doc }, cmd )
+                    ( { model | interact = interact, doc = doc }, Cmd.map DocMsg cmd )
 
                 Nothing ->
                     ( { model | interact = interact }, Cmd.none )
@@ -248,10 +368,36 @@ update msg model =
 
 subs { interact } =
     Sub.batch <|
-        [ soundLoaded (Sound.decoder >> SoundLoaded)
+        [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , newSVGSize (sizeDecoder >> GotSVGSize)
+        , BE.onKeyPress shortcutDecoder
+        , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
         ]
             ++ List.map (Sub.map InteractMsg) (Interact.subs interact)
+
+
+shortcutDecoder : D.Decoder Msg
+shortcutDecoder =
+    D.map keyCodeToMsg <| D.field "code" D.string
+
+
+keyCodeToMsg : String -> Msg
+keyCodeToMsg str =
+    case str of
+        "KeyZ" ->
+            DocMsg <| Doc.ChangedTool Doc.Play
+
+        "KeyX" ->
+            DocMsg <| Doc.ChangedTool Doc.Link
+
+        "KeyC" ->
+            DocMsg <| Doc.ChangedTool Doc.Edit
+
+        "Space" ->
+            DocMsg <| Doc.ToggleEngine
+
+        _ ->
+            NOOP
 
 
 
@@ -270,8 +416,8 @@ view model =
                )
     , body =
         [ layout [] <|
-            row [ height fill, width fill ]
-                ([ viewSoundLib model
+            row [ height <| px model.screenSize.height, width <| px model.screenSize.width ]
+                ([ viewFileExplorer model
                  , viewDoc model
                  ]
                     ++ (Doc.viewDetails model.doc
@@ -295,7 +441,7 @@ viewDoc model =
                      , SS.attribute "height" "100%"
                      , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
                      , computeViewBox model
-                     , Wheel.onWheel (Zoom << .deltaY)
+                     , Wheel.onWheel (\e -> Zoom e.deltaY e.mouseEvent.offsetPos)
                      ]
                         ++ List.map (Html.Attributes.map InteractMsg)
                             (Interact.dragSpaceEvents model.interact)
@@ -311,9 +457,58 @@ viewDoc model =
         ]
 
 
-viewSoundLib : Model -> Element Msg
-viewSoundLib model =
-    column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+viewFileExplorer : Model -> Element Msg
+viewFileExplorer model =
+    column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ] <|
+        ([ row [ Font.size 14, spacing 20 ]
+            [ Input.button
+                (if model.fileExplorerTab == Sounds then
+                    [ padding 5, Bg.color (rgb 0.2 0.2 0.2) ]
+
+                 else
+                    [ padding 5 ]
+                )
+                { label = text "Sons"
+                , onPress = Just <| ChangedExplorerTab Sounds
+                }
+            , Input.button
+                (if model.fileExplorerTab == Loaded then
+                    [ padding 5, Bg.color (rgb 0.1 0.1 0.1) ]
+
+                 else
+                    [ padding 5 ]
+                )
+                { label = text "Chargés"
+                , onPress = Just <| ChangedExplorerTab Loaded
+                }
+            , Input.button
+                (if model.fileExplorerTab == Saves then
+                    [ padding 5, Bg.color (rgb 0.1 0.1 0.1) ]
+
+                 else
+                    [ padding 5 ]
+                )
+                { label = text "Saves"
+                , onPress = Just <| ChangedExplorerTab Saves
+                }
+            ]
+         ]
+            ++ (case model.fileExplorerTab of
+                    Sounds ->
+                        viewSounds model
+
+                    Loaded ->
+                        viewLoaded model
+
+                    Saves ->
+                        viewSaveFiles model
+               )
+        )
+
+
+viewSounds : Model -> List (Element Msg)
+viewSounds model =
+    [ column [ width fill, height <| fillPortion 2, spacing 20, scrollbarY ]
         [ Input.button
             [ Font.color <|
                 if model.connected then
@@ -325,15 +520,32 @@ viewSoundLib model =
             { onPress = Just RequestSoundList
             , label = text "Actualiser"
             }
-        , column [ spacing 5 ] <|
-            text "Sons"
-                :: (List.map (\s -> el [ onClick (RequestSoundLoad s) ] (text s)) <|
-                        Set.toList model.soundList
-                   )
-        , column [ spacing 10 ] <|
-            text "Chargés"
-                :: List.map soundView model.loadedSoundList
+        , column [ width fill, height <| fillPortion 1, spacing 5, padding 2, scrollbarY ] <|
+            (List.map
+                (\s ->
+                    el
+                        [ onClick (RequestSoundLoad s)
+                        , Font.color <|
+                            if List.any ((==) s) <| List.map Sound.toString model.loadedSoundList then
+                                rgb 0.2 0.8 0.2
+
+                            else
+                                rgb 1 1 1
+                        ]
+                        (text s)
+                )
+             <|
+                Set.toList model.soundList
+            )
         ]
+    ]
+
+
+viewLoaded : Model -> List (Element Msg)
+viewLoaded model =
+    [ column [ width fill, height <| fillPortion 3, spacing 10, padding 2, scrollbarY ] <|
+        List.map soundView model.loadedSoundList
+    ]
 
 
 soundView : Sound -> Element Msg
@@ -341,6 +553,28 @@ soundView s =
     el
         [ onClick <| SoundClicked s ]
         (text (Sound.toString s))
+
+
+viewSaveFiles : Model -> List (Element Msg)
+viewSaveFiles model =
+    [ column [ height <| fillPortion 1, width fill, spacing 20 ]
+        [ Input.button
+            [ Font.color <|
+                if model.connected then
+                    rgb 0 0 0
+
+                else
+                    rgb 1 0 0
+            ]
+            { onPress = Just RequestSavesList
+            , label = text "Actualiser"
+            }
+        , column [ width fill, spacing 5, padding 2, scrollbarY ] <|
+            (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutGearsExtension s)) <|
+                Set.toList model.savesList
+            )
+        ]
+    ]
 
 
 computeViewBox : Model -> SS.Attribute Msg
@@ -376,7 +610,7 @@ computeViewBox { viewPos, svgSize } =
             SA.viewBox x y w h
 
         else
-            SA.viewBox y x h w
+            SA.viewBox x y h w
 
 
 forwardGearOutMsg : Interact.Msg Gear.Interactable -> Msg
@@ -394,3 +628,24 @@ fetchSoundList url =
         { url = Url.toString { url | path = "/soundList" }
         , expect = Http.expectString GotSoundList
         }
+
+
+fetchSavesList : Url.Url -> Cmd Msg
+fetchSavesList url =
+    Http.get
+        { url = Url.toString { url | path = "/savesList" }
+        , expect = Http.expectString GotSavesList
+        }
+
+
+fetchSaveFile : Url.Url -> String -> Cmd Msg
+fetchSaveFile url name =
+    Http.get
+        { url = Url.toString { url | path = "/saves/" ++ name }
+        , expect = Http.expectJson (GotLoadedFile <| cutGearsExtension name) Doc.mobileDecoder
+        }
+
+
+cutGearsExtension : String -> String
+cutGearsExtension =
+    String.dropRight 6
