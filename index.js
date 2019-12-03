@@ -27,8 +27,9 @@ function saveExtensionFilter (name) {
 }
 
 
-const staticCallback = staticRoute({tryfiles:['ports.html']})
+const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
 
+    , externCallback = staticRoute()
 
     , dynamicCallbacks = {
       
@@ -65,8 +66,9 @@ const staticCallback = staticRoute({tryfiles:['ports.html']})
 
 
     , callback = (req, res) => {
-      const cb = dynamicCallbacks[req.url.slice(1)]
-      ;(cb || staticCallback)(req, res)
+        const dir = req.url.split('/')[1]
+            , cb = (dir == 'sons' || dir == 'saves') ? externCallback : dynamicCallbacks[dir]
+        ;(cb || internCallback)(req, res)
     }
 
 
