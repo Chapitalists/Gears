@@ -1,0 +1,13 @@
+{ "bin": "index.js"
+, "pkg":
+  { "scripts":  []
+  , "assets":
+    [ "ports.html"
+    , "ports.js"
+    , "elmApp.js"
+    , "lib/svg.js"
+    , "lib/Tone.js"
+    , "LICENSE.md"
+    ]
+  }
+}

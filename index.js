@@ -3,11 +3,20 @@ Copyright ou © ou Copr. Clément Bossut, (2018)
 <bossut.clement@gmail.com>
 */
 
-const soundPath = './sons/'
+const fs = require('fs')
+    , staticRoute = require('static-route')
+    , port = 12345
+    , soundPath = process.argv[2] || './sons/'
     , soundExtensions = ['.wav']
-    , savePath = './saves/'
-    , backupPath = './backup/'
+    , savePath = process.argv[3] || './saves/'
+    , backupPath = process.argv[4] || './backup/'
     , saveExtension = '.gears'
+
+console.log('Checking directories')
+
+if (!fs.existsSync(soundPath)) fs.mkdirSync(soundPath)
+if (!fs.existsSync(savePath)) fs.mkdirSync(savePath)
+if (!fs.existsSync(backupPath)) fs.mkdirSync(backupPath)
 
 function soundExtensionFilter (name) {
   return soundExtensions.some(ext=>name.toLowerCase().endsWith(ext))
@@ -18,31 +27,22 @@ function saveExtensionFilter (name) {
 }
 
 
-const fs = require('fs')
-    , staticCallback = require('static-route')()
+const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
 
-
+    , externCallback = staticRoute()
 
     , dynamicCallbacks = {
       
-        test : (req, res) => {
-            console.log('got a test')
-            res.write('Stringlist')
-            res.end()
-        }
-      
-        , soundList : (req, res) => {
-            res.write(fs.readdirSync(soundPath)
+        soundList : (req, res) => {
+            res.end(fs.readdirSync(soundPath)
                 .filter(soundExtensionFilter)
                 .join('\\'))
-            res.end()
         }
 
         , savesList : (req, res) => {
-            res.write(fs.readdirSync(savePath)
+            res.end(fs.readdirSync(savePath)
                 .filter(saveExtensionFilter)
                 .join('\\'))
-            res.end()
         }
 
         , saveFile : (req, res) => {
@@ -51,34 +51,42 @@ const fs = require('fs')
 
                 req.on('data', chunk => data += chunk)
 
-                req.on('end', () => writeFile(JSON.parse(data)))
+                req.on('end', () => {
+                    if (writeFile(JSON.parse(data))) res.statusCode = 201
+                    res.end()
+                })
+            } else {
+                res.statusCode = 404
+                res.end()
             }
         }
-      
+
     }
 
 
 
     , callback = (req, res) => {
-      const cb = dynamicCallbacks[req.url.slice(1)]
-      ;(cb || staticCallback)(req, res)
+        const dir = req.url.split('/')[1]
+            , cb = (dir == 'sons' || dir == 'saves') ? externCallback : dynamicCallbacks[dir]
+        ;(cb || internCallback)(req, res)
     }
 
 
 function writeFile (data) {
-    if (!fs.existsSync(savePath)) fs.mkdirSync(savePath)
-    if (!fs.existsSync(backupPath)) fs.mkdirSync(backupPath)
-
     let filePath = savePath + data.name + saveExtension
-        dateStr = new Date().toISOString()
-            .replace(':', '-').replace(/\..+/, '')
-    if (fs.existsSync(filePath))
+      , dateStr = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-')
+      , created = true
+    if (fs.existsSync(filePath)) {
         fs.copyFileSync(
             filePath,
             backupPath + data.name + dateStr + saveExtension
         )
-
+        created = false
+    }
     fs.writeFileSync(filePath, JSON.stringify(data.data, null, 2))
+    return created
 }
 
-require('http').createServer(callback).listen(12345)
+require('http').createServer(callback).listen(port)
+
+console.log('Ready on port ' + port)
