@@ -55,7 +55,7 @@ mobileEncoder m =
 mobileDecoder : D.Decoder Mobile
 mobileDecoder =
     D.succeed Mobile
-        |> required "gears" (Coll.decoder Gear.decoder Gear.default)
+        |> required "gears" (Coll.decoder Gear.decoder Gear.typeString Gear.default)
         |> required "motor" Coll.idDecoder
 
 
@@ -102,7 +102,7 @@ type Detailed
 new : Maybe Url -> Doc
 new url =
     D
-        { data = Data.init { gears = Coll.empty Gear.default, motor = Coll.startId } url
+        { data = Data.init { gears = Coll.empty Gear.typeString Gear.default, motor = Coll.startId } url
         , dragging = NoDrag
         , tool = Play
         , engine = Engine.init

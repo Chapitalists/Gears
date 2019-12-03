@@ -187,14 +187,14 @@ getGearLinks g =
             links
 
 
-stringType : String
-stringType =
+typeString : String
+typeString =
     "gear"
 
 
 toUID : Id Gear -> String
 toUID id =
-    stringType ++ "-" ++ Coll.idToString id
+    typeString ++ "-" ++ Coll.idToString id
 
 
 fromSound : Sound -> Vec2 -> Gear
