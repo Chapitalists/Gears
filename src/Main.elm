@@ -640,9 +640,14 @@ fetchSavesList url =
 
 fetchSaveFile : Url.Url -> String -> Cmd Msg
 fetchSaveFile url name =
-    Http.get
-        { url = Url.toString { url | path = "/saves/" ++ name }
+    Http.request
+        { method = "GET"
+        , headers = [ Http.header "Cache-Control" "no-cache" ]
+        , url = Url.toString { url | path = "/saves/" ++ name }
+        , body = Http.emptyBody
         , expect = Http.expectJson (GotLoadedFile <| cutGearsExtension name) Doc.mobileDecoder
+        , timeout = Nothing
+        , tracker = Nothing
         }
 
 
