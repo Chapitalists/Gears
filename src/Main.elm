@@ -4,19 +4,23 @@ import Browser
 import Browser.Events as BE
 import Browser.Navigation as Nav
 import Coll exposing (Coll, Id)
-import Doc exposing (Doc, Interactable)
+import Content
+import Doc exposing (Doc)
+import Editor.Mobile as MEditor exposing (Interactable(..))
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Events exposing (..)
 import Element.Font as Font
 import Element.Input as Input
 import Gear exposing (Gear)
+import Harmony as Harmo
 import Html.Attributes
 import Html.Events.Extra.Wheel as Wheel
 import Http
 import Interact
 import Json.Decode as D
 import Math.Vector2 as Vec exposing (Vec2, vec2)
+import Mobile exposing (Mobeel)
 import Result exposing (Result)
 import Set exposing (Set)
 import Sound exposing (Sound)
@@ -25,6 +29,7 @@ import TypedSvg.Attributes as SA
 import TypedSvg.Core as SS
 import TypedSvg.Types exposing (Length(..), Transform(..))
 import Url exposing (Url)
+import Wheel
 
 
 port loadSound : String -> Cmd msg
@@ -72,7 +77,7 @@ type alias Model =
     , svgSize : Size Float
     , screenSize : Size Int
     , fileExplorerTab : ExTab
-    , interact : Interact.State Doc.Interactable
+    , interact : Interact.State MEditor.Interactable
     }
 
 
@@ -120,13 +125,6 @@ sizeDecoder =
     D.decodeValue <| D.map2 Size (D.field "width" D.float) (D.field "height" D.float)
 
 
-type alias ClickState =
-    { target : Id Gear
-    , drag : Bool
-    , pos : Vec2
-    }
-
-
 init : Size Int -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init screen url _ =
     ( Model
@@ -156,7 +154,7 @@ type Msg
     | RequestSavesList
     | RequestSaveLoad String
     | GotSavesList (Result Http.Error String)
-    | GotLoadedFile String (Result Http.Error Doc.Mobile)
+    | GotLoadedFile String (Result Http.Error Mobeel)
     | SoundLoaded (Result D.Error Sound)
     | SoundClicked Sound
     | ChangedExplorerTab ExTab
@@ -165,7 +163,7 @@ type Msg
     | GotSVGSize (Result D.Error (Size Float))
     | GotScreenSize (Size Int)
     | DocMsg Doc.Msg
-    | InteractMsg (Interact.Msg Doc.Interactable)
+    | InteractMsg (Interact.Msg MEditor.Interactable)
     | NOOP
 
 
@@ -206,10 +204,15 @@ update msg model =
                             Cmd.batch <|
                                 List.map
                                     (\gear ->
-                                        Tuple.second <|
-                                            update
-                                                (RequestSoundLoad <| Sound.toString <| gear.sound)
-                                                model
+                                        case Wheel.getContent gear.wheel of
+                                            Content.S s ->
+                                                Tuple.second <|
+                                                    update
+                                                        (RequestSoundLoad <| Sound.toString s)
+                                                        model
+
+                                            _ ->
+                                                Cmd.none
                                     )
                                 <|
                                     Coll.values m.gears
@@ -218,8 +221,8 @@ update msg model =
                         | connected = True
                         , doc = Doc.changeMobile m name (Just model.currentUrl) model.doc
                         , viewPos =
-                            { c = Gear.getPos <| Coll.get m.motor m.gears
-                            , smallestSize = Gear.getLengthId m.motor m.gears * 2 * 4
+                            { c = (Coll.get m.motor m.gears).pos
+                            , smallestSize = Harmo.getLengthId m.motor m.gears * 2 * 4
                             }
                       }
                     , cmds
@@ -328,7 +331,7 @@ update msg model =
                     Doc.update subMsg (getScale model) model.doc
             in
             case subMsg of
-                Doc.ChangeSound _ ->
+                Doc.MobileMsg (MEditor.ChangeSoundStarted _) ->
                     ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
 
                 _ ->
@@ -385,16 +388,16 @@ keyCodeToMsg : String -> Msg
 keyCodeToMsg str =
     case str of
         "KeyZ" ->
-            DocMsg <| Doc.ChangedTool Doc.Play
+            DocMsg <| Doc.MobileMsg <| MEditor.ChangedTool <| MEditor.Play False
 
         "KeyX" ->
-            DocMsg <| Doc.ChangedTool Doc.Link
+            DocMsg <| Doc.MobileMsg <| MEditor.ChangedTool MEditor.Harmonize
 
         "KeyC" ->
-            DocMsg <| Doc.ChangedTool Doc.Edit
+            DocMsg <| Doc.MobileMsg <| MEditor.ChangedTool MEditor.Edit
 
         "Space" ->
-            DocMsg <| Doc.ToggleEngine
+            DocMsg <| Doc.MobileMsg <| MEditor.ToggleEngine
 
         _ ->
             NOOP
@@ -417,44 +420,42 @@ view model =
     , body =
         [ layout [] <|
             row [ height <| px model.screenSize.height, width <| px model.screenSize.width ]
-                ([ viewFileExplorer model
-                 , viewDoc model
-                 ]
-                    ++ (Doc.viewDetails model.doc
-                            |> List.map (Element.map DocMsg)
-                       )
-                )
+                [ viewFileExplorer model
+                , row [ height fill, width fill ] <|
+                    [ column [ width fill, height fill ]
+                        [ Element.map DocMsg <| Doc.viewTop model.doc
+                        , el
+                            [ width fill
+                            , height fill
+                            , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
+                            ]
+                          <|
+                            Element.html <|
+                                S.svg
+                                    ([ Html.Attributes.id svgId
+                                     , SS.attribute "width" "100%"
+                                     , SS.attribute "height" "100%"
+                                     , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
+                                     , computeViewBox model
+                                     , Wheel.onWheel (\e -> Zoom e.deltaY e.mouseEvent.offsetPos)
+                                     ]
+                                        ++ List.map (Html.Attributes.map InteractMsg)
+                                            (Interact.dragSpaceEvents model.interact)
+                                        ++ List.map (Html.Attributes.map InteractMsg)
+                                            (Interact.draggableEvents ISurface)
+                                    )
+                                <|
+                                    (Doc.viewContent model.doc (Interact.getInteract model.interact) (getScale model)
+                                        |> List.map (SS.map forwardGearOutMsg)
+                                    )
+                        , Doc.viewBottom model.doc
+                            |> Element.map DocMsg
+                        ]
+                    ]
+                        ++ (List.map (Element.map DocMsg) <| Doc.viewSide model.doc)
+                ]
         ]
     }
-
-
-viewDoc : Model -> Element Msg
-viewDoc model =
-    column [ width fill, height fill ]
-        [ Doc.viewTools model.doc
-            |> Element.map DocMsg
-        , el [ width fill, height fill, Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver" ] <|
-            Element.html <|
-                S.svg
-                    ([ Html.Attributes.id svgId
-                     , SS.attribute "width" "100%"
-                     , SS.attribute "height" "100%"
-                     , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
-                     , computeViewBox model
-                     , Wheel.onWheel (\e -> Zoom e.deltaY e.mouseEvent.offsetPos)
-                     ]
-                        ++ List.map (Html.Attributes.map InteractMsg)
-                            (Interact.dragSpaceEvents model.interact)
-                        ++ List.map (Html.Attributes.map InteractMsg)
-                            (Interact.draggableEvents Doc.ISurface)
-                    )
-                <|
-                    (Doc.viewContent model.doc (Interact.getInteract model.interact) (getScale model)
-                        |> List.map (SS.map forwardGearOutMsg)
-                    )
-        , Doc.viewExtraTools model.doc
-            |> Element.map DocMsg
-        ]
 
 
 viewFileExplorer : Model -> Element Msg
@@ -613,9 +614,9 @@ computeViewBox { viewPos, svgSize } =
             SA.viewBox x y h w
 
 
-forwardGearOutMsg : Interact.Msg Gear.Interactable -> Msg
+forwardGearOutMsg : Interact.Msg (Wheel.Interactable x) -> Msg
 forwardGearOutMsg msg =
-    InteractMsg <| Interact.map Doc.fromGearInteractable msg
+    InteractMsg <| Interact.map MEditor.fromGearInteractable msg
 
 
 
@@ -645,7 +646,7 @@ fetchSaveFile url name =
         , headers = [ Http.header "Cache-Control" "no-cache" ]
         , url = Url.toString { url | path = "/saves/" ++ name }
         , body = Http.emptyBody
-        , expect = Http.expectJson (GotLoadedFile <| cutGearsExtension name) Doc.mobileDecoder
+        , expect = Http.expectJson (GotLoadedFile <| cutGearsExtension name) Mobile.decoder
         , timeout = Nothing
         , tracker = Nothing
         }

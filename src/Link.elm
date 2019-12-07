@@ -3,7 +3,9 @@ module Link exposing (..)
 import Coll exposing (Coll, Id)
 import Color
 import Fraction as Fract exposing (Fraction)
-import Gear exposing (Gear, Ref)
+import Json.Decode as D
+import Json.Decode.Field as Field
+import Json.Encode as E
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
@@ -11,55 +13,57 @@ import TypedSvg.Core exposing (Svg)
 import TypedSvg.Types exposing (Length(..), Transform(..))
 
 
-type alias Link =
-    ( Id Gear, Id Gear )
+type alias Link item =
+    ( Id item, Id item )
 
 
-viewFractLink : Coll Gear -> Link -> List (Svg msg)
-viewFractLink gears l =
-    let
-        ( g, gg ) =
-            toGears gears l
-    in
-    [ drawRawLink ( Gear.getPos g, Gear.getPos gg ) <|
-        ((Gear.getLength g gears + Gear.getLength gg gears) / 2)
+map : Link a -> Link b
+map ( i, j ) =
+    ( Coll.idMap i, Coll.idMap j )
+
+
+type alias Circle =
+    { d : Float, c : Vec2 }
+
+
+type alias DrawLink =
+    ( Circle, Circle )
+
+
+viewFractLink : DrawLink -> List (Svg msg)
+viewFractLink ( e, f ) =
+    [ drawRawLink ( e.c, f.c ) <|
+        ((e.d + f.d) / 2)
     ]
 
 
-viewMotorLink : Coll Gear -> List Link -> Link -> List (Svg msg)
-viewMotorLink gears cutting l =
-    let
-        ( g, gg ) =
-            toGears gears l
-    in
+viewMotorLink : Bool -> DrawLink -> List (Svg msg)
+viewMotorLink cutting ( e, f ) =
     [ S.g
         [ SA.opacity <|
             TypedSvg.Types.Opacity <|
-                if List.any (equal l) cutting then
+                if cutting then
                     0.5
 
                 else
                     1
         ]
         [ drawMotorLink
-            ( ( Gear.getPos g, Gear.getLength g gears )
-            , ( Gear.getPos gg, Gear.getLength gg gears )
+            ( ( e.c, e.d )
+            , ( f.c, f.d )
             )
         ]
     ]
 
 
-viewSelectedLink : Coll Gear -> Link -> List (Svg msg)
-viewSelectedLink gears l =
+viewSelectedLink : DrawLink -> List (Svg msg)
+viewSelectedLink ( e, f ) =
     let
-        ( g, gg ) =
-            toGears gears l
-
         w =
-            (Gear.getLength g gears + Gear.getLength gg gears) / 30
+            (e.d + f.d) / 30
     in
     [ S.polyline
-        [ SA.points [ tupleFromVec <| Gear.getPos g, tupleFromVec <| Gear.getPos gg ]
+        [ SA.points [ tupleFromVec <| e.c, tupleFromVec <| f.c ]
         , SA.stroke Color.red
         , SA.strokeWidth <| Num w
         , SA.strokeLinecap TypedSvg.Types.StrokeLinecapRound
@@ -109,24 +113,32 @@ drawCut ( p1, p2 ) scale =
         []
 
 
-equal : Link -> Link -> Bool
+encoder : Link x -> E.Value
+encoder l =
+    E.object
+        [ ( "from", Coll.idEncoder <| Tuple.first l )
+        , ( "to", Coll.idEncoder <| Tuple.second l )
+        ]
+
+
+decoder : D.Decoder (Link x)
+decoder =
+    Field.require "from" Coll.idDecoder <|
+        \from ->
+            Field.require "to" Coll.idDecoder <|
+                \to ->
+                    D.succeed ( from, to )
+
+
+equal : Link x -> Link x -> Bool
 equal l1 l2 =
     (Tuple.first l1 == Tuple.first l2 && Tuple.second l1 == Tuple.second l2)
         || (Tuple.first l1 == Tuple.second l2 && Tuple.first l2 == Tuple.second l1)
 
 
-toGears : Coll Gear -> Link -> ( Gear, Gear )
-toGears gears l =
-    let
-        getGear id =
-            Coll.get id gears
-    in
-    Tuple.mapBoth getGear getGear l
-
-
-toSegment : Coll Gear -> Link -> ( Vec2, Vec2 )
-toSegment gears l =
-    Tuple.mapBoth Gear.getPos Gear.getPos <| toGears gears l
+toSegment : DrawLink -> ( Vec2, Vec2 )
+toSegment l =
+    Tuple.mapBoth .c .c l
 
 
 tupleFromVec : Vec2 -> ( Float, Float )

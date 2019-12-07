@@ -1,75 +1,237 @@
 module Wheel exposing (..)
 
-import Browser
-import Html exposing (Html)
-import Svg exposing (..)
-import Svg.Attributes exposing (..)
-import Svg.Events exposing (..)
+import Coll exposing (Id)
+import Color
+import Content exposing (Content)
+import Html.Attributes
+import Interact
+import Json.Decode as D
+import Json.Decode.Field as Field
+import Json.Encode as E
+import Math.Vector2 exposing (..)
+import Sound
+import TypedSvg as S
+import TypedSvg.Attributes as SA
+import TypedSvg.Core exposing (..)
+import TypedSvg.Types exposing (Fill(..), Length(..), Opacity(..), Transform(..))
 
 
-main =
-    Browser.element
-        { init = init
-        , update = update
-        , view = view
-        , subscriptions = subs
-        }
-
-
-subs _ =
-    Sub.none
+type alias Wheeled a =
+    { a | wheel : Wheel }
 
 
 type alias Wheel =
-    { size : Int
-    , position : ( Int, Int )
-    , toggle : Bool
-    , color : Color
-    , startPos : Float
+    { startPercent : Float
+    , volume : Float
+    , content : WheelContent
+    , mute : Bool
     }
 
 
-type Color
-    = AnyColor
+type WheelContent
+    = C (Content Wheel)
 
 
-init () =
-    ( Wheel 100 ( 150, 150 ) False AnyColor 0, Cmd.none )
+getContent : Wheel -> Content Wheel
+getContent w =
+    case w.content of
+        C c ->
+            c
+
+
+default : Wheel
+default =
+    { startPercent = 0
+    , volume = 1
+    , content = C <| Content.S Sound.noSound
+    , mute = False
+    }
+
+
+fromSound : Sound.Sound -> Wheel
+fromSound s =
+    { default | content = C <| Content.S s }
+
+
+type Mod
+    = None
+    | Selectable
+    | Selected
+    | Resizing
+
+
+type alias Style =
+    { mod : Mod, motor : Bool, dashed : Bool }
+
+
+type Interactable x
+    = IWheel (Id x)
+    | IResizeHandle (Id x) Bool -- True = Right
 
 
 type Msg
-    = Clicked
-    | Noop
+    = ChangeContent (Content Wheel)
+    | ChangeVolume Float
 
 
-update : Msg -> Wheel -> ( Wheel, Cmd Msg )
-update msg model =
+update : Msg -> Wheeled g -> Wheeled g
+update msg g =
+    let
+        wheel =
+            g.wheel
+    in
     case msg of
-        Clicked ->
-            ( { model | toggle = not model.toggle }, Cmd.none )
+        ChangeContent c ->
+            { g | wheel = { wheel | content = C c } }
 
-        Noop ->
-            ( model, Cmd.none )
+        ChangeVolume vol ->
+            { g | wheel = { wheel | volume = vol } }
 
 
-view : Wheel -> Html Msg
-view w =
-    Html.div []
-        [ Html.text <|
-            if w.toggle then
-                "OUI"
+view : Wheel -> Vec2 -> Float -> Style -> Id x -> String -> Svg (Interact.Msg (Interactable x))
+view w pos length style id uid =
+    let
+        tickH =
+            length / 15
 
-            else
-                "NON"
-        , svg [ viewBox "0 0 1000 1000" ]
-            [ symbol [ viewBox "0 0 10 12", id "gearSym" ]
-                [ circle
-                    [ cx "5", cy "7", r "5" ]
-                    []
-                , rect [ fill "red", width "1", height "2", x "4.5", y "0" ] []
-                , rect [ fill "purple", width "1", height "2", x "4.5", y "2" ] []
+        tickW =
+            length / 30
+
+        circum =
+            length * pi
+    in
+    S.g
+        ([ SA.transform [ Translate (getX pos) (getY pos) ] ]
+            ++ Interact.hoverEvents (IWheel id)
+        )
+        ([ S.g [ Html.Attributes.id uid ]
+            [ S.circle
+                ([ SA.cx <| Num 0
+                 , SA.cy <| Num 0
+                 , SA.r <| Num (length / 2)
+                 , SA.stroke <|
+                    if style.motor then
+                        Color.red
+
+                    else
+                        Color.black
+                 , SA.strokeWidth <|
+                    Num <|
+                        if style.mod == Selectable then
+                            tickW * 2
+
+                        else
+                            tickW
+                 , SA.strokeDasharray <|
+                    if style.dashed then
+                        String.fromFloat (circum / 40 * 3 / 4)
+                            ++ ","
+                            ++ String.fromFloat (circum / 40 * 1 / 4)
+
+                    else
+                        ""
+                 , SA.fill <|
+                    if w.mute then
+                        Fill Color.white
+
+                    else
+                        Fill Color.black
+                 , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
+                 ]
+                    ++ Interact.draggableEvents (IWheel id)
+                )
+                []
+            , S.rect
+                [ SA.width <| Num tickW
+                , SA.height <| Num tickH
+                , SA.x <| Num (tickW / -2)
+                , SA.y <| Num ((length / -2) - tickH)
                 ]
-            , use [ xlinkHref "#gearSym", x "10", y "10", width "50", height "50", onClick Clicked ] []
-            , use [ onClick Noop, xlinkHref "#gearSym", x "50", y "50", width "50", height "50" ] []
+                []
+            , S.rect
+                [ SA.width <| Num tickW
+                , SA.height <| Num tickH
+                , SA.x <| Num (tickW / -2)
+                , SA.y <| Num (tickH / -2)
+                , SA.fill <| Fill Color.orange
+                , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) + (tickH / 2)) ]
+                ]
+                []
             ]
-        ]
+         ]
+            ++ (if style.mod == Selected then
+                    [ S.circle
+                        [ SA.cx <| Num 0
+                        , SA.cy <| Num 0
+                        , SA.r <| Num (length / 2 + tickW * 2)
+                        , SA.strokeWidth <| Num (tickW / 2)
+                        , SA.stroke Color.black
+                        , SA.fill FillNone
+                        ]
+                        []
+                    ]
+
+                else
+                    []
+               )
+            ++ (if style.mod == Resizing then
+                    [ S.polyline
+                        [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
+                        , SA.stroke Color.red
+                        , SA.strokeWidth <| Num tickW
+                        ]
+                        []
+                    , S.circle
+                        ([ SA.cx <| Num (-length / 2)
+                         , SA.cy <| Num 0
+                         , SA.r <| Num (tickW * 2)
+                         ]
+                            ++ Interact.draggableEvents (IResizeHandle id False)
+                        )
+                        []
+                    , S.circle
+                        ([ SA.cx <| Num (length / 2)
+                         , SA.cy <| Num 0
+                         , SA.r <| Num (tickW * 2)
+                         ]
+                            ++ Interact.draggableEvents (IResizeHandle id True)
+                        )
+                        []
+                    ]
+
+                else
+                    []
+               )
+        )
+
+
+encoder : Wheel -> List ( String, E.Value )
+encoder w =
+    [ ( "startPercent", E.float w.startPercent )
+    , ( "volume", E.float w.volume )
+    , ( "mute", E.bool w.mute )
+    , case w.content of
+        C (Content.S s) ->
+            ( "sound", Sound.encoder s )
+
+        _ ->
+            Debug.todo "Encode content"
+    ]
+
+
+decoder : D.Decoder Wheel
+decoder =
+    Field.require "startPercent" D.float <|
+        \startPercent ->
+            Field.require "volume" D.float <|
+                \volume ->
+                    Field.require "sound" Sound.decoder <|
+                        \sound ->
+                            Field.require "mute" D.bool <|
+                                \mute ->
+                                    D.succeed
+                                        { startPercent = startPercent
+                                        , volume = volume
+                                        , content = C <| Content.S sound
+                                        , mute = mute
+                                        }
