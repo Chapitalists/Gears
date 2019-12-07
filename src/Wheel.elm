@@ -21,7 +21,8 @@ type alias Wheeled a =
 
 
 type alias Wheel =
-    { startPercent : Float
+    { name : String
+    , startPercent : Float
     , volume : Float
     , content : WheelContent
     , mute : Bool
@@ -41,7 +42,8 @@ getContent w =
 
 default : Wheel
 default =
-    { startPercent = 0
+    { name = ""
+    , startPercent = 0
     , volume = 1
     , content = C <| Content.S Sound.noSound
     , mute = False
@@ -72,6 +74,7 @@ type Interactable x
 type Msg
     = ChangeContent (Content Wheel)
     | ChangeVolume Float
+    | Named String
 
 
 update : Msg -> Wheeled g -> Wheeled g
@@ -86,6 +89,13 @@ update msg g =
 
         ChangeVolume vol ->
             { g | wheel = { wheel | volume = vol } }
+
+        Named name ->
+            if String.all (\c -> Char.isAlphaNum c || c == '-') name then
+                { g | wheel = { wheel | name = name } }
+
+            else
+                g
 
 
 view : Wheel -> Vec2 -> Float -> Style -> Id x -> String -> Svg (Interact.Msg (Interactable x))
@@ -207,7 +217,8 @@ view w pos length style id uid =
 
 encoder : Wheel -> List ( String, E.Value )
 encoder w =
-    [ ( "startPercent", E.float w.startPercent )
+    [ ( "name", E.string w.name )
+    , ( "startPercent", E.float w.startPercent )
     , ( "volume", E.float w.volume )
     , ( "mute", E.bool w.mute )
     , case w.content of
@@ -221,17 +232,20 @@ encoder w =
 
 decoder : D.Decoder Wheel
 decoder =
-    Field.require "startPercent" D.float <|
-        \startPercent ->
-            Field.require "volume" D.float <|
-                \volume ->
-                    Field.require "sound" Sound.decoder <|
-                        \sound ->
-                            Field.require "mute" D.bool <|
-                                \mute ->
-                                    D.succeed
-                                        { startPercent = startPercent
-                                        , volume = volume
-                                        , content = C <| Content.S sound
-                                        , mute = mute
-                                        }
+    Field.attempt "name" D.string <|
+        \name ->
+            Field.require "startPercent" D.float <|
+                \startPercent ->
+                    Field.require "volume" D.float <|
+                        \volume ->
+                            Field.require "sound" Sound.decoder <|
+                                \sound ->
+                                    Field.require "mute" D.bool <|
+                                        \mute ->
+                                            D.succeed
+                                                { name = Maybe.withDefault "" name
+                                                , startPercent = startPercent
+                                                , volume = volume
+                                                , content = C <| Content.S sound
+                                                , mute = mute
+                                                }

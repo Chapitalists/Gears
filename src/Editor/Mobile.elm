@@ -627,7 +627,12 @@ viewDetails model mobile =
                             Coll.get id mobile.gears
                     in
                     [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ]
-                        [ text <| Gear.toUID id
+                        [ Input.text [ Font.color (rgb 0 0 0) ]
+                            { label = Input.labelAbove [] <| text "Roue :"
+                            , text = g.wheel.name
+                            , placeholder = Just <| Input.placeholder [] <| text <| Gear.toUID id
+                            , onChange = \str -> WheelMsg ( id, Wheel.Named str )
+                            }
                         , text <|
                             case Wheel.getContent g.wheel of
                                 Content.S s ->
