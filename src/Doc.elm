@@ -1,7 +1,7 @@
 port module Doc exposing (..)
 
 import Coll exposing (Coll, Id)
-import Content exposing (Mobile)
+import Content
 import Data exposing (Data)
 import Editor.Mobile as MEditor
 import Element exposing (..)
@@ -23,12 +23,12 @@ port toEngine : E.Value -> Cmd msg
 
 type Doc
     = D
-        { data : Data (Mobile Wheel)
+        { data : Data Mobeel
         , editor : MEditor.Model
         }
 
 
-changeMobile : Mobile Wheel -> String -> Maybe Url -> Doc -> Doc
+changeMobile : Mobeel -> String -> Maybe Url -> Doc -> Doc
 changeMobile m name url (D d) =
     D { d | data = Data.load m name url }
 

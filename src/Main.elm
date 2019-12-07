@@ -204,7 +204,7 @@ update msg model =
                             Cmd.batch <|
                                 List.map
                                     (\gear ->
-                                        case Wheel.getContent gear.wheel of
+                                        case Wheel.getContent gear of
                                             Content.S s ->
                                                 Tuple.second <|
                                                     update

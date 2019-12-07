@@ -2,9 +2,6 @@ module Content exposing (..)
 
 import Coll exposing (Coll, Id)
 import Gear exposing (Gear)
-import Harmony exposing (Harmony)
-import Math.Vector2 exposing (Vec2)
-import Motor exposing (Motor)
 import Sound exposing (Sound)
 
 

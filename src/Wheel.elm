@@ -33,9 +33,9 @@ type WheelContent
     = C (Content Wheel)
 
 
-getContent : Wheel -> Content Wheel
-getContent w =
-    case w.content of
+getContent : Wheeled g -> Content Wheel
+getContent { wheel } =
+    case wheel.content of
         C c ->
             c
 

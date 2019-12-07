@@ -12,6 +12,10 @@ import Sound exposing (Sound)
 import Wheel exposing (Wheel)
 
 
+
+--TODO Put here half Editor.Mobile, let there only interaction and tools view
+
+
 type alias Mobeel =
     Mobile Wheel
 

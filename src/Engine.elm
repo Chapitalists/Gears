@@ -121,7 +121,7 @@ encodeGear coll id =
         Debug.log (uid ++ "’s length is 0") E.null
 
     else
-        case Wheel.getContent w of
+        case Wheel.getContent g of
             Content.S s ->
                 E.object
                     [ ( "id", E.string <| uid )

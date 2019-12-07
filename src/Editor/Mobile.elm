@@ -634,7 +634,7 @@ viewDetails model mobile =
                             , onChange = \str -> WheelMsg ( id, Wheel.Named str )
                             }
                         , text <|
-                            case Wheel.getContent g.wheel of
+                            case Wheel.getContent g of
                                 Content.S s ->
                                     Sound.toString s
 
