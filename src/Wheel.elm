@@ -40,6 +40,15 @@ getContent { wheel } =
             c
 
 
+setContent : Content Wheel -> Wheeled g -> Wheeled g
+setContent c g =
+    let
+        w =
+            g.wheel
+    in
+    { g | wheel = { w | content = C c } }
+
+
 default : Wheel
 default =
     { name = ""

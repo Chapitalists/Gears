@@ -24,8 +24,13 @@ port toEngine : E.Value -> Cmd msg
 type Doc
     = D
         { data : Data Mobeel
+        , viewing : List ( String, Identifier )
         , editor : MEditor.Model
         }
+
+
+type Identifier
+    = G (Id Geer)
 
 
 changeMobile : Mobeel -> String -> Maybe Url -> Doc -> Doc
@@ -37,6 +42,7 @@ new : Maybe Url -> Doc
 new url =
     D
         { data = Data.init { motor = Coll.startId, gears = Coll.empty Gear.typeString Mobile.defaultGear } url
+        , viewing = []
         , editor = MEditor.init
         }
 
@@ -55,7 +61,7 @@ soundClicked sound (D doc) =
                     doc.editor
 
                 mobile =
-                    Data.current doc.data
+                    getViewing doc.viewing <| Data.current doc.data
 
                 group =
                     Harmo.getHarmonicGroup (Coll.idMap id) mobile.gears
@@ -67,10 +73,16 @@ soundClicked sound (D doc) =
                 { doc
                     | data =
                         Data.do
-                            { mobile
-                                | gears =
-                                    List.foldl (\el -> Coll.update el chSound) mobile.gears group
-                            }
+                            (updateViewing doc.viewing
+                                (\m ->
+                                    { m
+                                        | gears =
+                                            List.foldl (\el -> Coll.update el chSound) m.gears group
+                                    }
+                                )
+                             <|
+                                Data.current doc.data
+                            )
                             doc.data
                     , editor = { editor | edit = MEditor.Gear id }
                 }
@@ -81,15 +93,18 @@ soundClicked sound (D doc) =
             let
                 pos =
                     vec2 50 50
-
-                mobile =
-                    Data.current doc.data
             in
             ( D
                 { doc
                     | data =
                         Data.do
-                            { mobile | gears = Coll.insert (Mobile.fromSound sound pos) mobile.gears }
+                            (updateViewing doc.viewing
+                                (\m ->
+                                    { m | gears = Coll.insert (Mobile.fromSound sound pos) m.gears }
+                                )
+                             <|
+                                Data.current doc.data
+                            )
                             doc.data
                 }
             , Just pos
@@ -102,16 +117,13 @@ type Msg
     | Saved
     | Undo
     | Redo
+    | View (List ( String, Identifier ))
     | MobileMsg MEditor.Msg
     | InteractEvent (Interact.Event MEditor.Interactable)
 
 
 update : Msg -> Float -> Doc -> ( Doc, Cmd Msg )
 update msg scale (D doc) =
-    let
-        mobile =
-            Data.current doc.data
-    in
     case msg of
         EnteredFileName name ->
             if String.all (\c -> Char.isAlphaNum c || c == '-') name then
@@ -137,18 +149,24 @@ update msg scale (D doc) =
         Redo ->
             ( D { doc | data = Data.redo doc.data }, Cmd.none )
 
+        View l ->
+            ( D { doc | viewing = l }, Cmd.none )
+
         MobileMsg subMsg ->
             let
                 ( editor, ( mo, to ), engineCmd ) =
-                    MEditor.update subMsg scale ( doc.editor, mobile )
+                    MEditor.update subMsg scale ( doc.editor, getViewing doc.viewing <| Data.current doc.data )
+
+                mobile =
+                    updateViewing doc.viewing (always mo) <| Data.current doc.data
 
                 data =
                     case to of
                         MEditor.Do ->
-                            Data.do mo doc.data
+                            Data.do mobile doc.data
 
                         MEditor.Group ->
-                            Data.group mo doc.data
+                            Data.group mobile doc.data
 
                         MEditor.NOOP ->
                             doc.data
@@ -168,46 +186,67 @@ update msg scale (D doc) =
 
 viewTop : Doc -> Element Msg
 viewTop (D doc) =
-    row [ width fill, padding 10, spacing 20, Font.size 14 ]
-        (Element.map MobileMsg (MEditor.viewTools doc.editor)
-            :: [ Input.text [ width (fill |> maximum 500), centerX ]
-                    { label = Input.labelHidden "Nom du fichier"
-                    , text = Data.getName doc.data
-                    , placeholder = Just <| Input.placeholder [] <| text "nom-a-sauvegarder"
-                    , onChange = EnteredFileName
-                    }
-               , Input.button
-                    [ centerX
-                    , Font.color <|
-                        if Data.isSaved doc.data then
-                            rgb 0 0 0
+    column [ width fill ]
+        [ viewNav (D doc)
+        , row [ width fill, padding 10, spacing 20, Font.size 14 ]
+            (Element.map MobileMsg (MEditor.viewTools doc.editor)
+                :: [ Input.text [ width (fill |> maximum 500), centerX ]
+                        { label = Input.labelHidden "Nom du fichier"
+                        , text = Data.getName doc.data
+                        , placeholder = Just <| Input.placeholder [] <| text "nom-a-sauvegarder"
+                        , onChange = EnteredFileName
+                        }
+                   , Input.button
+                        [ centerX
+                        , Font.color <|
+                            if Data.isSaved doc.data then
+                                rgb 0 0 0
 
-                        else
-                            rgb 0 1 1
-                    ]
-                    { label = text "Sauvegarder"
-                    , onPress = Just Save
-                    }
-               , Input.button [ alignRight ]
-                    { label = text "Undo"
-                    , onPress =
-                        if Data.canUndo doc.data then
-                            Just Undo
+                            else
+                                rgb 0 1 1
+                        ]
+                        { label = text "Sauvegarder"
+                        , onPress = Just Save
+                        }
+                   , Input.button [ alignRight ]
+                        { label = text "Undo"
+                        , onPress =
+                            if Data.canUndo doc.data then
+                                Just Undo
 
-                        else
-                            Nothing
-                    }
-               , Input.button []
-                    { label = text "Redo"
-                    , onPress =
-                        if Data.canRedo doc.data then
-                            Just Redo
+                            else
+                                Nothing
+                        }
+                   , Input.button []
+                        { label = text "Redo"
+                        , onPress =
+                            if Data.canRedo doc.data then
+                                Just Redo
 
-                        else
-                            Nothing
-                    }
-               ]
-        )
+                            else
+                                Nothing
+                        }
+                   ]
+            )
+        ]
+
+
+viewNav : Doc -> Element Msg
+viewNav (D doc) =
+    row [] <|
+        List.intersperse (text ">") <|
+            Input.button []
+                { label = text "Racine"
+                , onPress = Just <| View []
+                }
+                :: List.indexedMap
+                    (\i ( name, _ ) ->
+                        Input.button []
+                            { label = text name
+                            , onPress = Just <| View <| List.take i doc.viewing
+                            }
+                    )
+                    doc.viewing
 
 
 viewBottom : Doc -> Element Msg
@@ -222,3 +261,38 @@ viewSide (D doc) =
 
 viewContent (D doc) =
     MEditor.viewContent ( doc.editor, Data.current doc.data )
+
+
+getViewing : List ( String, Identifier ) -> Mobeel -> Mobeel
+getViewing l m =
+    case l of
+        [] ->
+            m
+
+        ( _, G next ) :: rest ->
+            case Wheel.getContent <| Coll.get next m.gears of
+                Content.M mo ->
+                    getViewing rest mo
+
+                _ ->
+                    Debug.log "IMPOSSIBLE Content not viewable" m
+
+
+updateViewing : List ( String, Identifier ) -> (Mobeel -> Mobeel) -> Mobeel -> Mobeel
+updateViewing l f m =
+    case l of
+        [] ->
+            f m
+
+        ( _, G next ) :: rest ->
+            case Wheel.getContent <| Coll.get next m.gears of
+                Content.M mo ->
+                    { m
+                        | gears =
+                            Coll.update next
+                                (Wheel.setContent <| Content.M <| updateViewing rest f mo)
+                                m.gears
+                    }
+
+                _ ->
+                    Debug.log "IMPOSSIBLE Content not Mobile" m
