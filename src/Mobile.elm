@@ -70,7 +70,7 @@ encoder m =
     E.object
         [ ( "motor", Coll.idEncoder m.motor )
         , ( "gears"
-          , Coll.encoder m.gears <| Gear.encoder Wheel.encoder
+          , Coll.encoder m.gears <| Gear.encoder <| Wheel.encoder encoder
           )
         ]
 
@@ -79,4 +79,9 @@ decoder : D.Decoder Mobeel
 decoder =
     D.succeed Mobile
         |> required "motor" Coll.idDecoder
-        |> required "gears" (Coll.decoder (Gear.decoder Wheel.decoder) Gear.typeString defaultGear)
+        |> required "gears"
+            (Coll.decoder
+                (Gear.decoder <| Wheel.decoder <| D.lazy (\_ -> decoder))
+                Gear.typeString
+                defaultGear
+            )

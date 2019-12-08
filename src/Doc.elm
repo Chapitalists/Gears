@@ -36,7 +36,11 @@ type Identifier
 
 changeMobile : Mobeel -> String -> Maybe Url -> Doc -> Doc
 changeMobile m name url (D d) =
-    D { d | data = Data.load m name url }
+    let
+        (D n) =
+            new url
+    in
+    D { n | data = Data.load m name url }
 
 
 new : Maybe Url -> Doc

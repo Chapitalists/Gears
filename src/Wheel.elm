@@ -2,7 +2,7 @@ module Wheel exposing (..)
 
 import Coll exposing (Id)
 import Color
-import Content exposing (Content)
+import Content exposing (Content, Mobile)
 import Html.Attributes
 import Interact
 import Json.Decode as D
@@ -224,8 +224,8 @@ view w pos length style id uid =
         )
 
 
-encoder : Wheel -> List ( String, E.Value )
-encoder w =
+encoder : (Mobile Wheel -> E.Value) -> Wheel -> List ( String, E.Value )
+encoder mobileEncoder w =
     [ ( "name", E.string w.name )
     , ( "startPercent", E.float w.startPercent )
     , ( "volume", E.float w.volume )
@@ -234,27 +234,35 @@ encoder w =
         C (Content.S s) ->
             ( "sound", Sound.encoder s )
 
-        _ ->
-            Debug.todo "Encode content"
+        C (Content.M m) ->
+            ( "mobile", mobileEncoder m )
+
+        C (Content.C c) ->
+            Debug.todo "Encode collar"
     ]
 
 
-decoder : D.Decoder Wheel
-decoder =
-    Field.attempt "name" D.string <|
-        \name ->
-            Field.require "startPercent" D.float <|
-                \startPercent ->
-                    Field.require "volume" D.float <|
-                        \volume ->
-                            Field.require "sound" Sound.decoder <|
-                                \sound ->
-                                    Field.require "mute" D.bool <|
-                                        \mute ->
-                                            D.succeed
-                                                { name = Maybe.withDefault "" name
-                                                , startPercent = startPercent
-                                                , volume = volume
-                                                , content = C <| Content.S sound
-                                                , mute = mute
-                                                }
+decoder : D.Decoder (Mobile Wheel) -> D.Decoder Wheel
+decoder mobileDecoder =
+    D.oneOf
+        [ Field.require "sound" Sound.decoder <| \sound -> D.succeed <| C <| Content.S sound
+        , Field.require "mobile" mobileDecoder <| \mobile -> D.succeed <| C <| Content.M mobile
+        ]
+        |> D.andThen
+            (\content ->
+                Field.attempt "name" D.string <|
+                    \name ->
+                        Field.require "startPercent" D.float <|
+                            \startPercent ->
+                                Field.require "volume" D.float <|
+                                    \volume ->
+                                        Field.require "mute" D.bool <|
+                                            \mute ->
+                                                D.succeed
+                                                    { name = Maybe.withDefault "" name
+                                                    , startPercent = startPercent
+                                                    , volume = volume
+                                                    , content = content
+                                                    , mute = mute
+                                                    }
+            )
