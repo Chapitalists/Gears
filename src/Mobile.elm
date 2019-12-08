@@ -24,13 +24,18 @@ type alias Geer =
     Gear Wheel
 
 
+new : Mobeel
+new =
+    { motor = Coll.startId, gears = Coll.empty Gear.typeString defaultGear }
+
+
 defaultGear : Geer
 defaultGear =
     Gear.default Wheel.default
 
 
-fromSound : Sound -> Vec2 -> Geer
-fromSound s pos =
+gearFromSound : Sound -> Vec2 -> Geer
+gearFromSound s pos =
     { pos = pos
     , harmony = Harmo.newSelf <| Sound.length s
     , motor = []

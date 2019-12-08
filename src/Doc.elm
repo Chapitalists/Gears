@@ -42,7 +42,7 @@ changeMobile m name url (D d) =
 new : Maybe Url -> Doc
 new url =
     D
-        { data = Data.init { motor = Coll.startId, gears = Coll.empty Gear.typeString Mobile.defaultGear } url
+        { data = Data.init Mobile.new url
         , viewing = []
         , editor = MEditor.init
         }
@@ -62,7 +62,7 @@ soundClicked sound (D doc) =
                     doc.editor
 
                 mobile =
-                    getViewing doc.viewing <| Data.current doc.data
+                    getViewing (D doc)
 
                 group =
                     Harmo.getHarmonicGroup (Coll.idMap id) mobile.gears
@@ -101,7 +101,7 @@ soundClicked sound (D doc) =
                         Data.do
                             (updateViewing doc.viewing
                                 (\m ->
-                                    { m | gears = Coll.insert (Mobile.fromSound sound pos) m.gears }
+                                    { m | gears = Coll.insert (Mobile.gearFromSound sound pos) m.gears }
                                 )
                              <|
                                 Data.current doc.data
@@ -156,7 +156,7 @@ update msg scale (D doc) =
         MobileMsg subMsg ->
             let
                 ( editor, ( mo, to ), engineCmd ) =
-                    MEditor.update subMsg scale ( doc.editor, getViewing doc.viewing <| Data.current doc.data )
+                            MEditor.update subMsg scale ( doc.editor, getViewing (D doc) )
 
                 mobile =
                     updateViewing doc.viewing (always mo) <| Data.current doc.data
@@ -257,15 +257,20 @@ viewBottom (D doc) =
 
 viewSide : Doc -> List (Element Msg)
 viewSide (D doc) =
-    List.map (Element.map MobileMsg) <| MEditor.viewDetails doc.editor <| Data.current doc.data
+    List.map (Element.map MobileMsg) <| MEditor.viewDetails doc.editor <| getViewing (D doc)
 
 
 viewContent (D doc) =
-    MEditor.viewContent ( doc.editor, Data.current doc.data )
+    MEditor.viewContent ( doc.editor, getViewing (D doc) )
 
 
-getViewing : List ( String, Identifier ) -> Mobeel -> Mobeel
-getViewing l m =
+getViewing : Doc -> Mobeel
+getViewing (D { viewing, data }) =
+    getViewingHelper viewing <| Data.current data
+
+
+getViewingHelper : List ( String, Identifier ) -> Mobeel -> Mobeel
+getViewingHelper l m =
     case l of
         [] ->
             m
@@ -273,7 +278,7 @@ getViewing l m =
         ( _, G next ) :: rest ->
             case Wheel.getContent <| Coll.get next m.gears of
                 Content.M mo ->
-                    getViewing rest mo
+                    getViewingHelper rest mo
 
                 _ ->
                     Debug.log "IMPOSSIBLE Content not viewable" m
