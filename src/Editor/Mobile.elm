@@ -102,9 +102,15 @@ type Msg
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract (Link Geer) Fraction
     | SimplifyFractView
+    | Capsuled (Id Geer)
     | Interacted (Interact.Event Interactable)
     | WheelMsg ( Id Geer, Wheel.Msg )
     | GearMsg ( Id Geer, Gear.Msg )
+    | OutMsg DocMsg
+
+
+type DocMsg
+    = Inside (Id Geer)
 
 
 type ToUndo
@@ -264,11 +270,34 @@ update msg scale ( model, mobile ) =
                 _ ->
                     ( model, ( mobile, NOOP ), Nothing )
 
+        Capsuled id ->
+            let
+                g =
+                    Coll.get id mobile.gears
+
+                newG =
+                    { g | motor = Motor.default, harmony = Harmo.newSelf <| Harmo.getLength g.harmony mobile.gears }
+            in
+            ( model
+            , ( { mobile
+                    | gears =
+                        Coll.update id
+                            (Wheel.setContent <| Content.M <| Mobile.fromGear newG)
+                            mobile.gears
+                }
+              , Do
+              )
+            , Nothing
+            )
+
         WheelMsg ( id, subMsg ) ->
             ( model, ( { mobile | gears = Coll.update id (Wheel.update subMsg) mobile.gears }, Do ), Nothing )
 
         GearMsg ( id, subMsg ) ->
             ( model, ( { mobile | gears = Coll.update id (Gear.update subMsg) mobile.gears }, Do ), Nothing )
+
+        OutMsg _ ->
+            ( model, ( mobile, NOOP ), Nothing )
 
         -- TODO Find good pattern for big mess there
         Interacted event ->
@@ -633,13 +662,18 @@ viewDetails model mobile =
                             , placeholder = Just <| Input.placeholder [] <| text <| Gear.toUID id
                             , onChange = \str -> WheelMsg ( id, Wheel.Named str )
                             }
-                        , text <|
-                            case Wheel.getContent g of
-                                Content.S s ->
-                                    Sound.toString s
+                        , case Wheel.getContent g of
+                            Content.S s ->
+                                text <| Sound.toString s
 
-                                _ ->
-                                    Debug.todo "Content not sound"
+                            Content.M m ->
+                                Input.button []
+                                    { label = text "Voir Mobile"
+                                    , onPress = Just <| OutMsg <| Inside id
+                                    }
+
+                            _ ->
+                                Debug.todo "nav to collar"
                         , Input.button []
                             { label = text "PlayPause"
                             , onPress = Just <| PlayGear id
@@ -684,6 +718,10 @@ viewDetails model mobile =
                         , Input.button []
                             { label = text "Changer son"
                             , onPress = Just <| ChangeSoundStarted id
+                            }
+                        , Input.button []
+                            { label = text "Encapsuler"
+                            , onPress = Just <| Capsuled id
                             }
                         , Input.button []
                             { onPress = Just <| DeleteGear id

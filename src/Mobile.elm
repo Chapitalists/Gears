@@ -29,6 +29,15 @@ new =
     { motor = Coll.startId, gears = Coll.empty Gear.typeString defaultGear }
 
 
+fromGear : Geer -> Mobeel
+fromGear g =
+    let
+        ( id, coll ) =
+            Coll.insertTellId g <| Coll.empty Gear.typeString defaultGear
+    in
+    { motor = id, gears = coll }
+
+
 defaultGear : Geer
 defaultGear =
     Gear.default Wheel.default
@@ -41,6 +50,19 @@ gearFromSound s pos =
     , motor = []
     , wheel = Wheel.fromSound s
     }
+
+
+gearName : Id Geer -> Coll Geer -> String
+gearName id coll =
+    let
+        name =
+            (Coll.get id coll).wheel.name
+    in
+    if String.isEmpty name then
+        Gear.toUID id
+
+    else
+        name
 
 
 encoder : Mobeel -> E.Value

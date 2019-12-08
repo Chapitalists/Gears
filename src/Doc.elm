@@ -154,32 +154,45 @@ update msg scale (D doc) =
             ( D { doc | viewing = l, editor = MEditor.init }, toEngine Engine.stop )
 
         MobileMsg subMsg ->
-            let
-                ( editor, ( mo, to ), engineCmd ) =
+            case subMsg of
+                MEditor.OutMsg (MEditor.Inside id) ->
+                    ( D
+                        { doc
+                            | viewing =
+                                doc.viewing
+                                    ++ [ ( Mobile.gearName id (getViewing (D doc)).gears, G id ) ]
+                            , editor = MEditor.init
+                        }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    let
+                        ( editor, ( mo, to ), engineCmd ) =
                             MEditor.update subMsg scale ( doc.editor, getViewing (D doc) )
 
-                mobile =
-                    updateViewing doc.viewing (always mo) <| Data.current doc.data
+                        mobile =
+                            updateViewing doc.viewing (always mo) <| Data.current doc.data
 
-                data =
-                    case to of
-                        MEditor.Do ->
-                            Data.do mobile doc.data
+                        data =
+                            case to of
+                                MEditor.Do ->
+                                    Data.do mobile doc.data
 
-                        MEditor.Group ->
-                            Data.group mobile doc.data
+                                MEditor.Group ->
+                                    Data.group mobile doc.data
 
-                        MEditor.NOOP ->
-                            doc.data
-            in
-            ( D { doc | data = data, editor = editor }
-            , case engineCmd of
-                Nothing ->
-                    Cmd.none
+                                MEditor.NOOP ->
+                                    doc.data
+                    in
+                    ( D { doc | data = data, editor = editor }
+                    , case engineCmd of
+                        Nothing ->
+                            Cmd.none
 
-                Just v ->
-                    toEngine v
-            )
+                        Just v ->
+                            toEngine v
+                    )
 
         InteractEvent event ->
             update (MobileMsg <| MEditor.Interacted event) scale (D doc)
