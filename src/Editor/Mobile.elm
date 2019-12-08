@@ -629,16 +629,17 @@ viewContent ( model, mobile ) inter scale =
                         Motor.getAllLinks mobile.gears
 
                 Harmonize ->
-                    List.concatMap (Link.viewFractLink << Gear.toDrawLink mobile.gears) <|
+                    (List.concatMap (Link.viewFractLink << Gear.toDrawLink mobile.gears) <|
                         List.concatMap (.harmony >> Harmo.getLinks) <|
                             Coll.values mobile.gears
+                    )
+                        ++ (case model.link of
+                                Just { link } ->
+                                    Link.viewSelectedLink <| Gear.toDrawLink mobile.gears link
 
-                _ ->
-                    []
-           )
-        ++ (case model.link of
-                Just { link } ->
-                    Link.viewSelectedLink <| Gear.toDrawLink mobile.gears link
+                                _ ->
+                                    []
+                           )
 
                 _ ->
                     []
