@@ -224,30 +224,21 @@ view w pos length style id uid =
         )
 
 
-encoder : (Mobile Wheel -> E.Value) -> Wheel -> List ( String, E.Value )
-encoder mobileEncoder w =
+encoder : Wheel -> List ( String, E.Value )
+encoder w =
     [ ( "name", E.string w.name )
     , ( "startPercent", E.float w.startPercent )
     , ( "volume", E.float w.volume )
     , ( "mute", E.bool w.mute )
     , case w.content of
-        C (Content.S s) ->
-            ( "sound", Sound.encoder s )
-
-        C (Content.M m) ->
-            ( "mobile", mobileEncoder m )
-
-        C (Content.C c) ->
-            Debug.todo "Encode collar"
+        C c ->
+            Content.encoder encoder c
     ]
 
 
-decoder : D.Decoder (Mobile Wheel) -> D.Decoder Wheel
-decoder mobileDecoder =
-    D.oneOf
-        [ Field.require "sound" Sound.decoder <| \sound -> D.succeed <| C <| Content.S sound
-        , Field.require "mobile" mobileDecoder <| \mobile -> D.succeed <| C <| Content.M mobile
-        ]
+decoder : D.Decoder Wheel
+decoder =
+    Content.decoder (D.lazy (\_ -> decoder)) default
         |> D.andThen
             (\content ->
                 Field.attempt "name" D.string <|
@@ -262,7 +253,7 @@ decoder mobileDecoder =
                                                     { name = Maybe.withDefault "" name
                                                     , startPercent = startPercent
                                                     , volume = volume
-                                                    , content = content
+                                                    , content = C content
                                                     , mute = mute
                                                     }
             )

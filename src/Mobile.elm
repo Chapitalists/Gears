@@ -5,7 +5,6 @@ import Content exposing (Mobile)
 import Gear exposing (Gear)
 import Harmony as Harmo exposing (Harmony)
 import Json.Decode as D
-import Json.Decode.Pipeline exposing (required)
 import Json.Encode as E
 import Math.Vector2 exposing (Vec2)
 import Sound exposing (Sound)
@@ -66,22 +65,10 @@ gearName id coll =
 
 
 encoder : Mobeel -> E.Value
-encoder m =
-    E.object
-        [ ( "motor", Coll.idEncoder m.motor )
-        , ( "gears"
-          , Coll.encoder m.gears <| Gear.encoder <| Wheel.encoder encoder
-          )
-        ]
+encoder =
+    Content.mobileEncoder Wheel.encoder
 
 
 decoder : D.Decoder Mobeel
 decoder =
-    D.succeed Mobile
-        |> required "motor" Coll.idDecoder
-        |> required "gears"
-            (Coll.decoder
-                (Gear.decoder <| Wheel.decoder <| D.lazy (\_ -> decoder))
-                Gear.typeString
-                defaultGear
-            )
+    Content.mobileDecoder Wheel.decoder Wheel.default

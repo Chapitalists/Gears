@@ -8,7 +8,6 @@ import Element exposing (..)
 import Element.Font as Font
 import Element.Input as Input
 import Engine
-import Gear exposing (Gear)
 import Harmony as Harmo
 import Interact
 import Json.Encode as E
