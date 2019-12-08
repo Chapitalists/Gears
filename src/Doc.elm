@@ -7,6 +7,7 @@ import Editor.Mobile as MEditor
 import Element exposing (..)
 import Element.Font as Font
 import Element.Input as Input
+import Engine
 import Gear exposing (Gear)
 import Harmony as Harmo
 import Interact
@@ -150,7 +151,7 @@ update msg scale (D doc) =
             ( D { doc | data = Data.redo doc.data }, Cmd.none )
 
         View l ->
-            ( D { doc | viewing = l }, Cmd.none )
+            ( D { doc | viewing = l, editor = MEditor.init }, toEngine Engine.stop )
 
         MobileMsg subMsg ->
             let
@@ -243,7 +244,7 @@ viewNav (D doc) =
                     (\i ( name, _ ) ->
                         Input.button []
                             { label = text name
-                            , onPress = Just <| View <| List.take i doc.viewing
+                            , onPress = Just <| View <| List.take (i + 2) doc.viewing
                             }
                     )
                     doc.viewing
