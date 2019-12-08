@@ -15,7 +15,8 @@ import Content
 import Gear exposing (Gear)
 import Harmony as Harmo
 import Json.Encode as E
-import Mobile exposing (Geer)
+import Mobile exposing (Geer, Mobeel)
+import Motor
 import Sound
 import Wheel exposing (Wheel)
 
@@ -121,15 +122,28 @@ encodeGear coll id =
         Debug.log (uid ++ "’s length is 0") E.null
 
     else
-        case Wheel.getContent g of
-            Content.S s ->
-                E.object
-                    [ ( "id", E.string <| uid )
-                    , ( "length", E.float length )
-                    , ( "soundName", E.string <| Sound.toString s )
-                    , ( "mute", E.bool w.mute )
-                    , ( "volume", E.float w.volume )
-                    ]
+        E.object
+            ([ ( "id", E.string <| uid )
+             , ( "length", E.float length )
+             , ( "mute", E.bool w.mute )
+             , ( "volume", E.float w.volume )
+             ]
+                ++ (case Wheel.getContent g of
+                        Content.S s ->
+                            [ ( "soundName", E.string <| Sound.toString s ) ]
 
-            _ ->
-                Debug.todo "Encode encapsulated"
+                        Content.M m ->
+                            [ ( "mobile", encodeMobile m ) ]
+
+                        Content.C _ ->
+                            Debug.todo "Encode encapsulated"
+                   )
+            )
+
+
+encodeMobile : Mobeel -> E.Value
+encodeMobile { motor, gears } =
+    E.object
+        [ ( "motor", encodeGear gears motor )
+        , ( "gears", E.list (encodeGear gears) <| Motor.getMotored motor gears )
+        ]
