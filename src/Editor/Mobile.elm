@@ -318,7 +318,7 @@ update msg scale ( model, mobile ) =
                                 ( engine, v ) =
                                     Engine.setPlaying motored mobile.gears model.engine
                             in
-                            ( { model | engine = engine }, ( { mobile | gears = gears }, Do ), v )
+                            ( { model | dragging = NoDrag, engine = engine }, ( { mobile | gears = gears }, Do ), v )
 
                         -- VOLUME
                         ( IGear id, Interact.Dragged oldPos newPos ( True, _, _ ), NoDrag ) ->
@@ -498,7 +498,7 @@ viewContent ( model, mobile ) inter scale =
     let
         getMod : Interact.Interact Interactable -> Id Geer -> Wheel.Mod
         getMod i id =
-            if model.edit == Gear id then
+            if model.tool == Edit && model.edit == Gear id then
                 Wheel.Selected
 
             else
