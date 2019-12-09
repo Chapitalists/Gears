@@ -200,22 +200,25 @@ update msg model =
             case result of
                 Ok m ->
                     let
-                        cmds =
-                            Cmd.batch <|
-                                List.map
-                                    (\gear ->
-                                        case Wheel.getContent gear of
-                                            Content.S s ->
-                                                Tuple.second <|
-                                                    update
-                                                        (RequestSoundLoad <| Sound.toString s)
-                                                        model
+                        loadMobile mo =
+                            List.concatMap
+                                (\gear ->
+                                    case Wheel.getContent gear of
+                                        Content.S s ->
+                                            [ Tuple.second <|
+                                                update
+                                                    (RequestSoundLoad <| Sound.toString s)
+                                                    model
+                                            ]
 
-                                            _ ->
-                                                Cmd.none
-                                    )
-                                <|
-                                    Coll.values m.gears
+                                        Content.M mob ->
+                                            loadMobile mob
+
+                                        Content.C col ->
+                                            Debug.todo "load collar"
+                                )
+                            <|
+                                Coll.values mo.gears
                     in
                     ( { model
                         | connected = True
@@ -225,7 +228,7 @@ update msg model =
                             , smallestSize = Harmo.getLengthId m.motor m.gears * 2 * 4
                             }
                       }
-                    , cmds
+                    , Cmd.batch <| loadMobile m
                     )
 
                 Err (Http.BadBody err) ->
