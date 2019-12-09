@@ -25,7 +25,7 @@ encoder wheelEncoder content =
             ( "mobile", mobileEncoder wheelEncoder m )
 
         C c ->
-            Debug.todo "Encode collar"
+            ( "collar", collarEncoder wheelEncoder c )
 
 
 decoder : D.Decoder item -> item -> D.Decoder (Content item)
@@ -33,6 +33,7 @@ decoder wheelDecoder defaultWheel =
     D.oneOf
         [ Field.require "sound" Sound.decoder <| \sound -> D.succeed <| S sound
         , Field.require "mobile" (mobileDecoder wheelDecoder defaultWheel) <| \mobile -> D.succeed <| M mobile
+        , Field.require "collar" (collarDecoder wheelDecoder) <| \collar -> D.succeed <| C collar
         ]
 
 
@@ -63,5 +64,47 @@ mobileDecoder wheelDecoder defaultWheel =
             )
 
 
+type alias Bead item =
+    { length : Float, wheel : item }
+
+
+beadEncoder : (item -> List ( String, E.Value )) -> Bead item -> E.Value
+beadEncoder wheelEncoder b =
+    E.object <| ( "length", E.float b.length ) :: wheelEncoder b.wheel
+
+
+beadDecoder : D.Decoder item -> D.Decoder (Bead item)
+beadDecoder wheelDecoder =
+    wheelDecoder
+        |> D.andThen
+            (\w ->
+                Field.require "length" D.float <|
+                    \l ->
+                        D.succeed { length = l, wheel = w }
+            )
+
+
 type alias Collar item =
-    List { length : Float, wheel : item }
+    { matrice : Float, loop : Float, beads : List (Bead item) }
+
+
+collarEncoder : (item -> List ( String, E.Value )) -> Collar item -> E.Value
+collarEncoder wheelEncoder c =
+    E.object
+        [ ( "matriceLength", E.float c.matrice )
+        , ( "loopStart", E.float c.loop )
+        , ( "beads"
+          , E.list (beadEncoder wheelEncoder) c.beads
+          )
+        ]
+
+
+collarDecoder : D.Decoder item -> D.Decoder (Collar item)
+collarDecoder wheelDecoder =
+    Field.require "matriceLength" D.float <|
+        \matrice ->
+            Field.require "loopStart" D.float <|
+                \loop ->
+                    Field.require "beads" (D.list <| beadDecoder wheelDecoder) <|
+                        \beads ->
+                            D.succeed { matrice = matrice, loop = loop, beads = beads }
