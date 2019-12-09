@@ -96,7 +96,7 @@ volumeChanged id volume e =
             E.object
                 [ ( "action", E.string "volume" )
                 , ( "gearId", E.string <| Gear.toUID <| Coll.idMap id )
-                , ( "value", E.float volume )
+                , ( "value", E.float <| clamp 0 1 volume )
                 ]
 
     else
@@ -126,7 +126,7 @@ encodeGear coll id =
             ([ ( "id", E.string <| uid )
              , ( "length", E.float length )
              , ( "mute", E.bool w.mute )
-             , ( "volume", E.float w.volume )
+             , ( "volume", E.float <| clamp 0 1 w.volume )
              ]
                 ++ (case Wheel.getContent g of
                         Content.S s ->

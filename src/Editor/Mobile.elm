@@ -830,7 +830,7 @@ doVolumeChange id oldPos newPos scale mobile engine =
             wheel.volume + (Vec.getY oldPos - Vec.getY newPos) / scale / 100
 
         newGears =
-            Coll.update id (\g -> { g | wheel = { wheel | volume = volume } }) gears
+            Coll.update id (Wheel.update <| Wheel.ChangeVolume volume) gears
     in
     ( ( { mobile | gears = newGears }, Group ), Engine.volumeChanged id volume engine )
 

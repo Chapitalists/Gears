@@ -97,7 +97,7 @@ update msg g =
             { g | wheel = { wheel | content = C c } }
 
         ChangeVolume vol ->
-            { g | wheel = { wheel | volume = vol } }
+            { g | wheel = { wheel | volume = clamp 0 1 vol } }
 
         Named name ->
             if String.all (\c -> Char.isAlphaNum c || c == '-') name then
