@@ -66,9 +66,9 @@ function play(id) {
     playMusic(model)
 }
 
-function playMusic(model, volume = 1, rate = 1) {
-    if (model.soundName) playSound(model, volume, rate)
-    else if (model.mobile) playMobile(model, rate)
+function playMusic(model, parentVol = 1, parentRate = 1, parentMute = false) {
+    if (model.soundName) playSound(model, parentVol, parentRate, parentMute)
+    else if (model.mobile) playMobile(model, parentVol, parentRate, parentMute)
     return model
 }
 
@@ -87,9 +87,9 @@ function unpause(id) {
     unpauseMusic(model)
 }
 
-function unpauseMusic(model, volume = 1) {
-    if (model.soundName) unpauseSound(model, volume)
-    else if (model.mobile) unpauseMobile(model)
+function unpauseMusic(model, parentVol = 1, parentMute = false) {
+    if (model.soundName) unpauseSound(model, parentVol, parentMute)
+    else if (model.mobile) unpauseMobile(model, parentVol, parentMute)
 }
 
 function stop(id) {
@@ -104,43 +104,44 @@ function mute(id, mute) {
     let model = playing[id]
     if (!model) return;
     model.mute = mute
-    setVolume(model)
+    model.setVolume()
 }
 
 function changeVolume(id, volume) {
     let model = playing[id]
     if (!model) return;
     model.volume = volume
-    setVolume(model)
+    model.setVolume()
 }
 
-function playSound(model, volume, rate) {
+function playSound(model, pv, pr, pm) {
     let s = model.player = new Tone.Player(buffers[model.soundName]).toMaster()
     s.loop = true
-    setVolume(model, volume)
-    s.playbackRate = model.rate = rate * s.buffer.duration / model.length
+    model.setVolume = function (mod = 1, mute = false) {
+        mute || this.mute ? this.player.mute = true : this.player.volume.value = ((this.volume * mod) - 1) * 60
+    }
+    model.setVolume(pv, pm)
+    s.playbackRate = model.rate = pr * s.buffer.duration / model.length
     s.start()
     model.startTime = Tone.context.now()
 }
 
-function unpauseSound(model, volume) {
-    setVolume(model, volume)
+function unpauseSound(model, pv, pm) {
+    model.setVolume(pv, pm)
     model.player.start(Tone.context.now(), model.pauseOffset)
     model.startTime = Tone.context.now() - model.pauseOffset / model.rate
 }
 
-function playMobile(model, rate) {
-    model.rate = rate * model.mobile.motor.length / model.length
+function playMobile(model, pv, pr, pm) {
+    model.rate = pr * model.mobile.motor.length / model.length
     model.player = model.mobile.gears.concat(model.mobile.motor)
-                    .map(m => playMusic(m, model.volume, model.rate))
+                    .map(m => playMusic(m, model.volume * pv, model.rate * pr, model.mute || pm))
     model.player.stop = function () {this.map(m => m.player.stop())}
+    model.setVolume = function (mod = 1, mute = false) {
+        this.mobile.gears.concat(model.mobile.motor).map(m => m.setVolume(this.volume * mod, this.mute || mute))
+    }
 }
 
-function unpauseMobile(model) {
-    model.player.map(m => unpauseMusic(m, model.volume))
-}
-
-function setVolume(m, mod) {
-    let source = m.player
-    m.mute ? source.mute = true : source.volume.value = (m.volume - 1) * 60 * mod
+function unpauseMobile(model, pv, pm) {
+    model.player.map(m => unpauseMusic(m, model.volume * pv, model.mute || pm))
 }
