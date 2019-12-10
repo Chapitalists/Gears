@@ -4,6 +4,7 @@ import Browser
 import Browser.Events as BE
 import Browser.Navigation as Nav
 import Coll exposing (Coll, Id)
+import Collar
 import Content
 import Doc exposing (Doc)
 import Editor.Mobile as MEditor exposing (Interactable(..))
@@ -200,7 +201,7 @@ update msg model =
             case result of
                 Ok m ->
                     let
-                        loadMobile mo =
+                        loadList =
                             List.concatMap
                                 (\gear ->
                                     case Wheel.getContent gear of
@@ -216,13 +217,11 @@ update msg model =
                                                 ]
 
                                         Content.M mob ->
-                                            loadMobile mob
+                                            loadList <| Coll.values mob.gears
 
                                         Content.C col ->
-                                            Debug.todo "load collar"
+                                            loadList <| Collar.getBeads
                                 )
-                            <|
-                                Coll.values mo.gears
                     in
                     ( { model
                         | connected = True
@@ -232,7 +231,7 @@ update msg model =
                             , smallestSize = Harmo.getLengthId m.motor m.gears * 2 * 4
                             }
                       }
-                    , Cmd.batch <| loadMobile m
+                    , Cmd.batch <| loadList <| Coll.values m.gears
                     )
 
                 Err (Http.BadBody err) ->

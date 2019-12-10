@@ -21,6 +21,11 @@ beadFromSound s =
     { length = Sound.length s, wheel = Wheel.fromSound s }
 
 
+getBeads : Colleer -> List Beed
+getBeads =
+    Content.getBeads
+
+
 get : Int -> Colleer -> Beed
 get i c =
     Maybe.withDefault
