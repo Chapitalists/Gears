@@ -144,6 +144,6 @@ encodeGear coll id =
 encodeMobile : Mobeel -> E.Value
 encodeMobile { motor, gears } =
     E.object
-        [ ( "motor", encodeGear gears motor )
+        [ ( "length", E.float <| Harmo.getLengthId motor gears )
         , ( "gears", E.list (encodeGear gears) <| Motor.getMotored motor gears )
         ]

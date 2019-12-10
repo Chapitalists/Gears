@@ -133,12 +133,12 @@ function unpauseSound(model, pv, pm) {
 }
 
 function playMobile(model, pv, pr, pm) {
-    model.rate = pr * model.mobile.motor.length / model.length
-    model.player = model.mobile.gears.concat(model.mobile.motor)
+    model.rate = pr * model.mobile.length / model.length
+    model.player = model.mobile.gears
                     .map(m => playMusic(m, model.volume * pv, model.rate * pr, model.mute || pm))
     model.player.stop = function () {this.map(m => m.player.stop())}
     model.setVolume = function (mod = 1, mute = false) {
-        this.mobile.gears.concat(model.mobile.motor).map(m => m.setVolume(this.volume * mod, this.mute || mute))
+        this.mobile.gears.map(m => m.setVolume(this.volume * mod, this.mute || mute))
     }
 }
 
