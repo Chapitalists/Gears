@@ -426,13 +426,13 @@ view model =
                 [ viewFileExplorer model
                 , row [ height fill, width fill ] <|
                     [ column [ width fill, height fill ]
-                        [ Element.map DocMsg <| Doc.viewTop model.doc
-                        , el
+                        ([ Element.map DocMsg <| Doc.viewTop model.doc
+                         , el
                             [ width fill
                             , height fill
                             , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
                             ]
-                          <|
+                           <|
                             Element.html <|
                                 S.svg
                                     ([ Html.Attributes.id svgId
@@ -451,9 +451,11 @@ view model =
                                     (Doc.viewContent model.doc (Interact.getInteract model.interact) (getScale model)
                                         |> List.map (SS.map forwardGearOutMsg)
                                     )
-                        , Doc.viewBottom model.doc
-                            |> Element.map DocMsg
-                        ]
+                         ]
+                            ++ (Doc.viewBottom model.doc
+                                    |> List.map (Element.map DocMsg)
+                               )
+                        )
                     ]
                         ++ (List.map (Element.map DocMsg) <| Doc.viewSide model.doc)
                 ]
