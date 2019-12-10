@@ -205,11 +205,15 @@ update msg model =
                                 (\gear ->
                                     case Wheel.getContent gear of
                                         Content.S s ->
-                                            [ Tuple.second <|
-                                                update
-                                                    (RequestSoundLoad <| Sound.toString s)
-                                                    model
-                                            ]
+                                            if List.member s model.loadedSoundList then
+                                                []
+
+                                            else
+                                                [ Tuple.second <|
+                                                    update
+                                                        (RequestSoundLoad <| Sound.toString s)
+                                                        model
+                                                ]
 
                                         Content.M mob ->
                                             loadMobile mob
