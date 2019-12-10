@@ -13,7 +13,6 @@ import Element.Background as Bg
 import Element.Events exposing (..)
 import Element.Font as Font
 import Element.Input as Input
-import Gear exposing (Gear)
 import Harmony as Harmo
 import Html.Attributes
 import Html.Events.Extra.Wheel as Wheel

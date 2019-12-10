@@ -46,7 +46,7 @@ mobileEncoder wheelEncoder m =
     E.object
         [ ( "motor", Coll.idEncoder m.motor )
         , ( "gears"
-          , Coll.encoder m.gears <| Gear.encoder <| wheelEncoder
+          , Coll.encoder m.gears <| Gear.encoder wheelEncoder
           )
         ]
 
@@ -57,7 +57,7 @@ mobileDecoder wheelDecoder defaultWheel =
         |> required "motor" Coll.idDecoder
         |> required "gears"
             (Coll.decoder
-                (Gear.decoder <| wheelDecoder)
+                (Gear.decoder wheelDecoder)
                 Gear.typeString
              <|
                 Gear.default defaultWheel
