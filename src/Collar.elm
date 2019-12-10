@@ -19,6 +19,11 @@ type alias Beed =
     Bead Wheel
 
 
+toUID : Int -> String
+toUID i =
+    "bead-" ++ String.fromInt i
+
+
 beadFromSound : Sound -> Beed
 beadFromSound s =
     { length = Sound.length s, wheel = Wheel.fromSound s }
@@ -87,7 +92,7 @@ view c =
                 b.length
                 { mod = Wheel.None, motor = False, dashed = False }
                 Coll.startId
-                ("bead-" ++ String.fromInt i)
+                (toUID i)
                 :: l
             , ( p + b.length
               , i + 1

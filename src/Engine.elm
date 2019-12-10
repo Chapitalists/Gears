@@ -82,6 +82,7 @@ playCollar collar =
     E.object
         [ ( "action", E.string "playCollar" )
         , ( "loopStart", E.float collar.loop )
+        , ( "baseId", E.string <| String.dropRight 1 <| Collar.toUID 0 )
         , ( "beads", E.list encodeBead <| Collar.getBeads collar )
         ]
 

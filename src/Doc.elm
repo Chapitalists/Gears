@@ -152,6 +152,7 @@ type Msg
     | View (List ( String, Identifier ))
     | KeyPressed Shortcut
     | MobileMsg MEditor.Msg
+    | CollarMsg CEditor.Msg
     | InteractEvent (Interact.Event MEditor.Interactable)
 
 
@@ -219,6 +220,9 @@ update msg scale (D doc) =
                 ( Play, M _ ) ->
                     update (MobileMsg <| MEditor.ToggleEngine) scale (D doc)
 
+                ( Play, C _ ) ->
+                    update (CollarMsg <| CEditor.ToggleEngine) scale (D doc)
+
                 _ ->
                     ( D doc, Cmd.none )
 
@@ -265,6 +269,39 @@ update msg scale (D doc) =
 
                 _ ->
                     Debug.log "IMPOSSIBLE MobileMsg while viewing no mobile" ( D doc, Cmd.none )
+
+        CollarMsg subMsg ->
+            case ( doc.editor, getViewing (D doc) ) of
+                ( C editor, Content.C collar ) ->
+                    let
+                        ( newEditor, ( co, to ), engineCmd ) =
+                            CEditor.update subMsg ( editor, collar )
+
+                        newMobile =
+                            updateCollar doc.viewing (always co) <| Data.current doc.data
+
+                        data =
+                            case to of
+                                CEditor.Do ->
+                                    Data.do newMobile doc.data
+
+                                CEditor.Group ->
+                                    Data.do newMobile doc.data
+
+                                CEditor.NOOP ->
+                                    doc.data
+                    in
+                    ( D { doc | data = data }
+                    , case engineCmd of
+                        Nothing ->
+                            Cmd.none
+
+                        Just cmd ->
+                            toEngine cmd
+                    )
+
+                _ ->
+                    Debug.log "IMPOSSIBLE CollarMsg while viewing no collar" ( D doc, Cmd.none )
 
         InteractEvent event ->
             update (MobileMsg <| MEditor.Interacted event) scale (D doc)
