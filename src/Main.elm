@@ -396,16 +396,16 @@ keyCodeToMsg : String -> Msg
 keyCodeToMsg str =
     case str of
         "KeyZ" ->
-            DocMsg <| Doc.MobileMsg <| MEditor.ChangedTool <| MEditor.Play False
+            DocMsg <| Doc.KeyPressed <| Doc.Tool 1
 
         "KeyX" ->
-            DocMsg <| Doc.MobileMsg <| MEditor.ChangedTool MEditor.Harmonize
+            DocMsg <| Doc.KeyPressed <| Doc.Tool 2
 
         "KeyC" ->
-            DocMsg <| Doc.MobileMsg <| MEditor.ChangedTool MEditor.Edit
+            DocMsg <| Doc.KeyPressed <| Doc.Tool 3
 
         "Space" ->
-            DocMsg <| Doc.MobileMsg <| MEditor.ToggleEngine
+            DocMsg <| Doc.KeyPressed Doc.Play
 
         _ ->
             NOOP

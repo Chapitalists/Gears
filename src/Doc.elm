@@ -138,6 +138,11 @@ soundClicked sound (D doc) =
                     )
 
 
+type Shortcut
+    = Tool Int
+    | Play
+
+
 type Msg
     = EnteredFileName String
     | Save
@@ -145,6 +150,7 @@ type Msg
     | Undo
     | Redo
     | View (List ( String, Identifier ))
+    | KeyPressed Shortcut
     | MobileMsg MEditor.Msg
     | InteractEvent (Interact.Event MEditor.Interactable)
 
@@ -193,6 +199,28 @@ update msg scale (D doc) =
 
                 _ ->
                     Debug.log "IMPOSSIBLE Cannot view Sound" ( D doc, Cmd.none )
+
+        KeyPressed sh ->
+            case ( sh, doc.editor ) of
+                ( Tool i, M _ ) ->
+                    case i of
+                        1 ->
+                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False) scale (D doc)
+
+                        2 ->
+                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Harmonize) scale (D doc)
+
+                        3 ->
+                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Edit) scale (D doc)
+
+                        _ ->
+                            ( D doc, Cmd.none )
+
+                ( Play, M _ ) ->
+                    update (MobileMsg <| MEditor.ToggleEngine) scale (D doc)
+
+                _ ->
+                    ( D doc, Cmd.none )
 
         MobileMsg subMsg ->
             case ( doc.editor, getViewing (D doc) ) of
