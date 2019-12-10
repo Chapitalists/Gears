@@ -4,6 +4,7 @@ module Engine exposing
     , init
     , isPlaying
     , muted
+    , playCollar
     , playingIds
     , setPlaying
     , stop
@@ -11,6 +12,7 @@ module Engine exposing
     )
 
 import Coll exposing (Coll, Id)
+import Collar exposing (Beed, Colleer)
 import Content
 import Gear exposing (Gear)
 import Harmony as Harmo
@@ -75,6 +77,15 @@ stop =
     E.object [ ( "action", E.string "stopReset" ) ]
 
 
+playCollar : Colleer -> E.Value
+playCollar collar =
+    E.object
+        [ ( "action", E.string "playCollar" )
+        , ( "loopStart", E.float collar.loop )
+        , ( "beads", E.list encodeBead <| Collar.getBeads collar )
+        ]
+
+
 muted : Id Geer -> Bool -> Engine -> Maybe E.Value
 muted id mute e =
     if isPlaying id e then
@@ -103,14 +114,28 @@ volumeChanged id volume e =
         Nothing
 
 
+encodeWheel : Wheel -> List ( String, E.Value )
+encodeWheel w =
+    [ ( "mute", E.bool w.mute )
+    , ( "volume", E.float <| clamp 0 1 w.volume )
+    ]
+        ++ (case Wheel.getContent { wheel = w } of
+                Content.S s ->
+                    [ ( "soundName", E.string <| Sound.toString s ) ]
+
+                Content.M m ->
+                    [ ( "mobile", encodeMobile m ) ]
+
+                Content.C c ->
+                    [ ( "collar", encodeCollar c ) ]
+           )
+
+
 encodeGear : Coll Geer -> Id Geer -> E.Value
 encodeGear coll id =
     let
         g =
             Coll.get id coll
-
-        w =
-            g.wheel
 
         length =
             Harmo.getLength g.harmony coll
@@ -125,19 +150,8 @@ encodeGear coll id =
         E.object
             ([ ( "id", E.string <| uid )
              , ( "length", E.float length )
-             , ( "mute", E.bool w.mute )
-             , ( "volume", E.float <| clamp 0 1 w.volume )
              ]
-                ++ (case Wheel.getContent g of
-                        Content.S s ->
-                            [ ( "soundName", E.string <| Sound.toString s ) ]
-
-                        Content.M m ->
-                            [ ( "mobile", encodeMobile m ) ]
-
-                        Content.C _ ->
-                            Debug.todo "Encode encapsulated"
-                   )
+                ++ encodeWheel g.wheel
             )
 
 
@@ -147,3 +161,22 @@ encodeMobile { motor, gears } =
         [ ( "length", E.float <| Harmo.getLengthId motor gears )
         , ( "gears", E.list (encodeGear gears) <| Motor.getMotored motor gears )
         ]
+
+
+encodeCollar : Colleer -> E.Value
+encodeCollar c =
+    E.object
+        [ ( "length", E.float c.matrice )
+        , ( "loopStart", E.float c.loop )
+        , ( "beads"
+          , E.list encodeBead <| Collar.getBeads c
+          )
+        ]
+
+
+encodeBead : Beed -> E.Value
+encodeBead b =
+    E.object
+        (( "length", E.float b.length )
+            :: encodeWheel b.wheel
+        )

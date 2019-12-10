@@ -42,12 +42,32 @@ function engine(o) {
     case "playPause" :
         o.gears.map(playPause)
         break;
+    case "playCollar" :
+        playTopCollar(o.beads)
     case "mute" :
         mute(o.gearId, o.value)
         break;
     case "volume" :
         changeVolume(o.gearId, o.value)
     }
+}
+
+function playTopCollar(beads) {
+    let model = playing.collar = {}
+    model.beads = beads
+    model.players = beads.map(b => new Tone.Player(buffers[b.soundName]).toMaster())
+    let part = []
+      , t = 0
+    for (let i in beads) {
+        part.push([t, i])
+        t += beads[i].length
+    }
+    console.log(part)
+    model.player = new Tone.Part( ((t, i) => {model.players[i].start(t)}), part )
+    model.player.loopEnd = t
+    model.player.loop = true
+    model.player.start()
+    Tone.Transport.start()
 }
 
 function playPause(model) {
