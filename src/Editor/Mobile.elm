@@ -1,6 +1,7 @@
 module Editor.Mobile exposing (..)
 
 import Coll exposing (Coll, Id)
+import Collar
 import Content
 import Element exposing (..)
 import Element.Background as Bg
@@ -103,6 +104,7 @@ type Msg
     | AppliedFract (Link Geer) Fraction
     | SimplifyFractView
     | Capsuled (Id Geer)
+    | Collared (Id Geer)
     | Interacted (Interact.Event Interactable)
     | WheelMsg ( Id Geer, Wheel.Msg )
     | GearMsg ( Id Geer, Gear.Msg )
@@ -287,6 +289,19 @@ update msg scale ( model, mobile ) =
                 }
               , Do
               )
+            , Nothing
+            )
+
+        Collared id ->
+            let
+                g =
+                    Coll.get id mobile.gears
+
+                collar =
+                    Collar.fromWheel g.wheel <| Harmo.getLength g.harmony mobile.gears
+            in
+            ( model
+            , ( { mobile | gears = Coll.update id (Wheel.setContent <| Content.C collar) mobile.gears }, Do )
             , Nothing
             )
 
@@ -673,8 +688,11 @@ viewDetails model mobile =
                                     , onPress = Just <| OutMsg <| Inside id
                                     }
 
-                            _ ->
-                                Debug.todo "nav to collar"
+                            Content.C c ->
+                                Input.button []
+                                    { label = text "Voir Collier"
+                                    , onPress = Just <| OutMsg <| Inside id
+                                    }
                         , Input.button []
                             { label = text "PlayPause"
                             , onPress = Just <| PlayGear id
@@ -723,6 +741,10 @@ viewDetails model mobile =
                         , Input.button []
                             { label = text "Encapsuler"
                             , onPress = Just <| Capsuled id
+                            }
+                        , Input.button []
+                            { label = text "Collier"
+                            , onPress = Just <| Collared id
                             }
                         , Input.button []
                             { onPress = Just <| DeleteGear id

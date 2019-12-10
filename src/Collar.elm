@@ -21,6 +21,15 @@ beadFromSound s =
     { length = Sound.length s, wheel = Wheel.fromSound s }
 
 
+fromWheel : Wheel -> Float -> Colleer
+fromWheel w l =
+    { matrice = l
+    , loop = l
+    , head = { length = l, wheel = w }
+    , beads = []
+    }
+
+
 getBeads : Colleer -> List Beed
 getBeads =
     Content.getBeads
