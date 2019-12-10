@@ -85,7 +85,12 @@ beadDecoder wheelDecoder =
 
 
 type alias Collar item =
-    { matrice : Float, loop : Float, beads : List (Bead item) }
+    { matrice : Float, loop : Float, head : Bead item, beads : List (Bead item) }
+
+
+getBeads : Collar item -> List (Bead item)
+getBeads c =
+    c.head :: c.beads
 
 
 collarEncoder : (item -> List ( String, E.Value )) -> Collar item -> E.Value
@@ -94,7 +99,7 @@ collarEncoder wheelEncoder c =
         [ ( "matriceLength", E.float c.matrice )
         , ( "loopStart", E.float c.loop )
         , ( "beads"
-          , E.list (beadEncoder wheelEncoder) c.beads
+          , E.list (beadEncoder wheelEncoder) <| getBeads c
           )
         ]
 
@@ -107,4 +112,9 @@ collarDecoder wheelDecoder =
                 \loop ->
                     Field.require "beads" (D.list <| beadDecoder wheelDecoder) <|
                         \beads ->
-                            D.succeed { matrice = matrice, loop = loop, beads = beads }
+                            case beads of
+                                head :: list ->
+                                    D.succeed { matrice = matrice, loop = loop, head = head, beads = list }
+
+                                _ ->
+                                    D.fail "Collar should have at least one bead"
