@@ -200,10 +200,12 @@ update msg model =
             case result of
                 Ok m ->
                     let
-                        loadList =
+                        -- TODO Report bug, forced to map .wheel and {wheel} because {a | wheel} doesn’t work
+                        -- TODO Report bug, can’t define recursive function if it has no argument (f l = f l instead of f = f)
+                        loadList l =
                             List.concatMap
-                                (\gear ->
-                                    case Wheel.getContent gear of
+                                (\wheel ->
+                                    case Wheel.getContent { wheel = wheel } of
                                         Content.S s ->
                                             if List.member s model.loadedSoundList then
                                                 []
@@ -216,11 +218,12 @@ update msg model =
                                                 ]
 
                                         Content.M mob ->
-                                            loadList <| Coll.values mob.gears
+                                            loadList <| List.map .wheel <| Coll.values mob.gears
 
                                         Content.C col ->
-                                            loadList <| Collar.getBeads
+                                            loadList <| List.map .wheel <| Collar.getBeads col
                                 )
+                                l
                     in
                     ( { model
                         | connected = True
@@ -230,7 +233,7 @@ update msg model =
                             , smallestSize = Harmo.getLengthId m.motor m.gears * 2 * 4
                             }
                       }
-                    , Cmd.batch <| loadList <| Coll.values m.gears
+                    , Cmd.batch <| loadList <| List.map .wheel <| Coll.values m.gears
                     )
 
                 Err (Http.BadBody err) ->
