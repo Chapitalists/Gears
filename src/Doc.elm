@@ -199,15 +199,13 @@ update msg scale (D doc) =
                 ( M editor, Content.M mobile ) ->
                     case subMsg of
                         MEditor.OutMsg (MEditor.Inside id) ->
-                            ( D
-                                { doc
-                                    | viewing =
-                                        doc.viewing
-                                            ++ [ ( Mobile.gearName id mobile.gears, G id ) ]
-                                    , editor = M MEditor.init
-                                }
-                            , Cmd.none
-                            )
+                            update
+                                (View <|
+                                    doc.viewing
+                                        ++ [ ( Mobile.gearName id mobile.gears, G id ) ]
+                                )
+                                scale
+                                (D doc)
 
                         _ ->
                             let

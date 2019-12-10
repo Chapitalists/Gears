@@ -1,8 +1,11 @@
 module Collar exposing (..)
 
+import Coll
 import Content exposing (Bead, Collar)
+import Interact
 import Json.Decode as D
 import Json.Encode as E
+import Math.Vector2 exposing (vec2)
 import Sound exposing (Sound)
 import TypedSvg.Core exposing (Svg)
 import Wheel exposing (Wheel)
@@ -75,9 +78,25 @@ updateBead i f c =
         }
 
 
-view : Colleer -> List (Svg msg)
+view : Colleer -> List (Svg (Interact.Msg (Wheel.Interactable item)))
 view c =
-    []
+    List.foldl
+        (\b ( l, ( p, i ) ) ->
+            ( Wheel.view b.wheel
+                (vec2 (p + b.length / 2) 50)
+                b.length
+                { mod = Wheel.None, motor = False, dashed = False }
+                Coll.startId
+                ("bead-" ++ String.fromInt i)
+                :: l
+            , ( p + b.length
+              , i + 1
+              )
+            )
+        )
+        ( [], ( 50, 0 ) )
+        (getBeads c)
+        |> Tuple.first
 
 
 encoder : Colleer -> E.Value

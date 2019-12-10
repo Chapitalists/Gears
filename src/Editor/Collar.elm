@@ -2,7 +2,9 @@ module Editor.Collar exposing (..)
 
 import Collar exposing (Colleer)
 import Element exposing (Element, text)
+import Interact
 import TypedSvg.Core exposing (Svg)
+import Wheel
 
 
 type alias Model =
@@ -21,7 +23,7 @@ init =
     }
 
 
-viewContent : ( Model, Colleer ) -> List (Svg msg)
+viewContent : ( Model, Colleer ) -> List (Svg (Interact.Msg (Wheel.Interactable item)))
 viewContent ( model, collar ) =
     Collar.view collar
 
