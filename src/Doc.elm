@@ -158,6 +158,7 @@ type Msg
 
 update : Msg -> Float -> Doc -> ( Doc, Cmd Msg )
 update msg scale (D doc) =
+    -- TODO Maybe clean view right here
     case msg of
         EnteredFileName name ->
             if String.all (\c -> Char.isAlphaNum c || c == '-') name then
@@ -431,6 +432,10 @@ getViewingHelper l content =
             Debug.log "IMPOSSIBLE Should’ve cleaned Viewing before get" content
 
 
+
+-- TODO Should clean View with each update of data, do it in update before case ?
+
+
 cleanViewing : List ( String, Identifier ) -> WContent -> List ( String, Identifier )
 cleanViewing l content =
     case ( l, content ) of
@@ -444,7 +449,7 @@ cleanViewing l content =
             ( str, B next ) :: (cleanViewing rest <| Content.C c)
 
         _ ->
-            Debug.log ("Cleaned view" ++ (String.concat <| List.map Tuple.first l)) []
+            Debug.log ("Cleaned view" ++ (String.concat <| List.map Tuple.first l) ++ Debug.toString content) []
 
 
 updateViewing : List ( String, Identifier ) -> (WContent -> WContent) -> WContent -> WContent
