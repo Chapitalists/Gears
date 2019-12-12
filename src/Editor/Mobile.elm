@@ -212,11 +212,15 @@ update msg scale ( model, mobile ) =
                         else
                             model.edit
 
+                    gears =
+                        Motor.clean id mobile.gears
+
                     harmo =
-                        (Coll.get id mobile.gears).harmony
+                        (Coll.get id gears).harmony
                 in
+                -- TODO check and use harmo clean
                 if Harmo.hasHarmonics harmo then
-                    -- TODO
+                    -- TODO delete base ?
                     Debug.log "TODO delete base" return
 
                 else
@@ -224,7 +228,7 @@ update msg scale ( model, mobile ) =
                         Nothing ->
                             { return
                                 | model = { model | edit = edit, engine = Engine.init }
-                                , mobile = { mobile | gears = Coll.remove id mobile.gears }
+                                , mobile = { mobile | gears = Coll.remove id gears }
                                 , toUndo = Do
                                 , toEngine = Just Engine.stop
                             }
@@ -235,7 +239,7 @@ update msg scale ( model, mobile ) =
                                 , mobile =
                                     { mobile
                                         | gears =
-                                            mobile.gears
+                                            gears
                                                 |> Coll.update baseId (Harmo.remove id)
                                                 |> Coll.remove id
                                     }

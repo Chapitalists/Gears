@@ -1,6 +1,7 @@
 module Motor exposing
     ( Motor
     , add
+    , clean
     , decoder
     , default
     , encoder
@@ -98,6 +99,14 @@ remove ls entry motors playing =
       else
         []
     )
+
+
+clean : Id (Motored g) -> Coll (Motored g) -> Coll (Motored g)
+clean id motors =
+    List.foldl rmLink motors <|
+        List.map (\(MID otherId) -> ( id, Coll.idMap otherId )) <|
+            .motor <|
+                Coll.get id motors
 
 
 getMotored : Id (Motored g) -> Coll (Motored g) -> List (Id (Motored g))
