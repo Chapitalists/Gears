@@ -1,7 +1,7 @@
 module Wheel exposing (..)
 
 import Coll exposing (Id)
-import Color
+import Color exposing (Color)
 import Content exposing (Content, Mobile)
 import Html.Attributes
 import Interact
@@ -26,6 +26,7 @@ type alias Wheel =
     , volume : Float
     , content : WheelContent
     , mute : Bool
+    , color : Color
     }
 
 
@@ -56,6 +57,7 @@ default =
     , volume = 1
     , content = C <| Content.S Sound.noSound
     , mute = False
+    , color = Color.black
     }
 
 
@@ -84,6 +86,7 @@ type Msg
     = ChangeContent (Content Wheel)
     | ChangeVolume Float
     | Named String
+    | ChangeColor Color
 
 
 update : Msg -> Wheeled g -> Wheeled g
@@ -105,6 +108,9 @@ update msg g =
 
             else
                 g
+
+        ChangeColor c ->
+            { g | wheel = { wheel | color = c } }
 
 
 view : Wheel -> Vec2 -> Float -> Style -> Id x -> String -> Svg (Interact.Msg (Interactable x))
@@ -153,8 +159,11 @@ view w pos length style id uid =
                     if w.mute then
                         Fill Color.white
 
-                    else
+                    else if style.motor then
                         Fill Color.black
+
+                    else
+                        Fill w.color
                  , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
                  ]
                     ++ Interact.draggableEvents (IWheel id)
@@ -272,6 +281,7 @@ encoder w =
     , ( "startPercent", E.float w.startPercent )
     , ( "volume", E.float w.volume )
     , ( "mute", E.bool w.mute )
+    , ( "color", colorEncoder w.color )
     , case w.content of
         C c ->
             Content.encoder encoder c
@@ -291,11 +301,41 @@ decoder =
                                     \volume ->
                                         Field.require "mute" D.bool <|
                                             \mute ->
-                                                D.succeed
-                                                    { name = Maybe.withDefault "" name
-                                                    , startPercent = startPercent
-                                                    , volume = volume
-                                                    , content = C content
-                                                    , mute = mute
-                                                    }
+                                                Field.attempt "color" colorDecoder <|
+                                                    \color ->
+                                                        D.succeed
+                                                            { name = Maybe.withDefault "" name
+                                                            , startPercent = startPercent
+                                                            , volume = volume
+                                                            , content = C content
+                                                            , mute = mute
+                                                            , color = Maybe.withDefault Color.black color
+                                                            }
             )
+
+
+colorEncoder : Color -> E.Value
+colorEncoder c =
+    let
+        named =
+            Color.toHsla c
+    in
+    E.object
+        [ ( "hue", E.float named.hue )
+        , ( "sat", E.float named.saturation )
+        , ( "light", E.float named.lightness )
+        , ( "alpha", E.float named.alpha )
+        ]
+
+
+colorDecoder : D.Decoder Color
+colorDecoder =
+    Field.require "hue" D.float <|
+        \hue ->
+            Field.require "sat" D.float <|
+                \sat ->
+                    Field.require "light" D.float <|
+                        \light ->
+                            Field.require "alpha" D.float <|
+                                \alpha ->
+                                    D.succeed <| Color.hsla hue sat light alpha

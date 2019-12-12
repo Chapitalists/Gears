@@ -278,7 +278,7 @@ update msg model =
 
         SoundClicked sound ->
             let
-                ( newDoc, newGearPos ) =
+                ( newDoc, newGearPos, cmd ) =
                     Doc.soundClicked sound model.doc
             in
             ( { model
@@ -291,7 +291,7 @@ update msg model =
                         Nothing ->
                             model.viewPos
               }
-            , Cmd.none
+            , Cmd.map DocMsg cmd
             )
 
         ChangedExplorerTab tab ->

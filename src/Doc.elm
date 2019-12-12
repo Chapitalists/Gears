@@ -2,6 +2,7 @@ port module Doc exposing (..)
 
 import Coll exposing (Coll, Id)
 import Collar exposing (Colleer)
+import Color
 import Content exposing (Content)
 import Data exposing (Data)
 import Editor.Collar as CEditor
@@ -15,6 +16,7 @@ import Interact
 import Json.Encode as E
 import Math.Vector2 exposing (Vec2, vec2)
 import Mobile exposing (Geer, Mobeel)
+import Random
 import Sound exposing (Sound)
 import TypedSvg.Core as Svg
 import Url exposing (Url)
@@ -69,7 +71,7 @@ new url =
 -- Possible when viewPos moves to Mobile
 
 
-soundClicked : Sound -> Doc -> ( Doc, Maybe Vec2 )
+soundClicked : Sound -> Doc -> ( Doc, Maybe Vec2, Cmd Msg )
 soundClicked sound (D doc) =
     case doc.editor of
         C editor ->
@@ -84,6 +86,7 @@ soundClicked sound (D doc) =
                             doc.data
                 }
             , Nothing
+            , Cmd.none
             )
 
         M editor ->
@@ -114,12 +117,19 @@ soundClicked sound (D doc) =
                             , editor = M { editor | edit = MEditor.Gear id }
                         }
                     , Nothing
+                    , Cmd.none
                     )
 
-                _ ->
+                ( _, Content.M mobile ) ->
                     let
                         pos =
                             vec2 50 50
+
+                        ( id, gears ) =
+                            Coll.insertTellId (Mobile.gearFromSound sound pos) mobile.gears
+
+                        colorGen =
+                            Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
                     in
                     ( D
                         { doc
@@ -127,7 +137,7 @@ soundClicked sound (D doc) =
                                 Data.do
                                     (updateMobile doc.viewing
                                         (\m ->
-                                            { m | gears = Coll.insert (Mobile.gearFromSound sound pos) m.gears }
+                                            { m | gears = gears }
                                         )
                                      <|
                                         Data.current doc.data
@@ -135,7 +145,11 @@ soundClicked sound (D doc) =
                                     doc.data
                         }
                     , Just pos
+                    , Random.generate (\c -> MobileMsg <| MEditor.WheelMsg ( id, Wheel.ChangeColor c )) colorGen
                     )
+
+                _ ->
+                    ( D doc, Nothing, Cmd.none )
 
 
 type Shortcut
