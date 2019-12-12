@@ -560,149 +560,166 @@ viewDetails : Model -> Mobeel -> List (Element Msg)
 viewDetails model mobile =
     case model.tool of
         Edit ->
-            case model.edit of
-                Gear id ->
-                    let
-                        g =
-                            Coll.get id mobile.gears
-                    in
-                    [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ]
-                        [ Input.text [ Font.color (rgb 0 0 0) ]
-                            { label = Input.labelAbove [] <| text "Roue :"
-                            , text = g.wheel.name
-                            , placeholder = Just <| Input.placeholder [] <| text <| Gear.toUID id
-                            , onChange = \str -> WheelMsg ( id, Wheel.Named str )
-                            }
-                        , case Wheel.getContent g of
-                            Content.S s ->
-                                text <| Sound.toString s
-
-                            Content.M m ->
-                                Input.button []
-                                    { label = text "Voir Mobile"
-                                    , onPress = Just <| OutMsg <| Inside id
-                                    }
-
-                            Content.C c ->
-                                Input.button []
-                                    { label = text "Voir Collier"
-                                    , onPress = Just <| OutMsg <| Inside id
-                                    }
-                        , Input.button []
-                            { label = text "PlayPause"
-                            , onPress = Just <| PlayGear id
-                            }
-                        , Input.button []
-                            { label = text "Stop"
-                            , onPress = Just <| StopGear id
-                            }
-                        , Input.slider []
-                            { label = Input.labelAbove [] <| text "Volume"
-                            , onChange = \f -> WheelMsg ( id, Wheel.ChangeVolume f )
-                            , value = g.wheel.volume
-                            , min = 0
-                            , max = 1
-                            , step = Just 0.01
-                            , thumb = Input.defaultThumb
-                            }
-                        , Input.button []
-                            { label = text "Copie"
-                            , onPress = Just <| CopyGear id
-                            }
-                        , row [ spacing 16 ] <|
-                            text "x"
-                                :: List.map
-                                    (\i ->
-                                        Input.button []
-                                            { label = text <| String.fromInt i
-                                            , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer i )
-                                            }
-                                    )
-                                    [ 2, 3, 5, 7 ]
-                        , row [ spacing 16 ] <|
-                            text "/"
-                                :: List.map
-                                    (\i ->
-                                        Input.button []
-                                            { label = text <| String.fromInt i
-                                            , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit i )
-                                            }
-                                    )
-                                    [ 2, 3, 5, 7 ]
-                        , Input.button []
-                            { label = text "Changer son"
-                            , onPress = Just <| ChangeSoundStarted id
-                            }
-                        , Input.button []
-                            { label = text "Encapsuler"
-                            , onPress = Just <| Capsuled id
-                            }
-                        , Input.button []
-                            { label = text "Collier"
-                            , onPress = Just <| Collared id
-                            }
-                        , Input.button []
-                            { onPress = Just <| DeleteGear id
-                            , label = text "Supprimer"
-                            }
-                        ]
-                    ]
-
-                ChangeSound id ->
-                    [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
-                        [ text <| Gear.toUID id
-                        , text "Choisir un son chargé"
-                        , Input.button []
-                            { label = text "Annuler"
-                            , onPress = Just <| ChangeSoundCanceled id
-                            }
-                        ]
-                    ]
-
-                _ ->
-                    []
+            viewEditDetails model mobile
 
         Harmonize ->
-            case model.link of
-                Just { link, fract } ->
-                    [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
-                        ([ text <| (Gear.toUID <| Tuple.first link) ++ (Gear.toUID <| Tuple.second link) ]
-                            ++ (case fract of
-                                    Nothing ->
-                                        [ text "Unrelated" ]
-
-                                    Just f ->
-                                        [ Input.text [ Font.color (rgb 0 0 0) ]
-                                            { text = String.fromInt f.num
-                                            , onChange = EnteredFract True
-                                            , label = Input.labelHidden "Numerator"
-                                            , placeholder = Nothing
-                                            }
-                                        , text "/"
-                                        , Input.text [ Font.color (rgb 0 0 0) ]
-                                            { text = String.fromInt f.den
-                                            , onChange = EnteredFract False
-                                            , label = Input.labelHidden "Denominator"
-                                            , placeholder = Nothing
-                                            }
-                                        , Input.button []
-                                            { label = text "Change"
-                                            , onPress = Just <| AppliedFract link f
-                                            }
-                                        , Input.button []
-                                            { label = text "Simplifier"
-                                            , onPress = Just SimplifyFractView
-                                            }
-                                        ]
-                               )
-                            ++ [ row [] [] ]
-                        )
-                    ]
-
-                Nothing ->
-                    []
+            viewHarmonizeDetails model mobile
 
         _ ->
+            []
+
+
+viewEditDetails : Model -> Mobeel -> List (Element Msg)
+viewEditDetails model mobile =
+    case model.edit of
+        Gear id ->
+            let
+                g =
+                    Coll.get id mobile.gears
+            in
+            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ]
+                [ Input.text [ Font.color (rgb 0 0 0) ]
+                    { label = Input.labelAbove [] <| text "Roue :"
+                    , text = g.wheel.name
+                    , placeholder = Just <| Input.placeholder [] <| text <| Gear.toUID id
+                    , onChange = \str -> WheelMsg ( id, Wheel.Named str )
+                    }
+                , case Wheel.getContent g of
+                    Content.S s ->
+                        text <| Sound.toString s
+
+                    Content.M m ->
+                        Input.button []
+                            { label = text "Voir Mobile"
+                            , onPress = Just <| OutMsg <| Inside id
+                            }
+
+                    Content.C c ->
+                        Input.button []
+                            { label = text "Voir Collier"
+                            , onPress = Just <| OutMsg <| Inside id
+                            }
+                , Input.button []
+                    { label = text "PlayPause"
+                    , onPress = Just <| PlayGear id
+                    }
+                , Input.button []
+                    { label = text "Stop"
+                    , onPress = Just <| StopGear id
+                    }
+                , Input.slider []
+                    { label = Input.labelAbove [] <| text "Volume"
+                    , onChange = \f -> WheelMsg ( id, Wheel.ChangeVolume f )
+                    , value = g.wheel.volume
+                    , min = 0
+                    , max = 1
+                    , step = Just 0.01
+                    , thumb = Input.defaultThumb
+                    }
+                , Input.button []
+                    { label = text "Copie"
+                    , onPress = Just <| CopyGear id
+                    }
+                , row [ spacing 16 ] <|
+                    text "x"
+                        :: List.map
+                            (\i ->
+                                Input.button []
+                                    { label = text <| String.fromInt i
+                                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer i )
+                                    }
+                            )
+                            [ 2, 3, 5, 7 ]
+                , row [ spacing 16 ] <|
+                    text "/"
+                        :: List.map
+                            (\i ->
+                                Input.button []
+                                    { label = text <| String.fromInt i
+                                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit i )
+                                    }
+                            )
+                            [ 2, 3, 5, 7 ]
+                , Input.button []
+                    { label = text "Changer son"
+                    , onPress = Just <| ChangeSoundStarted id
+                    }
+                , Input.button []
+                    { label = text "Encapsuler"
+                    , onPress = Just <| Capsuled id
+                    }
+                , Input.button []
+                    { label = text "Collier"
+                    , onPress = Just <| Collared id
+                    }
+                , if id == mobile.motor then
+                    Input.button []
+                        { onPress = Just <| ChangedMode SelectMotor
+                        , label = text "Changer Motrice"
+                        }
+
+                  else
+                    Input.button []
+                        { onPress = Just <| DeleteGear id
+                        , label = text "Supprimer"
+                        }
+                ]
+            ]
+
+        ChangeSound id ->
+            [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+                [ text <| Gear.toUID id
+                , text "Choisir un son chargé"
+                , Input.button []
+                    { label = text "Annuler"
+                    , onPress = Just <| ChangeSoundCanceled id
+                    }
+                ]
+            ]
+
+        _ ->
+            []
+
+
+viewHarmonizeDetails : Model -> Mobeel -> List (Element Msg)
+viewHarmonizeDetails model mobile =
+    case model.link of
+        Just { link, fract } ->
+            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+                ([ text <| (Gear.toUID <| Tuple.first link) ++ (Gear.toUID <| Tuple.second link) ]
+                    ++ (case fract of
+                            Nothing ->
+                                [ text "Unrelated" ]
+
+                            Just f ->
+                                [ Input.text [ Font.color (rgb 0 0 0) ]
+                                    { text = String.fromInt f.num
+                                    , onChange = EnteredFract True
+                                    , label = Input.labelHidden "Numerator"
+                                    , placeholder = Nothing
+                                    }
+                                , text "/"
+                                , Input.text [ Font.color (rgb 0 0 0) ]
+                                    { text = String.fromInt f.den
+                                    , onChange = EnteredFract False
+                                    , label = Input.labelHidden "Denominator"
+                                    , placeholder = Nothing
+                                    }
+                                , Input.button []
+                                    { label = text "Change"
+                                    , onPress = Just <| AppliedFract link f
+                                    }
+                                , Input.button []
+                                    { label = text "Simplifier"
+                                    , onPress = Just SimplifyFractView
+                                    }
+                                ]
+                       )
+                    ++ [ row [] [] ]
+                )
+            ]
+
+        Nothing ->
             []
 
 
