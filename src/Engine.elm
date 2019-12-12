@@ -81,9 +81,8 @@ playCollar : Colleer -> E.Value
 playCollar collar =
     E.object
         [ ( "action", E.string "playCollar" )
-        , ( "loopStart", E.float collar.loop )
         , ( "baseId", E.string <| String.dropRight 1 <| Collar.toUID 0 )
-        , ( "beads", E.list encodeBead <| Collar.getBeads collar )
+        , ( "collar", encodeCollar collar )
         ]
 
 
@@ -169,9 +168,7 @@ encodeCollar c =
     E.object
         [ ( "length", E.float c.matrice )
         , ( "loopStart", E.float c.loop )
-        , ( "beads"
-          , E.list encodeBead <| Collar.getBeads c
-          )
+        , ( "beads", E.list encodeBead <| Collar.getBeads c )
         ]
 
 

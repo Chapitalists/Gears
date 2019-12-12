@@ -4,9 +4,10 @@ if (app.ports.loadSound) app.ports.loadSound.subscribe(createBuffer)
 if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 
 const buffers = {}
-    , playing = {}
     , ro = new ResizeObserver(sendSize)
 ro.observe(document.getElementById('svgResizeObserver'))
+
+let playing = {}
 
 let deb = null
 
@@ -35,122 +36,162 @@ function loadErr(err, soundName) {
 }
 
 function engine(o) {
+  let model = null
   switch ( o.action ) {
     case "stopReset" :
-        for ( id in playing) stop(id)
+        if (playing.player) stop(playing)
+        else for ( id in playing) stop(playing[id])
+        Tone.Transport.stop()
+        playing = {}
         break;
     case "playPause" :
         o.gears.map(playPause)
+        Tone.Transport.start()
         break;
     case "playCollar" :
-        playTopCollar(o.beads)
+        playing = prepare(o)
+        play(o, o)
+        Tone.Transport.start()
+        break;
     case "mute" :
-        mute(o.gearId, o.value)
+        model = playing[o.gearId]
+        if (model) {
+            model.mute = o.value
+            model.changeVolume()
+        }
         break;
     case "volume" :
-        changeVolume(o.gearId, o.value)
+        model = playing[o.gearId]
+        if (model) {
+            model.volume = o.value
+            model.changeVolume()
+        }
     }
 }
+// model.collar.beads[i].id = baseId + i
 
-function playTopCollar(beads) {
-    let model = playing.collar = {}
-    model.beads = beads
-    model.players = beads.map(b => new Tone.Player(buffers[b.soundName]).toMaster())
-    let part = []
+function playTopCollar(beads, baseId) {
+    let model = playing
+      , part = []
       , t = 0
     for (let i in beads) {
         part.push([t, i])
         t += beads[i].length
+        beads[i].id = baseId + i
     }
-    console.log(part)
-    model.player = new Tone.Part( ((t, i) => {model.players[i].start(t)}), part )
+    model.beads = beads.map(v => prepare(v))
+    model.player = new Tone.Part( ((t, i) => {model.beads[i].once(t)}), part )
     model.player.loopEnd = t
     model.player.loop = true
     model.player.start()
     Tone.Transport.start()
 }
 
+function playPauseTopCollar(beads) {
+    Tone.Transport.pause()
+    Tone.Transport.start()
+}
+
 function playPause(model) {
     if (!playing[model.id]) {
-        playing[model.id] = model
-        play(model.id)
-    } else if (playing[model.id].paused) unpause(model.id)
-    else pause(model.id)
+        playing[model.id] = prepare(model)
+    }
+    if (playing[model.id].paused) play(playing[model.id], model)
+    else pause(playing[model.id])
 }
 
-function play(id) {
-    let model = playing[id]
-      , g = model.gear = SVG.adopt(document.getElementById(model.id))
-    model.paused = false
-    g.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).loop()
-    playMusic(model)
-}
-
-function playMusic(model, parentVol = 1, parentRate = 1, parentMute = false) {
-    if (model.soundName) playSound(model, parentVol, parentRate, parentMute)
-    else if (model.mobile) playMobile(model, parentVol, parentRate, parentMute)
+function prepareOld(model, top = true, v = 1, r = 1, m = false) {
+    if (top) {
+        model.view = SVG.adopt(document.getElementById(model.id))
+        model.animation = function() {return this.view.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0})}
+    }
+    model.paused = true
+    model.pauseOffset = 0
+    model.start = function (t) {
+        this.paused = false
+        this.changeVolume()
+        this.startTime = t || Tone.now()
+        this.player.restart(t)
+    }
+    if (model.soundName) prepareSound(model, v, r, m)
+    else if (model.mobile) prepareMobile(model, v, r, m)
+    else if (model.collar) prepareCollar(model, v, r, m)
     return model
 }
 
-function pause(id) {
-    let model = playing[id]
-    model.paused = true
-    model.gear.animate().pause()
-    model.player.stop()
-    model.pauseOffset = (Tone.context.now() - model.startTime) * model.rate
-}
-
-function unpause(id) {
-    let model = playing[id]
-    model.paused = false
-    model.gear.animate().play()
-    unpauseMusic(model)
-}
-
-function unpauseMusic(model, parentVol = 1, parentMute = false) {
-    if (model.soundName) unpauseSound(model, parentVol, parentMute)
-    else if (model.mobile) unpauseMobile(model, parentVol, parentMute)
-}
-
-function stop(id) {
-    let model = playing[id]
-    if (!model) return;
-    model.gear.animate().play().finish()
-    model.player.stop()
-    playing[id] = null
-}
-
-function mute(id, mute) {
-    let model = playing[id]
-    if (!model) return;
-    model.mute = mute
-    model.setVolume()
-}
-
-function changeVolume(id, volume) {
-    let model = playing[id]
-    if (!model) return;
-    model.volume = volume
-    model.setVolume()
-}
-
-function playSound(model, pv, pr, pm) {
-    let s = model.player = new Tone.Player(buffers[model.soundName]).toMaster()
-    s.loop = true
-    model.setVolume = function (mod = 1, mute = false) {
-        mute || this.mute ? this.player.mute = true : this.player.volume.value = ((this.volume * mod) - 1) * 60
+function prepareSound(model, volume, rate, mute) {
+    model.player = new Tone.Player(buffers[model.soundName]).toMaster()
+    model.player.playbackRate = model.rate = rate * model.player.buffer.duration / model.length
+    model.loop = function () {
+        this.player.loop = true
+        if (this.view) this.animation().loop()
+        this.start()
     }
-    model.setVolume(pv, pm)
-    s.playbackRate = model.rate = pr * s.buffer.duration / model.length
-    s.start()
-    model.startTime = Tone.context.now()
+    model.once = function (t) {
+        this.player.loop = false
+        if (this.view) this.animation().play() // TODO shouldn’t ignore t !!!
+        this.start(t)
+    }
+    model.pause = function () {
+        this.paused = true
+        if (this.view) this.view.pause()
+        this.pauseOffset = (Tone.now() - this.startTime) * this.rate
+        this.player.stop()
+    }
+    model.unpause = function (volume, mute) {
+        this.paused = false
+        this.changeVolume()
+        if (this.view) this.view.play()
+        this.startTime = Tone.now() - this.pauseOffset / this.rate
+        this.player.start(Tone.now(), this.pauseOffset)
+    }
+    model.playPause = function (newModel) {
+        model.volume = newModel.volume
+        model.mute = newModel.mute
+        this.paused ? this.unpause() : this.pause()
+    }
+    model.stop = function () {
+        if (this.view) this.view.play().finish()
+        this.player.stop()
+        this.player = this.view = null
+    }
+    model.changeVolume = function () {
+        mute || model.mute ?
+            this.player.mute = true :
+            this.player.volume.value = ((this.volume * volume) - 1) * 60
+    }
 }
 
-function unpauseSound(model, pv, pm) {
-    model.setVolume(pv, pm)
-    model.player.start(Tone.context.now(), model.pauseOffset)
-    model.startTime = Tone.context.now() - model.pauseOffset / model.rate
+function prepareMobile(model, volume, rate, mute) {
+    model.rate = rate * model.mobile.length / model.length
+    model.gears = model.mobile.gears
+        .map(v=>prepare(v, model.volume * volume, model.rate * rate, model.mute || mute))
+    model.player = {}
+    model.player.restart = (t) => model.gears.map(v=>v.restart(t))
+    model.loop = function () {
+        if (this.view) this.animation().loop()
+        this.gears.map(v => v.loop())
+    }
+    model.once = function (t) {
+        if (this.view) this.animation().play() // TODO shouldn’t ignore t
+        this.gears.map(v => v.stop(t + (this.length / this.rate))) // TODO mobile once
+    }
+    model.pause = function () {
+        if (this.view) this.view.pause()
+        this.gear.map(v => v.pause())
+    }
+    model.unpause = function (model, volume, mute) {
+        this.changeVolume()
+        if (this.view) this.view.play()
+        this.gears.map((v, i) => v.unpause(model.gears[i], ))
+    }
 }
+function prepareCollar(model) {
+    let m = {}
+    m.playPause = function(){}
+    return m
+}
+
 
 function playMobile(model, pv, pr, pm) {
     model.rate = pr * model.mobile.length / model.length
@@ -164,4 +205,10 @@ function playMobile(model, pv, pr, pm) {
 
 function unpauseMobile(model, pv, pm) {
     model.player.map(m => unpauseMusic(m, model.volume * pv, model.mute || pm))
+}
+
+function playCollar(model, pv, pr, pm) {
+}
+
+function unpauseCollar(model, pv, pm) {
 }
