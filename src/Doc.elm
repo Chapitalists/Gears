@@ -375,7 +375,7 @@ viewNav (D doc) =
                     (\i ( name, _ ) ->
                         Input.button []
                             { label = text name
-                            , onPress = Just <| View <| List.take (i + 2) doc.viewing
+                            , onPress = Just <| View <| List.take (i + 1) doc.viewing
                             }
                     )
                     doc.viewing
