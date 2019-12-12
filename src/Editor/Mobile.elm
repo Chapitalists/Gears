@@ -212,44 +212,48 @@ update msg scale ( model, mobile ) =
             { return | model = { model | edit = Gear id } }
 
         DeleteGear id ->
-            let
-                edit =
-                    if model.edit == Gear id then
-                        NoSelection
-
-                    else
-                        model.edit
-
-                harmo =
-                    (Coll.get id mobile.gears).harmony
-            in
-            if Harmo.hasHarmonics harmo then
-                -- TODO
-                Debug.log "TODO delete base" return
+            if id == mobile.motor then
+                return
 
             else
-                case Harmo.getBaseId harmo of
-                    Nothing ->
-                        { return
-                            | model = { model | edit = edit, engine = Engine.init }
-                            , mobile = { mobile | gears = Coll.remove id mobile.gears }
-                            , toUndo = Do
-                            , toEngine = Just Engine.stop
-                        }
+                let
+                    edit =
+                        if model.edit == Gear id then
+                            NoSelection
 
-                    Just baseId ->
-                        { return
-                            | model = { model | engine = Engine.init }
-                            , mobile =
-                                { mobile
-                                    | gears =
-                                        mobile.gears
-                                            |> Coll.update baseId (Harmo.remove id)
-                                            |> Coll.remove id
-                                }
-                            , toUndo = Do
-                            , toEngine = Just Engine.stop
-                        }
+                        else
+                            model.edit
+
+                    harmo =
+                        (Coll.get id mobile.gears).harmony
+                in
+                if Harmo.hasHarmonics harmo then
+                    -- TODO
+                    Debug.log "TODO delete base" return
+
+                else
+                    case Harmo.getBaseId harmo of
+                        Nothing ->
+                            { return
+                                | model = { model | edit = edit, engine = Engine.init }
+                                , mobile = { mobile | gears = Coll.remove id mobile.gears }
+                                , toUndo = Do
+                                , toEngine = Just Engine.stop
+                            }
+
+                        Just baseId ->
+                            { return
+                                | model = { model | engine = Engine.init }
+                                , mobile =
+                                    { mobile
+                                        | gears =
+                                            mobile.gears
+                                                |> Coll.update baseId (Harmo.remove id)
+                                                |> Coll.remove id
+                                    }
+                                , toUndo = Do
+                                , toEngine = Just Engine.stop
+                            }
 
         EnteredFract isNumerator str ->
             Maybe.map2 Tuple.pair model.link (String.toInt str)
