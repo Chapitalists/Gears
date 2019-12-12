@@ -230,43 +230,45 @@ update msg scale (D doc) =
         MobileMsg subMsg ->
             case ( doc.editor, getViewing (D doc) ) of
                 ( M editor, Content.M mobile ) ->
-                    case subMsg of
-                        MEditor.OutMsg (MEditor.Inside id) ->
-                            update
-                                (View <|
-                                    doc.viewing
-                                        ++ [ ( Mobile.gearName id mobile.gears, G id ) ]
+                    let
+                        res =
+                            MEditor.update subMsg scale ( editor, mobile )
+
+                        newMobile =
+                            updateMobile doc.viewing (always res.mobile) <| Data.current doc.data
+
+                        data =
+                            case res.toUndo of
+                                MEditor.Do ->
+                                    Data.do newMobile doc.data
+
+                                MEditor.Group ->
+                                    Data.group newMobile doc.data
+
+                                MEditor.NOOP ->
+                                    doc.data
+
+                        newDoc =
+                            D { doc | data = data, editor = M res.model }
+                    in
+                    ( Maybe.withDefault newDoc
+                        (res.outMsg
+                            |> Maybe.map
+                                (\outMsg ->
+                                    Tuple.first <|
+                                        case outMsg of
+                                            MEditor.Inside id ->
+                                                update
+                                                    (View <|
+                                                        doc.viewing
+                                                            ++ [ ( Mobile.gearName id mobile.gears, G id ) ]
+                                                    )
+                                                    scale
+                                                    newDoc
                                 )
-                                scale
-                                (D doc)
-
-                        _ ->
-                            let
-                                ( newEditor, ( mo, to ), engineCmd ) =
-                                    MEditor.update subMsg scale ( editor, mobile )
-
-                                newMobile =
-                                    updateMobile doc.viewing (always mo) <| Data.current doc.data
-
-                                data =
-                                    case to of
-                                        MEditor.Do ->
-                                            Data.do newMobile doc.data
-
-                                        MEditor.Group ->
-                                            Data.group newMobile doc.data
-
-                                        MEditor.NOOP ->
-                                            doc.data
-                            in
-                            ( D { doc | data = data, editor = M newEditor }
-                            , case engineCmd of
-                                Nothing ->
-                                    Cmd.none
-
-                                Just v ->
-                                    toEngine v
-                            )
+                        )
+                    , Maybe.withDefault Cmd.none <| Maybe.map toEngine res.toEngine
+                    )
 
                 _ ->
                     Debug.log "IMPOSSIBLE MobileMsg while viewing no mobile" ( D doc, Cmd.none )

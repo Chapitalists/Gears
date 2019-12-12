@@ -121,33 +121,52 @@ type ToUndo
     | NOOP
 
 
-update : Msg -> Float -> ( Model, Mobeel ) -> ( Model, ( Mobeel, ToUndo ), Maybe E.Value )
+type alias Return =
+    { model : Model
+    , mobile : Mobeel
+    , toUndo : ToUndo
+    , toEngine : Maybe E.Value
+    , outMsg : Maybe DocMsg
+    }
+
+
+update : Msg -> Float -> ( Model, Mobeel ) -> Return
 update msg scale ( model, mobile ) =
+    let
+        return =
+            { model = model
+            , mobile = mobile
+            , toUndo = NOOP
+            , toEngine = Nothing
+            , outMsg = Nothing
+            }
+    in
     case msg of
         ChangedTool tool ->
-            ( { model
-                | tool = tool
-                , dragging =
-                    case model.dragging of
-                        Cut _ _ ->
-                            NoDrag
+            { return
+                | model =
+                    { model
+                        | tool = tool
+                        , dragging =
+                            case model.dragging of
+                                Cut _ _ ->
+                                    NoDrag
 
-                        _ ->
-                            if tool == Edit then
-                                NoDrag
+                                _ ->
+                                    if tool == Edit then
+                                        NoDrag
 
-                            else
-                                model.dragging
-                , engine = Engine.init
-              }
-            , ( mobile, NOOP )
-            , Just Engine.stop
-            )
+                                    else
+                                        model.dragging
+                        , engine = Engine.init
+                    }
+                , toEngine = Just Engine.stop
+            }
 
         ToggleEngine ->
             case model.tool of
                 Play True ->
-                    ( { model | tool = Play False, engine = Engine.init }, ( mobile, NOOP ), Just Engine.stop )
+                    { return | model = { model | tool = Play False, engine = Engine.init }, toEngine = Just Engine.stop }
 
                 Play False ->
                     let
@@ -157,29 +176,29 @@ update msg scale ( model, mobile ) =
                                 mobile.gears
                                 model.engine
                     in
-                    ( { model | tool = Play True, engine = engine }, ( mobile, NOOP ), v )
+                    { return | model = { model | tool = Play True, engine = engine }, toEngine = v }
 
                 _ ->
-                    ( model, ( mobile, NOOP ), Nothing )
+                    return
 
         PlayGear id ->
             let
                 ( engine, v ) =
                     Engine.addPlaying [ id ] mobile.gears model.engine
             in
-            ( { model | engine = engine }, ( mobile, NOOP ), v )
+            { return | model = { model | engine = engine }, toEngine = v }
 
         StopGear id ->
-            ( { model | engine = Engine.init }, ( mobile, NOOP ), Just Engine.stop )
+            { return | model = { model | engine = Engine.init }, toEngine = Just Engine.stop }
 
         CopyGear id ->
-            ( model, ( { mobile | gears = Gear.copy id mobile.gears }, Do ), Nothing )
+            { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
         ChangeSoundStarted id ->
-            ( { model | edit = ChangeSound id }, ( mobile, NOOP ), Nothing )
+            { return | model = { model | edit = ChangeSound id } }
 
         ChangeSoundCanceled id ->
-            ( { model | edit = Gear id }, ( mobile, NOOP ), Nothing )
+            { return | model = { model | edit = Gear id } }
 
         DeleteGear id ->
             let
@@ -195,82 +214,80 @@ update msg scale ( model, mobile ) =
             in
             if Harmo.hasHarmonics harmo then
                 -- TODO
-                Debug.log "TODO delete base" ( model, ( mobile, NOOP ), Nothing )
+                Debug.log "TODO delete base" return
 
             else
                 case Harmo.getBaseId harmo of
                     Nothing ->
-                        ( { model | edit = edit, engine = Engine.init }
-                        , ( { mobile | gears = Coll.remove id mobile.gears }, Do )
-                        , Just Engine.stop
-                        )
+                        { return
+                            | model = { model | edit = edit, engine = Engine.init }
+                            , mobile = { mobile | gears = Coll.remove id mobile.gears }
+                            , toUndo = Do
+                            , toEngine = Just Engine.stop
+                        }
 
                     Just baseId ->
-                        ( { model | engine = Engine.init }
-                        , ( { mobile
-                                | gears =
-                                    mobile.gears
-                                        |> Coll.update baseId (Harmo.remove id)
-                                        |> Coll.remove id
-                            }
-                          , Do
-                          )
-                        , Just Engine.stop
-                        )
+                        { return
+                            | model = { model | engine = Engine.init }
+                            , mobile =
+                                { mobile
+                                    | gears =
+                                        mobile.gears
+                                            |> Coll.update baseId (Harmo.remove id)
+                                            |> Coll.remove id
+                                }
+                            , toUndo = Do
+                            , toEngine = Just Engine.stop
+                        }
 
         EnteredFract isNumerator str ->
-            case ( model.link, String.toInt str ) of
-                ( Just link, Just i ) ->
-                    case link.fract of
-                        Just fract ->
-                            ( { model
-                                | link =
-                                    Just
-                                        { link
-                                            | fract =
-                                                Just <|
-                                                    if isNumerator then
-                                                        { fract | num = i }
+            Maybe.map2 Tuple.pair model.link (String.toInt str)
+                |> Maybe.andThen
+                    (\( link, i ) ->
+                        link.fract
+                            |> Maybe.map
+                                (\fract ->
+                                    { return
+                                        | model =
+                                            { model
+                                                | link =
+                                                    Just
+                                                        { link
+                                                            | fract =
+                                                                Just <|
+                                                                    if isNumerator then
+                                                                        { fract | num = i }
 
-                                                    else
-                                                        { fract | den = i }
-                                        }
-                              }
-                            , ( mobile, NOOP )
-                            , Nothing
-                            )
-
-                        _ ->
-                            ( model, ( mobile, NOOP ), Nothing )
-
-                _ ->
-                    ( model, ( mobile, NOOP ), Nothing )
+                                                                    else
+                                                                        { fract | den = i }
+                                                        }
+                                            }
+                                    }
+                                )
+                    )
+                |> Maybe.withDefault return
 
         AppliedFract l fract ->
             let
                 newFract =
                     Fract.multiplication fract <| Harmo.getFract <| Coll.get (Tuple.first l) mobile.gears
             in
-            ( model
-            , ( { mobile | gears = Coll.update (Tuple.second l) (Harmo.setFract newFract) mobile.gears }, Do )
-            , Nothing
-            )
+            { return
+                | mobile = { mobile | gears = Coll.update (Tuple.second l) (Harmo.setFract newFract) mobile.gears }
+                , toUndo = Do
+            }
 
         SimplifyFractView ->
-            case model.link of
-                Just link ->
-                    case link.fract of
-                        Just fract ->
-                            ( { model | link = Just { link | fract = Just <| Fract.simplify fract } }
-                            , ( mobile, NOOP )
-                            , Nothing
-                            )
-
-                        _ ->
-                            ( model, ( mobile, NOOP ), Nothing )
-
-                _ ->
-                    ( model, ( mobile, NOOP ), Nothing )
+            model.link
+                |> Maybe.andThen
+                    (\link ->
+                        link.fract
+                            |> Maybe.map
+                                (\fract ->
+                                    { return | model = { model | link = Just { link | fract = Just <| Fract.simplify fract } } }
+                                )
+                    )
+                |> Maybe.withDefault return
 
         Capsuled id ->
             let
@@ -280,17 +297,16 @@ update msg scale ( model, mobile ) =
                 newG =
                     { g | motor = Motor.default, harmony = Harmo.newSelf <| Harmo.getLength g.harmony mobile.gears }
             in
-            ( model
-            , ( { mobile
-                    | gears =
-                        Coll.update id
-                            (Wheel.setContent <| Content.M <| Mobile.fromGear newG)
-                            mobile.gears
-                }
-              , Do
-              )
-            , Nothing
-            )
+            { return
+                | mobile =
+                    { mobile
+                        | gears =
+                            Coll.update id
+                                (Wheel.setContent <| Content.M <| Mobile.fromGear newG)
+                                mobile.gears
+                    }
+                , toUndo = Do
+            }
 
         Collared id ->
             let
@@ -300,19 +316,19 @@ update msg scale ( model, mobile ) =
                 collar =
                     Collar.fromWheel g.wheel <| Harmo.getLength g.harmony mobile.gears
             in
-            ( model
-            , ( { mobile | gears = Coll.update id (Wheel.setContent <| Content.C collar) mobile.gears }, Do )
-            , Nothing
-            )
+            { return
+                | mobile = { mobile | gears = Coll.update id (Wheel.setContent <| Content.C collar) mobile.gears }
+                , toUndo = Do
+            }
 
         WheelMsg ( id, subMsg ) ->
-            ( model, ( { mobile | gears = Coll.update id (Wheel.update subMsg) mobile.gears }, Do ), Nothing )
+            { return | mobile = { mobile | gears = Coll.update id (Wheel.update subMsg) mobile.gears }, toUndo = Do }
 
         GearMsg ( id, subMsg ) ->
-            ( model, ( { mobile | gears = Coll.update id (Gear.update subMsg) mobile.gears }, Do ), Nothing )
+            { return | mobile = { mobile | gears = Coll.update id (Gear.update subMsg) mobile.gears }, toUndo = Do }
 
-        OutMsg _ ->
-            ( model, ( mobile, NOOP ), Nothing )
+        OutMsg subMsg ->
+            { return | outMsg = Just subMsg }
 
         -- TODO Find good pattern for big mess there
         Interacted event ->
@@ -329,30 +345,24 @@ update msg scale ( model, mobile ) =
                                 newMute =
                                     not w.mute
                             in
-                            ( model
-                            , ( { mobile
-                                    | gears =
-                                        Coll.update id
-                                            (\g -> { g | wheel = { w | mute = newMute } })
-                                            mobile.gears
-                                }
-                              , Do
-                              )
-                            , Engine.muted id newMute model.engine
-                            )
+                            { return
+                                | mobile =
+                                    { mobile
+                                        | gears =
+                                            Coll.update id
+                                                (\g -> { g | wheel = { w | mute = newMute } })
+                                                mobile.gears
+                                    }
+                                , toUndo = Do
+                                , toEngine = Engine.muted id newMute model.engine
+                            }
 
                         -- CUT
                         ( ISurface, Interact.Dragged p1 p2 _, NoDrag ) ->
-                            ( { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears }
-                            , ( mobile, NOOP )
-                            , Nothing
-                            )
+                            { return | model = { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears } }
 
                         ( ISurface, Interact.Dragged _ p2 _, Cut ( p1, _ ) _ ) ->
-                            ( { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears }
-                            , ( mobile, NOOP )
-                            , Nothing
-                            )
+                            { return | model = { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears } }
 
                         ( ISurface, Interact.DragEnded True, Cut _ cuts ) ->
                             let
@@ -362,7 +372,12 @@ update msg scale ( model, mobile ) =
                                 ( engine, v ) =
                                     Engine.setPlaying motored mobile.gears model.engine
                             in
-                            ( { model | dragging = NoDrag, engine = engine }, ( { mobile | gears = gears }, Do ), v )
+                            { return
+                                | model = { model | dragging = NoDrag, engine = engine }
+                                , mobile = { mobile | gears = gears }
+                                , toUndo = Do
+                                , toEngine = v
+                            }
 
                         -- VOLUME
                         ( IGear id, Interact.Dragged oldPos newPos ( True, _, _ ), NoDrag ) ->
@@ -370,34 +385,40 @@ update msg scale ( model, mobile ) =
                                 res =
                                     doVolumeChange id oldPos newPos scale mobile model.engine
                             in
-                            ( { model | dragging = VolumeChange }, Tuple.first res, Tuple.second res )
+                            { return
+                                | model = { model | dragging = VolumeChange }
+                                , mobile = res.mobile
+                                , toUndo = res.toUndo
+                                , toEngine = res.toEngine
+                            }
 
                         ( IGear id, Interact.Dragged oldPos newPos _, VolumeChange ) ->
                             let
                                 res =
                                     doVolumeChange id oldPos newPos scale mobile model.engine
                             in
-                            ( model, Tuple.first res, Tuple.second res )
+                            { return | mobile = res.mobile, toUndo = res.toUndo, toEngine = res.toEngine }
 
                         ( _, Interact.DragEnded _, VolumeChange ) ->
-                            ( { model | dragging = NoDrag }, ( mobile, Do ), Nothing )
+                            { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
                         -- LINK -> MOTOR
                         ( IGear _, Interact.Dragged _ _ _, CompleteLink _ ) ->
-                            ( model, ( mobile, NOOP ), Nothing )
+                            -- If ConpleteLink, don’t move
+                            return
 
                         ( IGear id, Interact.Dragged _ pos _, _ ) ->
-                            ( { model | dragging = HalfLink ( id, pos ) }, ( mobile, NOOP ), Nothing )
+                            { return | model = { model | dragging = HalfLink ( id, pos ) } }
 
                         ( IGear to, Interact.DragIn, HalfLink ( from, _ ) ) ->
-                            ( { model | dragging = CompleteLink ( from, to ) }, ( mobile, NOOP ), Nothing )
+                            { return | model = { model | dragging = CompleteLink ( from, to ) } }
 
                         ( IGear to, Interact.DragOut, CompleteLink ( from, _ ) ) ->
                             let
                                 toCenter =
                                     (Coll.get to mobile.gears).pos
                             in
-                            ( { model | dragging = HalfLink ( from, toCenter ) }, ( mobile, NOOP ), Nothing )
+                            { return | model = { model | dragging = HalfLink ( from, toCenter ) } }
 
                         ( IGear _, Interact.DragEnded True, CompleteLink l ) ->
                             let
@@ -407,82 +428,88 @@ update msg scale ( model, mobile ) =
                                 ( engine, v ) =
                                     Engine.addPlaying toPlay mobile.gears model.engine
                             in
-                            ( { model | dragging = NoDrag, engine = engine }
-                            , ( { mobile | gears = gears }, Do )
-                            , v
-                            )
+                            { return
+                                | model = { model | dragging = NoDrag, engine = engine }
+                                , mobile = { mobile | gears = gears }
+                                , toUndo = Do
+                                , toEngine = v
+                            }
 
                         -- CLEAN DRAG
                         ( _, Interact.DragEnded _, _ ) ->
-                            ( { model | dragging = NoDrag }, ( mobile, NOOP ), Nothing )
+                            { return | model = { model | dragging = NoDrag } }
 
                         _ ->
-                            ( model, ( mobile, NOOP ), Nothing )
+                            return
 
                 -- LINK --------
                 Harmonize ->
                     case ( event.item, event.action, model.dragging ) of
                         -- COPY
                         ( IGear id, Interact.Clicked _, _ ) ->
-                            ( model, ( { mobile | gears = Gear.copy id mobile.gears }, Do ), Nothing )
+                            { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
                         -- RESIZE
                         ( IResizeHandle id add, Interact.Dragged oldPos newPos _, NoDrag ) ->
-                            ( { model | dragging = SizeChange }
-                            , ( doResize id oldPos newPos add mobile, Group )
-                            , Nothing
-                            )
+                            { return
+                                | model = { model | dragging = SizeChange }
+                                , mobile = doResize id oldPos newPos add mobile
+                                , toUndo = Group
+                            }
 
                         ( IResizeHandle id add, Interact.Dragged oldPos newPos _, SizeChange ) ->
-                            ( model, ( doResize id oldPos newPos add mobile, Group ), Nothing )
+                            { return | mobile = doResize id oldPos newPos add mobile, toUndo = Group }
 
                         ( _, Interact.DragEnded _, SizeChange ) ->
-                            ( { model | dragging = NoDrag }, ( mobile, Do ), Nothing )
+                            { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
                         -- LINK -> HARMO
                         ( IGear _, Interact.Dragged _ _ _, CompleteLink _ ) ->
-                            ( model, ( mobile, NOOP ), Nothing )
+                            -- If Complete Link, don’t move
+                            return
 
                         ( IGear id, Interact.Dragged _ pos _, _ ) ->
-                            ( { model | dragging = HalfLink ( id, pos ) }, ( mobile, NOOP ), Nothing )
+                            { return | model = { model | dragging = HalfLink ( id, pos ) } }
 
                         ( IGear to, Interact.DragIn, HalfLink ( from, _ ) ) ->
-                            ( { model | dragging = CompleteLink ( from, to ) }, ( mobile, NOOP ), Nothing )
+                            { return | model = { model | dragging = CompleteLink ( from, to ) } }
 
                         ( IGear to, Interact.DragOut, CompleteLink ( from, _ ) ) ->
                             let
                                 toCenter =
                                     (Coll.get to mobile.gears).pos
                             in
-                            ( { model | dragging = HalfLink ( from, toCenter ) }, ( mobile, NOOP ), Nothing )
+                            { return | model = { model | dragging = HalfLink ( from, toCenter ) } }
 
                         ( IGear _, Interact.DragEnded True, CompleteLink l ) ->
                             let
                                 ( newGears, mayFract ) =
                                     doLinked l mobile.gears
                             in
-                            ( { model
-                                | dragging = NoDrag
-                                , link = Just { link = l, fract = mayFract }
-                              }
-                            , ( { mobile | gears = newGears }, Do )
-                              -- TODO if doLinked returns gears unchanged, empty undo
-                            , Nothing
-                            )
+                            { return
+                                | model =
+                                    { model
+                                        | dragging = NoDrag
+                                        , link = Just { link = l, fract = mayFract }
+                                    }
+                                , mobile = { mobile | gears = newGears }
+                                , toUndo = Do
+                            }
 
+                        -- TODO if doLinked returns gears unchanged, empty undo
                         -- CLEAN DRAG
                         ( _, Interact.DragEnded _, _ ) ->
-                            ( { model | dragging = NoDrag }, ( mobile, NOOP ), Nothing )
+                            { return | model = { model | dragging = NoDrag } }
 
                         _ ->
-                            ( model, ( mobile, NOOP ), Nothing )
+                            return
 
                 -- EDIT --------
                 Edit ->
                     case ( event.item, event.action, model.dragging ) of
                         -- DETAIL
                         ( IGear id, Interact.Clicked _, _ ) ->
-                            ( { model | edit = Gear id }, ( mobile, NOOP ), Nothing )
+                            { return | model = { model | edit = Gear id } }
 
                         -- MOVE
                         ( IGear id, Interact.Dragged oldPos newPos _, _ ) ->
@@ -490,16 +517,17 @@ update msg scale ( model, mobile ) =
                                 gearUp =
                                     Gear.update <| Gear.Move <| Vec.sub newPos oldPos
                             in
-                            ( { model | dragging = Moving }
-                            , ( { mobile | gears = Coll.update id gearUp mobile.gears }, Group )
-                            , Nothing
-                            )
+                            { return
+                                | model = { model | dragging = Moving }
+                                , mobile = { mobile | gears = Coll.update id gearUp mobile.gears }
+                                , toUndo = Group
+                            }
 
                         ( _, Interact.DragEnded _, Moving ) ->
-                            ( { model | dragging = NoDrag }, ( mobile, Do ), Nothing )
+                            { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
                         _ ->
-                            ( model, ( mobile, NOOP ), Nothing )
+                            return
 
 
 viewTools : Model -> Element Msg
@@ -839,7 +867,7 @@ doLinked l gears =
     )
 
 
-doVolumeChange : Id Geer -> Vec2 -> Vec2 -> Float -> Mobeel -> Engine -> ( ( Mobeel, ToUndo ), Maybe E.Value )
+doVolumeChange : Id Geer -> Vec2 -> Vec2 -> Float -> Mobeel -> Engine -> { mobile : Mobeel, toUndo : ToUndo, toEngine : Maybe E.Value }
 doVolumeChange id oldPos newPos scale mobile engine =
     let
         gears =
@@ -854,9 +882,10 @@ doVolumeChange id oldPos newPos scale mobile engine =
         newGears =
             Coll.update id (Wheel.update <| Wheel.ChangeVolume volume) gears
     in
-    ( ( { mobile | gears = newGears }, Group ), Engine.volumeChanged id volume engine )
+    { mobile = { mobile | gears = newGears }, toUndo = Group, toEngine = Engine.volumeChanged id volume engine }
 
 
+doResize : Id Geer -> Vec2 -> Vec2 -> Bool -> Mobeel -> Mobeel
 doResize id oldPos newPos add mobile =
     let
         gears =
