@@ -25,6 +25,7 @@ import Wheel exposing (Wheel)
 type alias Model =
     { dragging : Dragging
     , tool : Tool
+    , mode : Mode
     , edit : EditInfo
     , link : Maybe LinkInfo
     , engine : Engine
@@ -40,6 +41,11 @@ type Tool
     = Edit
     | Play Bool
     | Harmonize
+
+
+type Mode
+    = Normal
+    | Nav
 
 
 type EditInfo
@@ -82,6 +88,7 @@ fromGearInteractable i =
 init =
     { dragging = NoDrag
     , tool = Play False
+    , mode = Normal
     , edit = NoSelection
     , link = Nothing
     , engine = Engine.init
@@ -91,6 +98,7 @@ init =
 
 type Msg
     = ChangedTool Tool
+    | ChangedMode Mode
       -- TODO EngineMsg ?
     | ToggleEngine
     | PlayGear (Id Geer)
@@ -162,6 +170,9 @@ update msg scale ( model, mobile ) =
                     }
                 , toEngine = Just Engine.stop
             }
+
+        ChangedMode mode ->
+            { return | model = { model | mode = mode } }
 
         ToggleEngine ->
             case model.tool of
@@ -332,39 +343,54 @@ update msg scale ( model, mobile ) =
 
         -- TODO Find good pattern for big mess there
         Interacted event ->
-            case model.tool of
-                -- PLAY --------
-                Play on ->
-                    interactPlay on scale event model mobile
+            case model.mode of
+                Nav ->
+                    case ( event.item, event.action ) of
+                        ( IGear id, Interact.Clicked _ ) ->
+                            case Wheel.getContent <| Coll.get id mobile.gears of
+                                Content.S _ ->
+                                    return
 
-                -- LINK --------
-                Harmonize ->
-                    interactHarmonize scale event model mobile
-
-                -- EDIT --------
-                Edit ->
-                    case ( event.item, event.action, model.dragging ) of
-                        -- DETAIL
-                        ( IGear id, Interact.Clicked _, _ ) ->
-                            { return | model = { model | edit = Gear id } }
-
-                        -- MOVE
-                        ( IGear id, Interact.Dragged oldPos newPos _, _ ) ->
-                            let
-                                gearUp =
-                                    Gear.update <| Gear.Move <| Vec.sub newPos oldPos
-                            in
-                            { return
-                                | model = { model | dragging = Moving }
-                                , mobile = { mobile | gears = Coll.update id gearUp mobile.gears }
-                                , toUndo = Group
-                            }
-
-                        ( _, Interact.DragEnded _, Moving ) ->
-                            { return | model = { model | dragging = NoDrag }, toUndo = Do }
+                                _ ->
+                                    { return | outMsg = Just <| Inside id }
 
                         _ ->
                             return
+
+                Normal ->
+                    case model.tool of
+                        -- PLAY --------
+                        Play on ->
+                            interactPlay on scale event model mobile
+
+                        -- LINK --------
+                        Harmonize ->
+                            interactHarmonize scale event model mobile
+
+                        -- EDIT --------
+                        Edit ->
+                            case ( event.item, event.action, model.dragging ) of
+                                -- DETAIL
+                                ( IGear id, Interact.Clicked _, _ ) ->
+                                    { return | model = { model | edit = Gear id } }
+
+                                -- MOVE
+                                ( IGear id, Interact.Dragged oldPos newPos _, _ ) ->
+                                    let
+                                        gearUp =
+                                            Gear.update <| Gear.Move <| Vec.sub newPos oldPos
+                                    in
+                                    { return
+                                        | model = { model | dragging = Moving }
+                                        , mobile = { mobile | gears = Coll.update id gearUp mobile.gears }
+                                        , toUndo = Group
+                                    }
+
+                                ( _, Interact.DragEnded _, Moving ) ->
+                                    { return | model = { model | dragging = NoDrag }, toUndo = Do }
+
+                                _ ->
+                                    return
 
 
 viewTools : Model -> Element Msg

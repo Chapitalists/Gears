@@ -141,6 +141,8 @@ soundClicked sound (D doc) =
 type Shortcut
     = Tool Int
     | Play
+    | Nav
+    | Normal
 
 
 type Msg
@@ -204,6 +206,12 @@ update msg scale (D doc) =
 
         KeyPressed sh ->
             case ( sh, doc.editor ) of
+                ( Nav, M _ ) ->
+                    update (MobileMsg <| MEditor.ChangedMode MEditor.Nav) scale (D doc)
+
+                ( Normal, M _ ) ->
+                    update (MobileMsg <| MEditor.ChangedMode MEditor.Normal) scale (D doc)
+
                 ( Tool i, M _ ) ->
                     case i of
                         1 ->

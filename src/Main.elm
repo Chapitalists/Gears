@@ -382,6 +382,8 @@ subs { interact } =
         [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , newSVGSize (sizeDecoder >> GotSVGSize)
         , BE.onKeyPress shortcutDecoder
+        , BE.onKeyDown modeDecoder
+        , BE.onKeyUp <| D.succeed <| DocMsg <| Doc.KeyPressed Doc.Normal
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
         ]
             ++ List.map (Sub.map InteractMsg) (Interact.subs interact)
@@ -390,6 +392,21 @@ subs { interact } =
 shortcutDecoder : D.Decoder Msg
 shortcutDecoder =
     D.map keyCodeToMsg <| D.field "code" D.string
+
+
+modeDecoder : D.Decoder Msg
+modeDecoder =
+    D.field "code" D.string
+        |> D.andThen
+            (\str ->
+                D.succeed <|
+                    case str of
+                        "KeyV" ->
+                            DocMsg <| Doc.KeyPressed Doc.Nav
+
+                        _ ->
+                            NOOP
+            )
 
 
 keyCodeToMsg : String -> Msg
