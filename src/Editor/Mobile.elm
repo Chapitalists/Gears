@@ -46,7 +46,7 @@ type Tool
 type Mode
     = Normal
     | Nav
-
+    | SelectMotor
     | ChangeSound (Id Geer)
 
 
@@ -349,6 +349,18 @@ update msg scale ( model, mobile ) =
                         _ ->
                             return
 
+                SelectMotor ->
+                    case ( event.item, event.action ) of
+                        ( IGear id, Interact.Clicked _ ) ->
+                            { return
+                                | model = { model | mode = Normal }
+                                , mobile = { mobile | motor = id }
+                                , toUndo = Do
+                            }
+
+                        _ ->
+                            return
+
                 ChangeSound _ ->
                     return
 
@@ -554,6 +566,16 @@ viewDetails model mobile =
             [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ] <|
                 [ text <| Gear.toUID id
                 , text "Choisir un son chargé"
+                , Input.button []
+                    { label = text "Annuler"
+                    , onPress = Just <| ChangedMode Normal
+                    }
+                ]
+            ]
+
+        SelectMotor ->
+            [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ] <|
+                [ text "Choisir nouvelle Motrice"
                 , Input.button []
                     { label = text "Annuler"
                     , onPress = Just <| ChangedMode Normal
