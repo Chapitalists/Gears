@@ -335,174 +335,11 @@ update msg scale ( model, mobile ) =
             case model.tool of
                 -- PLAY --------
                 Play on ->
-                    case ( event.item, event.action, model.dragging ) of
-                        -- MUTE
-                        ( IGear id, Interact.Clicked _, _ ) ->
-                            let
-                                w =
-                                    (Coll.get id mobile.gears).wheel
-
-                                newMute =
-                                    not w.mute
-                            in
-                            { return
-                                | mobile =
-                                    { mobile
-                                        | gears =
-                                            Coll.update id
-                                                (\g -> { g | wheel = { w | mute = newMute } })
-                                                mobile.gears
-                                    }
-                                , toUndo = Do
-                                , toEngine = Engine.muted id newMute model.engine
-                            }
-
-                        -- CUT
-                        ( ISurface, Interact.Dragged p1 p2 _, NoDrag ) ->
-                            { return | model = { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears } }
-
-                        ( ISurface, Interact.Dragged _ p2 _, Cut ( p1, _ ) _ ) ->
-                            { return | model = { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears } }
-
-                        ( ISurface, Interact.DragEnded True, Cut _ cuts ) ->
-                            let
-                                ( gears, motored ) =
-                                    Motor.remove cuts mobile.motor mobile.gears on
-
-                                ( engine, v ) =
-                                    Engine.setPlaying motored mobile.gears model.engine
-                            in
-                            { return
-                                | model = { model | dragging = NoDrag, engine = engine }
-                                , mobile = { mobile | gears = gears }
-                                , toUndo = Do
-                                , toEngine = v
-                            }
-
-                        -- VOLUME
-                        ( IGear id, Interact.Dragged oldPos newPos ( True, _, _ ), NoDrag ) ->
-                            let
-                                res =
-                                    doVolumeChange id oldPos newPos scale mobile model.engine
-                            in
-                            { return
-                                | model = { model | dragging = VolumeChange }
-                                , mobile = res.mobile
-                                , toUndo = res.toUndo
-                                , toEngine = res.toEngine
-                            }
-
-                        ( IGear id, Interact.Dragged oldPos newPos _, VolumeChange ) ->
-                            let
-                                res =
-                                    doVolumeChange id oldPos newPos scale mobile model.engine
-                            in
-                            { return | mobile = res.mobile, toUndo = res.toUndo, toEngine = res.toEngine }
-
-                        ( _, Interact.DragEnded _, VolumeChange ) ->
-                            { return | model = { model | dragging = NoDrag }, toUndo = Do }
-
-                        -- LINK -> MOTOR
-                        ( IGear _, Interact.Dragged _ _ _, CompleteLink _ ) ->
-                            -- If ConpleteLink, don’t move
-                            return
-
-                        ( IGear id, Interact.Dragged _ pos _, _ ) ->
-                            { return | model = { model | dragging = HalfLink ( id, pos ) } }
-
-                        ( IGear to, Interact.DragIn, HalfLink ( from, _ ) ) ->
-                            { return | model = { model | dragging = CompleteLink ( from, to ) } }
-
-                        ( IGear to, Interact.DragOut, CompleteLink ( from, _ ) ) ->
-                            let
-                                toCenter =
-                                    (Coll.get to mobile.gears).pos
-                            in
-                            { return | model = { model | dragging = HalfLink ( from, toCenter ) } }
-
-                        ( IGear _, Interact.DragEnded True, CompleteLink l ) ->
-                            let
-                                ( gears, toPlay ) =
-                                    Motor.add l mobile.gears <| Engine.playingIds model.engine
-
-                                ( engine, v ) =
-                                    Engine.addPlaying toPlay mobile.gears model.engine
-                            in
-                            { return
-                                | model = { model | dragging = NoDrag, engine = engine }
-                                , mobile = { mobile | gears = gears }
-                                , toUndo = Do
-                                , toEngine = v
-                            }
-
-                        -- CLEAN DRAG
-                        ( _, Interact.DragEnded _, _ ) ->
-                            { return | model = { model | dragging = NoDrag } }
-
-                        _ ->
-                            return
+                    interactPlay on scale event model mobile
 
                 -- LINK --------
                 Harmonize ->
-                    case ( event.item, event.action, model.dragging ) of
-                        -- COPY
-                        ( IGear id, Interact.Clicked _, _ ) ->
-                            { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
-
-                        -- RESIZE
-                        ( IResizeHandle id add, Interact.Dragged oldPos newPos _, NoDrag ) ->
-                            { return
-                                | model = { model | dragging = SizeChange }
-                                , mobile = doResize id oldPos newPos add mobile
-                                , toUndo = Group
-                            }
-
-                        ( IResizeHandle id add, Interact.Dragged oldPos newPos _, SizeChange ) ->
-                            { return | mobile = doResize id oldPos newPos add mobile, toUndo = Group }
-
-                        ( _, Interact.DragEnded _, SizeChange ) ->
-                            { return | model = { model | dragging = NoDrag }, toUndo = Do }
-
-                        -- LINK -> HARMO
-                        ( IGear _, Interact.Dragged _ _ _, CompleteLink _ ) ->
-                            -- If Complete Link, don’t move
-                            return
-
-                        ( IGear id, Interact.Dragged _ pos _, _ ) ->
-                            { return | model = { model | dragging = HalfLink ( id, pos ) } }
-
-                        ( IGear to, Interact.DragIn, HalfLink ( from, _ ) ) ->
-                            { return | model = { model | dragging = CompleteLink ( from, to ) } }
-
-                        ( IGear to, Interact.DragOut, CompleteLink ( from, _ ) ) ->
-                            let
-                                toCenter =
-                                    (Coll.get to mobile.gears).pos
-                            in
-                            { return | model = { model | dragging = HalfLink ( from, toCenter ) } }
-
-                        ( IGear _, Interact.DragEnded True, CompleteLink l ) ->
-                            let
-                                ( newGears, mayFract ) =
-                                    doLinked l mobile.gears
-                            in
-                            { return
-                                | model =
-                                    { model
-                                        | dragging = NoDrag
-                                        , link = Just { link = l, fract = mayFract }
-                                    }
-                                , mobile = { mobile | gears = newGears }
-                                , toUndo = Do
-                            }
-
-                        -- TODO if doLinked returns gears unchanged, empty undo
-                        -- CLEAN DRAG
-                        ( _, Interact.DragEnded _, _ ) ->
-                            { return | model = { model | dragging = NoDrag } }
-
-                        _ ->
-                            return
+                    interactHarmonize scale event model mobile
 
                 -- EDIT --------
                 Edit ->
@@ -914,3 +751,194 @@ computeCuts : ( Vec2, Vec2 ) -> Coll Geer -> List (Link Geer)
 computeCuts cut gears =
     Motor.getAllLinks gears
         |> List.filter (Link.cuts cut << Link.toSegment << Gear.toDrawLink gears)
+
+
+interactPlay : Bool -> Float -> Interact.Event Interactable -> Model -> Mobeel -> Return
+interactPlay on scale event model mobile =
+    let
+        return =
+            { model = model
+            , mobile = mobile
+            , toUndo = NOOP
+            , toEngine = Nothing
+            , outMsg = Nothing
+            }
+    in
+    case ( event.item, event.action, model.dragging ) of
+        -- MUTE
+        ( IGear id, Interact.Clicked _, _ ) ->
+            let
+                w =
+                    (Coll.get id mobile.gears).wheel
+
+                newMute =
+                    not w.mute
+            in
+            { return
+                | mobile =
+                    { mobile
+                        | gears =
+                            Coll.update id
+                                (\g -> { g | wheel = { w | mute = newMute } })
+                                mobile.gears
+                    }
+                , toUndo = Do
+                , toEngine = Engine.muted id newMute model.engine
+            }
+
+        -- CUT
+        ( ISurface, Interact.Dragged p1 p2 _, NoDrag ) ->
+            { return | model = { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears } }
+
+        ( ISurface, Interact.Dragged _ p2 _, Cut ( p1, _ ) _ ) ->
+            { return | model = { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears } }
+
+        ( ISurface, Interact.DragEnded True, Cut _ cuts ) ->
+            let
+                ( gears, motored ) =
+                    Motor.remove cuts mobile.motor mobile.gears on
+
+                ( engine, v ) =
+                    Engine.setPlaying motored mobile.gears model.engine
+            in
+            { return
+                | model = { model | dragging = NoDrag, engine = engine }
+                , mobile = { mobile | gears = gears }
+                , toUndo = Do
+                , toEngine = v
+            }
+
+        -- VOLUME
+        ( IGear id, Interact.Dragged oldPos newPos ( True, _, _ ), NoDrag ) ->
+            let
+                res =
+                    doVolumeChange id oldPos newPos scale mobile model.engine
+            in
+            { return
+                | model = { model | dragging = VolumeChange }
+                , mobile = res.mobile
+                , toUndo = res.toUndo
+                , toEngine = res.toEngine
+            }
+
+        ( IGear id, Interact.Dragged oldPos newPos _, VolumeChange ) ->
+            let
+                res =
+                    doVolumeChange id oldPos newPos scale mobile model.engine
+            in
+            { return | mobile = res.mobile, toUndo = res.toUndo, toEngine = res.toEngine }
+
+        ( _, Interact.DragEnded _, VolumeChange ) ->
+            { return | model = { model | dragging = NoDrag }, toUndo = Do }
+
+        -- LINK -> MOTOR
+        ( IGear _, Interact.Dragged _ _ _, CompleteLink _ ) ->
+            -- If ConpleteLink, don’t move
+            return
+
+        ( IGear id, Interact.Dragged _ pos _, _ ) ->
+            { return | model = { model | dragging = HalfLink ( id, pos ) } }
+
+        ( IGear to, Interact.DragIn, HalfLink ( from, _ ) ) ->
+            { return | model = { model | dragging = CompleteLink ( from, to ) } }
+
+        ( IGear to, Interact.DragOut, CompleteLink ( from, _ ) ) ->
+            let
+                toCenter =
+                    (Coll.get to mobile.gears).pos
+            in
+            { return | model = { model | dragging = HalfLink ( from, toCenter ) } }
+
+        ( IGear _, Interact.DragEnded True, CompleteLink l ) ->
+            let
+                ( gears, toPlay ) =
+                    Motor.add l mobile.gears <| Engine.playingIds model.engine
+
+                ( engine, v ) =
+                    Engine.addPlaying toPlay mobile.gears model.engine
+            in
+            { return
+                | model = { model | dragging = NoDrag, engine = engine }
+                , mobile = { mobile | gears = gears }
+                , toUndo = Do
+                , toEngine = v
+            }
+
+        -- CLEAN DRAG
+        ( _, Interact.DragEnded _, _ ) ->
+            { return | model = { model | dragging = NoDrag } }
+
+        _ ->
+            return
+
+
+interactHarmonize : Float -> Interact.Event Interactable -> Model -> Mobeel -> Return
+interactHarmonize scale event model mobile =
+    let
+        return =
+            { model = model
+            , mobile = mobile
+            , toUndo = NOOP
+            , toEngine = Nothing
+            , outMsg = Nothing
+            }
+    in
+    case ( event.item, event.action, model.dragging ) of
+        -- COPY
+        ( IGear id, Interact.Clicked _, _ ) ->
+            { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
+
+        -- RESIZE
+        ( IResizeHandle id add, Interact.Dragged oldPos newPos _, NoDrag ) ->
+            { return
+                | model = { model | dragging = SizeChange }
+                , mobile = doResize id oldPos newPos add mobile
+                , toUndo = Group
+            }
+
+        ( IResizeHandle id add, Interact.Dragged oldPos newPos _, SizeChange ) ->
+            { return | mobile = doResize id oldPos newPos add mobile, toUndo = Group }
+
+        ( _, Interact.DragEnded _, SizeChange ) ->
+            { return | model = { model | dragging = NoDrag }, toUndo = Do }
+
+        -- LINK -> HARMO
+        ( IGear _, Interact.Dragged _ _ _, CompleteLink _ ) ->
+            -- If Complete Link, don’t move
+            return
+
+        ( IGear id, Interact.Dragged _ pos _, _ ) ->
+            { return | model = { model | dragging = HalfLink ( id, pos ) } }
+
+        ( IGear to, Interact.DragIn, HalfLink ( from, _ ) ) ->
+            { return | model = { model | dragging = CompleteLink ( from, to ) } }
+
+        ( IGear to, Interact.DragOut, CompleteLink ( from, _ ) ) ->
+            let
+                toCenter =
+                    (Coll.get to mobile.gears).pos
+            in
+            { return | model = { model | dragging = HalfLink ( from, toCenter ) } }
+
+        ( IGear _, Interact.DragEnded True, CompleteLink l ) ->
+            let
+                ( newGears, mayFract ) =
+                    doLinked l mobile.gears
+            in
+            { return
+                | model =
+                    { model
+                        | dragging = NoDrag
+                        , link = Just { link = l, fract = mayFract }
+                    }
+                , mobile = { mobile | gears = newGears }
+                , toUndo = Do
+            }
+
+        -- TODO if doLinked returns gears unchanged, empty undo
+        -- CLEAN DRAG
+        ( _, Interact.DragEnded _, _ ) ->
+            { return | model = { model | dragging = NoDrag } }
+
+        _ ->
+            return
