@@ -13,6 +13,7 @@ import Element.Background as Bg
 import Element.Events exposing (..)
 import Element.Font as Font
 import Element.Input as Input
+import Engine
 import Harmony as Harmo
 import Html.Attributes
 import Html.Events.Extra.Wheel as Wheel
@@ -133,7 +134,7 @@ init screen url _ =
         Set.empty
         []
         Set.empty
-        (Doc.new <| Just url)
+        (Doc.init <| Just url)
         (ViewPos (vec2 0 0) 10)
         (Size 0 0)
         screen
@@ -227,13 +228,13 @@ update msg model =
                     in
                     ( { model
                         | connected = True
-                        , doc = Doc.changeMobile m name (Just model.currentUrl) model.doc
+                        , doc = Doc.changeMobile m name model.doc
                         , viewPos =
                             { c = (Coll.get m.motor m.gears).pos
                             , smallestSize = Harmo.getLengthId m.motor m.gears * 2 * 4
                             }
                       }
-                    , Cmd.batch <| loadList <| List.map .wheel <| Coll.values m.gears
+                    , Cmd.batch <| Doc.toEngine Engine.stop :: (loadList <| List.map .wheel <| Coll.values m.gears)
                     )
 
                 Err (Http.BadBody err) ->

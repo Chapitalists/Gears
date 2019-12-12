@@ -48,22 +48,26 @@ type alias WContent =
     Content Wheel
 
 
-changeMobile : Mobeel -> String -> Maybe Url -> Doc -> Doc
-changeMobile m name url (D d) =
-    let
-        (D n) =
-            new url
-    in
-    D { n | data = Data.load m name url }
-
-
-new : Maybe Url -> Doc
-new url =
+init : Maybe Url -> Doc
+init url =
     D
         { data = Data.init Mobile.new url
         , viewing = []
         , editor = M MEditor.init
         }
+
+
+
+-- TODO why not msg in update ?
+
+
+changeMobile : Mobeel -> String -> Doc -> Doc
+changeMobile m name (D d) =
+    let
+        (D n) =
+            init Nothing
+    in
+    D { n | data = Data.load m name d.data }
 
 
 
@@ -163,6 +167,7 @@ type Msg
     = EnteredFileName String
     | Save
     | Saved
+    | New
     | Undo
     | Redo
     | View (List ( String, Identifier ))
@@ -193,6 +198,13 @@ update msg scale (D doc) =
         Saved ->
             --TODO handle server response
             ( D doc, Cmd.none )
+
+        New ->
+            let
+                (D n) =
+                    init Nothing
+            in
+            ( D { n | data = Data.new Mobile.new doc.data }, toEngine Engine.stop )
 
         Undo ->
             ( D { doc | data = Data.undo doc.data }, Cmd.none )
@@ -361,6 +373,10 @@ viewTop (D doc) =
                         ]
                         { label = text "Sauvegarder"
                         , onPress = Just Save
+                        }
+                   , Input.button [ centerX ]
+                        { label = text "Nouveau"
+                        , onPress = Just New
                         }
                    , Input.button [ alignRight ]
                         { label = text "Undo"

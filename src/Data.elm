@@ -27,14 +27,25 @@ init data url =
         }
 
 
-load : a -> String -> Maybe Url -> Data a
-load data name url =
+new : a -> Data a -> Data a
+new data (D d) =
     D
-        { undoList = Undo.fresh data
-        , grouping = Nothing
-        , saved = True
-        , name = name
-        , serverUrl = url
+        { d
+            | undoList = Undo.new data <| Undo.fresh (current <| D d)
+            , grouping = Nothing
+            , saved = False
+            , name = "non-titre"
+        }
+
+
+load : a -> String -> Data a -> Data a
+load data name (D d) =
+    D
+        { d
+            | undoList = Undo.new data <| Undo.fresh (current <| D d)
+            , grouping = Nothing
+            , saved = True
+            , name = name
         }
 
 
