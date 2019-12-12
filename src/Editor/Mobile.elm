@@ -708,7 +708,11 @@ viewHarmonizeDetails model mobile =
                 ([ text <| (Gear.toUID <| Tuple.first link) ++ (Gear.toUID <| Tuple.second link) ]
                     ++ (case fract of
                             Nothing ->
-                                [ text "Unrelated" ]
+                                [ text <|
+                                    String.fromFloat <|
+                                        Harmo.getLengthId (Tuple.second link) mobile.gears
+                                            / Harmo.getLengthId (Tuple.first link) mobile.gears
+                                ]
 
                             Just f ->
                                 [ Input.text [ Font.color (rgb 0 0 0) ]
