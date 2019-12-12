@@ -26,7 +26,7 @@ type alias Model =
     { dragging : Dragging
     , tool : Tool
     , mode : Mode
-    , edit : EditInfo
+    , edit : Maybe (Id Geer)
     , link : Maybe LinkInfo
     , engine : Engine
     , resizing : Maybe (Id Wheel)
@@ -47,10 +47,6 @@ type Mode
     = Normal
     | Nav
 
-
-type EditInfo
-    = NoSelection
-    | Gear (Id Geer)
     | ChangeSound (Id Geer)
 
 
@@ -89,7 +85,7 @@ init =
     { dragging = NoDrag
     , tool = Play False
     , mode = Normal
-    , edit = NoSelection
+    , edit = Nothing
     , link = Nothing
     , engine = Engine.init
     , resizing = Nothing
@@ -105,8 +101,6 @@ type Msg
     | StopGear (Id Geer)
       --
     | CopyGear (Id Geer)
-    | ChangeSoundStarted (Id Geer)
-    | ChangeSoundCanceled (Id Geer)
     | DeleteGear (Id Geer)
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract (Link Geer) Fraction
@@ -205,12 +199,6 @@ update msg scale ( model, mobile ) =
         CopyGear id ->
             { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
-        ChangeSoundStarted id ->
-            { return | model = { model | edit = ChangeSound id } }
-
-        ChangeSoundCanceled id ->
-            { return | model = { model | edit = Gear id } }
-
         DeleteGear id ->
             if id == mobile.motor then
                 return
@@ -218,8 +206,8 @@ update msg scale ( model, mobile ) =
             else
                 let
                     edit =
-                        if model.edit == Gear id then
-                            NoSelection
+                        if model.edit == Just id then
+                            Nothing
 
                         else
                             model.edit
@@ -361,6 +349,9 @@ update msg scale ( model, mobile ) =
                         _ ->
                             return
 
+                ChangeSound _ ->
+                    return
+
                 Normal ->
                     case model.tool of
                         -- PLAY --------
@@ -376,7 +367,7 @@ update msg scale ( model, mobile ) =
                             case ( event.item, event.action, model.dragging ) of
                                 -- DETAIL
                                 ( IGear id, Interact.Clicked _, _ ) ->
-                                    { return | model = { model | edit = Gear id } }
+                                    { return | model = { model | edit = Just id } }
 
                                 -- MOVE
                                 ( IGear id, Interact.Dragged oldPos newPos _, _ ) ->
@@ -437,7 +428,7 @@ viewContent ( model, mobile ) inter scale =
     let
         getMod : Interact.Interact Interactable -> Id Geer -> Wheel.Mod
         getMod i id =
-            if model.tool == Edit && model.edit == Gear id then
+            if model.tool == Edit && model.edit == Just id then
                 Wheel.Selected
 
             else
@@ -558,21 +549,34 @@ viewContent ( model, mobile ) inter scale =
 
 viewDetails : Model -> Mobeel -> List (Element Msg)
 viewDetails model mobile =
-    case model.tool of
-        Edit ->
-            viewEditDetails model mobile
-
-        Harmonize ->
-            viewHarmonizeDetails model mobile
+    case model.mode of
+        ChangeSound id ->
+            [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ] <|
+                [ text <| Gear.toUID id
+                , text "Choisir un son chargé"
+                , Input.button []
+                    { label = text "Annuler"
+                    , onPress = Just <| ChangedMode Normal
+                    }
+                ]
+            ]
 
         _ ->
-            []
+            case model.tool of
+                Edit ->
+                    viewEditDetails model mobile
+
+                Harmonize ->
+                    viewHarmonizeDetails model mobile
+
+                _ ->
+                    []
 
 
 viewEditDetails : Model -> Mobeel -> List (Element Msg)
 viewEditDetails model mobile =
     case model.edit of
-        Gear id ->
+        Just id ->
             let
                 g =
                     Coll.get id mobile.gears
@@ -642,7 +646,7 @@ viewEditDetails model mobile =
                             [ 2, 3, 5, 7 ]
                 , Input.button []
                     { label = text "Changer son"
-                    , onPress = Just <| ChangeSoundStarted id
+                    , onPress = Just <| ChangedMode <| ChangeSound id
                     }
                 , Input.button []
                     { label = text "Encapsuler"
@@ -663,17 +667,6 @@ viewEditDetails model mobile =
                         { onPress = Just <| DeleteGear id
                         , label = text "Supprimer"
                         }
-                ]
-            ]
-
-        ChangeSound id ->
-            [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
-                [ text <| Gear.toUID id
-                , text "Choisir un son chargé"
-                , Input.button []
-                    { label = text "Annuler"
-                    , onPress = Just <| ChangeSoundCanceled id
-                    }
                 ]
             ]
 

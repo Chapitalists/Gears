@@ -90,7 +90,7 @@ soundClicked sound (D doc) =
             )
 
         M editor ->
-            case ( editor.edit, getViewing (D doc) ) of
+            case ( editor.mode, getViewing (D doc) ) of
                 ( MEditor.ChangeSound id, Content.M mobile ) ->
                     let
                         group =
@@ -114,7 +114,7 @@ soundClicked sound (D doc) =
                                         Data.current doc.data
                                     )
                                     doc.data
-                            , editor = M { editor | edit = MEditor.Gear id }
+                            , editor = M { editor | mode = MEditor.Normal }
                         }
                     , Nothing
                     , Cmd.none

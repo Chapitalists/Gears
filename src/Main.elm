@@ -339,7 +339,7 @@ update msg model =
                     Doc.update subMsg (getScale model) model.doc
             in
             case subMsg of
-                Doc.MobileMsg (MEditor.ChangeSoundStarted _) ->
+                Doc.MobileMsg (MEditor.ChangedMode (MEditor.ChangeSound _)) ->
                     ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
 
                 _ ->
