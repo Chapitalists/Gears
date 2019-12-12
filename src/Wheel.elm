@@ -124,7 +124,7 @@ view w pos length style id uid =
             ++ Interact.hoverEvents (IWheel id)
         )
         ([ S.g [ Html.Attributes.id uid ]
-            [ S.circle
+            ([ S.circle
                 ([ SA.cx <| Num 0
                  , SA.cy <| Num 0
                  , SA.r <| Num (length / 2)
@@ -160,14 +160,14 @@ view w pos length style id uid =
                     ++ Interact.draggableEvents (IWheel id)
                 )
                 []
-            , S.rect
+             , S.rect
                 [ SA.width <| Num tickW
                 , SA.height <| Num tickH
                 , SA.x <| Num (tickW / -2)
                 , SA.y <| Num ((length / -2) - tickH)
                 ]
                 []
-            , S.rect
+             , S.rect
                 [ SA.width <| Num tickW
                 , SA.height <| Num tickH
                 , SA.x <| Num (tickW / -2)
@@ -176,7 +176,49 @@ view w pos length style id uid =
                 , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) + (tickH / 2)) ]
                 ]
                 []
-            ]
+             ]
+                ++ (let
+                        symSize =
+                            length / 4
+                    in
+                    case w.content of
+                        C (Content.M _) ->
+                            [ S.line
+                                [ SA.x1 <| Num -symSize
+                                , SA.y1 <| Num -symSize
+                                , SA.x2 <| Num symSize
+                                , SA.y2 <| Num symSize
+                                , SA.stroke Color.grey
+                                , SA.strokeWidth <| Num tickW
+                                ]
+                                []
+                            , S.line
+                                [ SA.x1 <| Num -symSize
+                                , SA.y1 <| Num symSize
+                                , SA.x2 <| Num symSize
+                                , SA.y2 <| Num -symSize
+                                , SA.stroke Color.grey
+                                , SA.strokeWidth <| Num tickW
+                                ]
+                                []
+                            ]
+
+                        C (Content.C _) ->
+                            [ S.line
+                                [ SA.x1 <| Num -symSize
+                                , SA.y1 <| Num 0
+                                , SA.x2 <| Num symSize
+                                , SA.y2 <| Num 0
+                                , SA.stroke Color.grey
+                                , SA.strokeWidth <| Num tickW
+                                ]
+                                []
+                            ]
+
+                        _ ->
+                            []
+                   )
+            )
          ]
             ++ (if style.mod == Selected then
                     [ S.circle
