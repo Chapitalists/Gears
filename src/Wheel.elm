@@ -61,9 +61,9 @@ default =
     }
 
 
-fromSound : Sound.Sound -> Wheel
-fromSound s =
-    { default | content = C <| Content.S s }
+fromContent : Content Wheel -> Wheel
+fromContent c =
+    { default | content = C c }
 
 
 type Mod

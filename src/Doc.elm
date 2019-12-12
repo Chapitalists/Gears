@@ -124,36 +124,43 @@ soundClicked sound (D doc) =
                     , Cmd.none
                     )
 
-                ( _, Content.M mobile ) ->
-                    let
-                        pos =
-                            vec2 50 50
-
-                        ( id, gears ) =
-                            Coll.insertTellId (Mobile.gearFromSound sound pos) mobile.gears
-
-                        colorGen =
-                            Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
-                    in
-                    ( D
-                        { doc
-                            | data =
-                                Data.do
-                                    (updateMobile doc.viewing
-                                        (\m ->
-                                            { m | gears = gears }
-                                        )
-                                     <|
-                                        Data.current doc.data
-                                    )
-                                    doc.data
-                        }
-                    , Just pos
-                    , Random.generate (\c -> MobileMsg <| MEditor.WheelMsg ( id, Wheel.ChangeColor c )) colorGen
-                    )
-
                 _ ->
-                    ( D doc, Nothing, Cmd.none )
+                    (\( a, b, c ) -> ( a, Just b, c )) <| addGearToMobile (Content.S sound) (D doc)
+
+
+addGearToMobile : Content Wheel -> Doc -> ( Doc, Vec2, Cmd Msg )
+addGearToMobile c (D doc) =
+    case getViewing (D doc) of
+        Content.M mobile ->
+            let
+                pos =
+                    vec2 50 50
+
+                ( id, gears ) =
+                    Coll.insertTellId (Mobile.gearFromContent c pos) mobile.gears
+
+                colorGen =
+                    Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
+            in
+            ( D
+                { doc
+                    | data =
+                        Data.do
+                            (updateMobile doc.viewing
+                                (\m ->
+                                    { m | gears = gears }
+                                )
+                             <|
+                                Data.current doc.data
+                            )
+                            doc.data
+                }
+            , pos
+            , Random.generate (\color -> MobileMsg <| MEditor.WheelMsg ( id, Wheel.ChangeColor color )) colorGen
+            )
+
+        _ ->
+            ( D doc, vec2 50 50, Cmd.none )
 
 
 type Shortcut

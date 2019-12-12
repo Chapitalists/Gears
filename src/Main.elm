@@ -78,6 +78,7 @@ type alias Model =
     , svgSize : Size Float
     , screenSize : Size Int
     , fileExplorerTab : ExTab
+    , capsuling : Bool
     , interact : Interact.State MEditor.Interactable
     }
 
@@ -139,6 +140,7 @@ init screen url _ =
         (Size 0 0)
         screen
         Sounds
+        False
         Interact.init
     , fetchSoundList url
     )
@@ -159,8 +161,10 @@ type Msg
     | SoundLoaded (Result D.Error Sound)
     | SoundClicked Sound
     | ChangedExplorerTab ExTab
+    | Capsuling Bool
     | UpdateViewPos ViewPos
     | Zoom Float ( Float, Float )
+    | ReleasedMode
     | GotSVGSize (Result D.Error (Size Float))
     | GotScreenSize (Size Int)
     | DocMsg Doc.Msg
@@ -226,16 +230,30 @@ update msg model =
                                 )
                                 l
                     in
-                    ( { model
-                        | connected = True
-                        , doc = Doc.changeMobile m name model.doc
-                        , viewPos =
-                            { c = (Coll.get m.motor m.gears).pos
-                            , smallestSize = Harmo.getLengthId m.motor m.gears * 2 * 4
-                            }
-                      }
-                    , Cmd.batch <| Doc.toEngine Engine.stop :: (loadList <| List.map .wheel <| Coll.values m.gears)
-                    )
+                    if model.capsuling then
+                        let
+                            ( newDoc, pos, cmd ) =
+                                Doc.addGearToMobile (Content.M m) model.doc
+                        in
+                        ( { model
+                            | connected = True
+                            , doc = newDoc
+                            , viewPos = { c = pos, smallestSize = Harmo.getLengthId m.motor m.gears * 2 * 4 }
+                          }
+                        , Cmd.batch <| Cmd.map DocMsg cmd :: (loadList <| List.map .wheel <| Coll.values m.gears)
+                        )
+
+                    else
+                        ( { model
+                            | connected = True
+                            , doc = Doc.changeMobile m name model.doc
+                            , viewPos =
+                                { c = (Coll.get m.motor m.gears).pos
+                                , smallestSize = Harmo.getLengthId m.motor m.gears * 2 * 4
+                                }
+                          }
+                        , Cmd.batch <| Doc.toEngine Engine.stop :: (loadList <| List.map .wheel <| Coll.values m.gears)
+                        )
 
                 Err (Http.BadBody err) ->
                     Debug.log err ( model, Cmd.none )
@@ -298,6 +316,13 @@ update msg model =
         ChangedExplorerTab tab ->
             ( { model | fileExplorerTab = tab }, Cmd.none )
 
+        Capsuling on ->
+            if on then
+                ( { model | capsuling = on, fileExplorerTab = Saves }, Cmd.none )
+
+            else
+                ( { model | capsuling = on }, Cmd.none )
+
         UpdateViewPos vp ->
             ( { model | viewPos = vp }, Cmd.none )
 
@@ -322,6 +347,9 @@ update msg model =
                     Vec.sub vp.c <| Vec.scale scale p
             in
             ( { model | viewPos = { c = nC, smallestSize = nS } }, Cmd.none )
+
+        ReleasedMode ->
+            update (DocMsg <| Doc.KeyPressed Doc.Normal) { model | capsuling = False }
 
         GotSVGSize res ->
             case res of
@@ -384,7 +412,7 @@ subs { interact } =
         , newSVGSize (sizeDecoder >> GotSVGSize)
         , BE.onKeyPress shortcutDecoder
         , BE.onKeyDown modeDecoder
-        , BE.onKeyUp <| D.succeed <| DocMsg <| Doc.KeyPressed Doc.Normal
+        , BE.onKeyUp <| D.succeed <| ReleasedMode
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
         ]
             ++ List.map (Sub.map InteractMsg) (Interact.subs interact)
@@ -404,6 +432,9 @@ modeDecoder =
                     case str of
                         "KeyV" ->
                             DocMsg <| Doc.KeyPressed Doc.Nav
+
+                        "KeyE" ->
+                            Capsuling True
 
                         _ ->
                             NOOP
@@ -488,7 +519,15 @@ view model =
 
 viewFileExplorer : Model -> Element Msg
 viewFileExplorer model =
-    column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ] <|
+    let
+        bgColor =
+            if model.capsuling then
+                rgb 0.2 0.2 0.8
+
+            else
+                rgb 0.5 0.5 0.5
+    in
+    column [ height fill, Bg.color bgColor, Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ] <|
         ([ row [ Font.size 14, spacing 20 ]
             [ Input.button
                 (if model.fileExplorerTab == Sounds then

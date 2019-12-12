@@ -26,7 +26,7 @@ toUID i =
 
 beadFromSound : Sound -> Beed
 beadFromSound s =
-    { length = Sound.length s, wheel = Wheel.fromSound s }
+    { length = Sound.length s, wheel = Wheel.fromContent <| Content.S s }
 
 
 fromWheel : Wheel -> Float -> Colleer
