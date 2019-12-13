@@ -168,6 +168,7 @@ type Shortcut
     | Play
     | Nav
     | Normal
+    | Move
 
 
 type Msg
@@ -241,6 +242,9 @@ update msg scale (D doc) =
             case ( sh, doc.editor ) of
                 ( Nav, M _ ) ->
                     update (MobileMsg <| MEditor.ChangedMode MEditor.Nav) scale (D doc)
+
+                ( Move, M _ ) ->
+                    update (MobileMsg <| MEditor.ChangedMode MEditor.Move) scale (D doc)
 
                 ( Normal, M _ ) ->
                     update (MobileMsg <| MEditor.ChangedMode MEditor.Normal) scale (D doc)

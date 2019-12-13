@@ -436,6 +436,9 @@ modeDecoder =
                         "KeyE" ->
                             Capsuling True
 
+                        "KeyD" ->
+                            DocMsg <| Doc.KeyPressed Doc.Move
+
                         _ ->
                             NOOP
             )

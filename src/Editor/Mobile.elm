@@ -46,6 +46,7 @@ type Tool
 type Mode
     = Normal
     | Nav
+    | Move
     | SelectMotor
     | ChangeSound (Id Geer)
 
@@ -349,6 +350,27 @@ update msg scale ( model, mobile ) =
 
                                 _ ->
                                     { return | outMsg = Just <| Inside id }
+
+                        _ ->
+                            return
+
+                Move ->
+                    -- FIXME copy of edit move
+                    case ( event.item, event.action, model.dragging ) of
+                        -- MOVE
+                        ( IGear id, Interact.Dragged oldPos newPos _, _ ) ->
+                            let
+                                gearUp =
+                                    Gear.update <| Gear.Move <| Vec.sub newPos oldPos
+                            in
+                            { return
+                                | model = { model | dragging = Moving }
+                                , mobile = { mobile | gears = Coll.update id gearUp mobile.gears }
+                                , toUndo = Group
+                            }
+
+                        ( _, Interact.DragEnded _, Moving ) ->
+                            { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
                         _ ->
                             return
