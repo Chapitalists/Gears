@@ -39,8 +39,11 @@ function engine(o) {
   let model = null
   switch ( o.action ) {
     case "stopReset" :
-        if (playing.player) stop(playing)
-        else for ( id in playing) stop(playing[id])
+        if (playing.player) stop(playing) // UNUSED CURRENTLY
+        else for ( id in playing) {
+            stop(playing[id])
+            playing[id].view.animate().play().finish()
+        }
         Tone.Transport.stop()
         playing = {}
         break;
@@ -49,22 +52,25 @@ function engine(o) {
         Tone.Transport.start()
         break;
     case "playCollar" :
-        playing = prepare(o)
-        play(o, o)
-        Tone.Transport.start()
+        if (playing.player) {stop(playing);playing = {}}
+        else {
+            playing = prepare(o)
+            play(o,o)
+            Tone.Transport.start()
+        }
         break;
     case "mute" :
         model = playing[o.gearId]
         if (model) {
             model.mute = o.value
-            model.changeVolume()
+            setVolume(model)
         }
         break;
     case "volume" :
         model = playing[o.gearId]
         if (model) {
             model.volume = o.value
-            model.changeVolume()
+            setVolume(model)
         }
     }
 }
@@ -95,9 +101,17 @@ function playPauseTopCollar(beads) {
 function playPause(model) {
     if (!playing[model.id]) {
         playing[model.id] = prepare(model)
+        playing[model.id].view = SVG.adopt(document.getElementById(model.id))
+        playing[model.id].view.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).loop()
     }
-    if (playing[model.id].paused) play(playing[model.id], model)
-    else pause(playing[model.id])
+    if (playing[model.id].paused) {
+        play(playing[model.id], model)
+        playing[model.id].view.animate().play()
+    }
+    else {
+        pause(playing[model.id])
+        playing[model.id].view.animate().pause()
+    }
 }
 
 function prepareOld(model, top = true, v = 1, r = 1, m = false) {

@@ -84,6 +84,15 @@ function stop(model) {
     if (model.mobile) model.gears.map(stop)
     if (model.collar) {
         model.player.stop()
-        stop(model.players[model.current])
+        if (model.current) stop(model.players[model.current])
     }
+}
+
+function setVolume(model, volume = 1, mute = false) {
+    if (model.soundName) {
+        if (mute || model.mute) model.player.mute = true
+        else model.player.volume.value = ((model.volume * volume) - 1) * 60
+    }
+    if (model.mobile) model.gears.map(v => setVolume(v, model.volume * volume, model.mute || mute))
+    if (model.collar) model.players.map(v => setVolume(v, model.volume * volume, model.mute || mute))
 }
