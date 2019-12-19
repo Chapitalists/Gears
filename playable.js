@@ -34,6 +34,7 @@ function callback(t, i) {
 }
 
 function once(model, t) {
+    model.startTime = Tone.now()
     model.player.loop = false
     if (t) model.player.start(t)
     else model.player.start(Tone.now(), model.pauseOffset)
@@ -54,6 +55,7 @@ function play(model, newModel = {}, volume = 1, mute = false) { // TODO What if 
     }
     if (model.collar) {
         model.players.map((v,i) => {
+            v.paused = false
             v.mute = newModel.collar.beads[i].mute
             v.volume = newModel.collar.beads[i].volume
             if (v.mute || mute || model.mute) v.player.mute = true
@@ -75,7 +77,7 @@ function pause(model) {
     }
     if (model.collar) {
         model.player.stop()
-        pause(model.players[model.current])
+        pause(model.players[model.current || 0])
     }
 }
 
