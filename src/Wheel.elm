@@ -1,75 +1,341 @@
 module Wheel exposing (..)
 
-import Browser
-import Html exposing (Html)
-import Svg exposing (..)
-import Svg.Attributes exposing (..)
-import Svg.Events exposing (..)
+import Coll exposing (Id)
+import Color exposing (Color)
+import Content exposing (Content, Mobile)
+import Html.Attributes
+import Interact
+import Json.Decode as D
+import Json.Decode.Field as Field
+import Json.Encode as E
+import Math.Vector2 exposing (..)
+import Sound
+import TypedSvg as S
+import TypedSvg.Attributes as SA
+import TypedSvg.Core exposing (..)
+import TypedSvg.Types exposing (Fill(..), Length(..), Opacity(..), Transform(..))
 
 
-main =
-    Browser.element
-        { init = init
-        , update = update
-        , view = view
-        , subscriptions = subs
-        }
-
-
-subs _ =
-    Sub.none
+type alias Wheeled a =
+    { a | wheel : Wheel }
 
 
 type alias Wheel =
-    { size : Int
-    , position : ( Int, Int )
-    , toggle : Bool
+    { name : String
+    , startPercent : Float
+    , volume : Float
+    , content : WheelContent
+    , mute : Bool
     , color : Color
-    , startPos : Float
     }
 
 
-type Color
-    = AnyColor
+type WheelContent
+    = C (Content Wheel)
 
 
-init () =
-    ( Wheel 100 ( 150, 150 ) False AnyColor 0, Cmd.none )
+getContent : Wheeled g -> Content Wheel
+getContent { wheel } =
+    case wheel.content of
+        C c ->
+            c
+
+
+setContent : Content Wheel -> Wheeled g -> Wheeled g
+setContent c g =
+    let
+        w =
+            g.wheel
+    in
+    { g | wheel = { w | content = C c } }
+
+
+default : Wheel
+default =
+    { name = ""
+    , startPercent = 0
+    , volume = 1
+    , content = C <| Content.S Sound.noSound
+    , mute = False
+    , color = Color.black
+    }
+
+
+fromContent : Content Wheel -> Wheel
+fromContent c =
+    { default | content = C c }
+
+
+type Mod
+    = None
+    | Selectable
+    | Selected
+    | Resizing
+
+
+type alias Style =
+    { mod : Mod, motor : Bool, dashed : Bool }
+
+
+type Interactable x
+    = IWheel (Id x)
+    | IResizeHandle (Id x) Bool -- True = Right
 
 
 type Msg
-    = Clicked
-    | Noop
+    = ChangeContent (Content Wheel)
+    | ChangeVolume Float
+    | Named String
+    | ChangeColor Color
 
 
-update : Msg -> Wheel -> ( Wheel, Cmd Msg )
-update msg model =
+update : Msg -> Wheeled g -> Wheeled g
+update msg g =
+    let
+        wheel =
+            g.wheel
+    in
     case msg of
-        Clicked ->
-            ( { model | toggle = not model.toggle }, Cmd.none )
+        ChangeContent c ->
+            { g | wheel = { wheel | content = C c } }
 
-        Noop ->
-            ( model, Cmd.none )
+        ChangeVolume vol ->
+            { g | wheel = { wheel | volume = clamp 0 1 vol } }
 
-
-view : Wheel -> Html Msg
-view w =
-    Html.div []
-        [ Html.text <|
-            if w.toggle then
-                "OUI"
+        Named name ->
+            if String.all (\c -> Char.isAlphaNum c || c == '-') name then
+                { g | wheel = { wheel | name = name } }
 
             else
-                "NON"
-        , svg [ viewBox "0 0 1000 1000" ]
-            [ symbol [ viewBox "0 0 10 12", id "gearSym" ]
-                [ circle
-                    [ cx "5", cy "7", r "5" ]
-                    []
-                , rect [ fill "red", width "1", height "2", x "4.5", y "0" ] []
-                , rect [ fill "purple", width "1", height "2", x "4.5", y "2" ] []
+                g
+
+        ChangeColor c ->
+            { g | wheel = { wheel | color = c } }
+
+
+view : Wheel -> Vec2 -> Float -> Style -> Id x -> String -> Svg (Interact.Msg (Interactable x))
+view w pos length style id uid =
+    let
+        tickH =
+            length / 15
+
+        tickW =
+            length / 30
+
+        circum =
+            length * pi
+    in
+    S.g
+        ([ SA.transform [ Translate (getX pos) (getY pos) ] ]
+            ++ Interact.hoverEvents (IWheel id)
+        )
+        ([ S.g [ Html.Attributes.id uid ]
+            ([ S.circle
+                ([ SA.cx <| Num 0
+                 , SA.cy <| Num 0
+                 , SA.r <| Num (length / 2)
+                 , SA.stroke <|
+                    if style.motor then
+                        Color.red
+
+                    else
+                        Color.black
+                 , SA.strokeWidth <|
+                    Num <|
+                        if style.mod == Selectable then
+                            tickW * 2
+
+                        else
+                            tickW
+                 , SA.strokeDasharray <|
+                    if style.dashed then
+                        String.fromFloat (circum / 40 * 3 / 4)
+                            ++ ","
+                            ++ String.fromFloat (circum / 40 * 1 / 4)
+
+                    else
+                        ""
+                 , SA.fill <|
+                    if w.mute then
+                        Fill Color.white
+
+                    else if style.motor then
+                        Fill Color.black
+
+                    else
+                        Fill w.color
+                 , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
+                 ]
+                    ++ Interact.draggableEvents (IWheel id)
+                )
+                []
+             , S.rect
+                [ SA.width <| Num tickW
+                , SA.height <| Num tickH
+                , SA.x <| Num (tickW / -2)
+                , SA.y <| Num ((length / -2) - tickH)
                 ]
-            , use [ xlinkHref "#gearSym", x "10", y "10", width "50", height "50", onClick Clicked ] []
-            , use [ onClick Noop, xlinkHref "#gearSym", x "50", y "50", width "50", height "50" ] []
-            ]
+                []
+             , S.rect
+                [ SA.width <| Num tickW
+                , SA.height <| Num tickH
+                , SA.x <| Num (tickW / -2)
+                , SA.y <| Num (tickH / -2)
+                , SA.fill <| Fill Color.orange
+                , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) + (tickH / 2)) ]
+                ]
+                []
+             ]
+                ++ (let
+                        symSize =
+                            length / 4
+                    in
+                    case w.content of
+                        C (Content.M _) ->
+                            [ S.line
+                                [ SA.x1 <| Num -symSize
+                                , SA.y1 <| Num -symSize
+                                , SA.x2 <| Num symSize
+                                , SA.y2 <| Num symSize
+                                , SA.stroke Color.grey
+                                , SA.strokeWidth <| Num tickW
+                                ]
+                                []
+                            , S.line
+                                [ SA.x1 <| Num -symSize
+                                , SA.y1 <| Num symSize
+                                , SA.x2 <| Num symSize
+                                , SA.y2 <| Num -symSize
+                                , SA.stroke Color.grey
+                                , SA.strokeWidth <| Num tickW
+                                ]
+                                []
+                            ]
+
+                        C (Content.C _) ->
+                            [ S.line
+                                [ SA.x1 <| Num -symSize
+                                , SA.y1 <| Num 0
+                                , SA.x2 <| Num symSize
+                                , SA.y2 <| Num 0
+                                , SA.stroke Color.grey
+                                , SA.strokeWidth <| Num tickW
+                                ]
+                                []
+                            ]
+
+                        _ ->
+                            []
+                   )
+            )
+         ]
+            ++ (if style.mod == Selected then
+                    [ S.circle
+                        [ SA.cx <| Num 0
+                        , SA.cy <| Num 0
+                        , SA.r <| Num (length / 2 + tickW * 2)
+                        , SA.strokeWidth <| Num (tickW / 2)
+                        , SA.stroke Color.black
+                        , SA.fill FillNone
+                        ]
+                        []
+                    ]
+
+                else
+                    []
+               )
+            ++ (if style.mod == Resizing then
+                    [ S.polyline
+                        [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
+                        , SA.stroke Color.red
+                        , SA.strokeWidth <| Num tickW
+                        ]
+                        []
+                    , S.circle
+                        ([ SA.cx <| Num (-length / 2)
+                         , SA.cy <| Num 0
+                         , SA.r <| Num (tickW * 2)
+                         ]
+                            ++ Interact.draggableEvents (IResizeHandle id False)
+                        )
+                        []
+                    , S.circle
+                        ([ SA.cx <| Num (length / 2)
+                         , SA.cy <| Num 0
+                         , SA.r <| Num (tickW * 2)
+                         ]
+                            ++ Interact.draggableEvents (IResizeHandle id True)
+                        )
+                        []
+                    ]
+
+                else
+                    []
+               )
+        )
+
+
+encoder : Wheel -> List ( String, E.Value )
+encoder w =
+    [ ( "name", E.string w.name )
+    , ( "startPercent", E.float w.startPercent )
+    , ( "volume", E.float w.volume )
+    , ( "mute", E.bool w.mute )
+    , ( "color", colorEncoder w.color )
+    , case w.content of
+        C c ->
+            Content.encoder encoder c
+    ]
+
+
+decoder : D.Decoder Wheel
+decoder =
+    Content.decoder (D.lazy (\_ -> decoder)) default
+        |> D.andThen
+            (\content ->
+                Field.attempt "name" D.string <|
+                    \name ->
+                        Field.require "startPercent" D.float <|
+                            \startPercent ->
+                                Field.require "volume" D.float <|
+                                    \volume ->
+                                        Field.require "mute" D.bool <|
+                                            \mute ->
+                                                Field.attempt "color" colorDecoder <|
+                                                    \color ->
+                                                        D.succeed
+                                                            { name = Maybe.withDefault "" name
+                                                            , startPercent = startPercent
+                                                            , volume = volume
+                                                            , content = C content
+                                                            , mute = mute
+                                                            , color = Maybe.withDefault Color.black color
+                                                            }
+            )
+
+
+colorEncoder : Color -> E.Value
+colorEncoder c =
+    let
+        named =
+            Color.toHsla c
+    in
+    E.object
+        [ ( "hue", E.float named.hue )
+        , ( "sat", E.float named.saturation )
+        , ( "light", E.float named.lightness )
+        , ( "alpha", E.float named.alpha )
         ]
+
+
+colorDecoder : D.Decoder Color
+colorDecoder =
+    Field.require "hue" D.float <|
+        \hue ->
+            Field.require "sat" D.float <|
+                \sat ->
+                    Field.require "light" D.float <|
+                        \light ->
+                            Field.require "alpha" D.float <|
+                                \alpha ->
+                                    D.succeed <| Color.hsla hue sat light alpha

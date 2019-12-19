@@ -1,193 +1,180 @@
-port module Engine exposing (Engine, addMotor, getAllLinks, init, isPlaying, mute, playPause, rmMotors, stop, toggle, volumeChanged)
+module Engine exposing
+    ( Engine
+    , addPlaying
+    , init
+    , isPlaying
+    , muted
+    , playCollar
+    , playingIds
+    , setPlaying
+    , stop
+    , volumeChanged
+    )
 
 import Coll exposing (Coll, Id)
-import Gear exposing (Gear, getMotors)
+import Collar exposing (Beed, Colleer)
+import Content
+import Gear exposing (Gear)
+import Harmony as Harmo
 import Json.Encode as E
-import Link exposing (Link)
-
-
-port toEngine : E.Value -> Cmd msg
-
-
-
--- TODO Could store adjacency lists (Gear.motors) in Dict (Id Gear, List (Id Gear))
--- but as need for Sets with Ids, either deopacify or add this kind of Dict into Coll API
+import Mobile exposing (Geer, Mobeel)
+import Motor
+import Sound
+import Wheel exposing (Wheel)
 
 
 type Engine
-    = E { playing : List (Id Gear) }
+    = E (List (Id Geer))
 
 
 init : Engine
 init =
-    E { playing = [] }
+    E []
 
 
-isPlaying : Engine -> Bool
-isPlaying (E e) =
-    not <| List.isEmpty e.playing
+isPlaying : Id Geer -> Engine -> Bool
+isPlaying id (E l) =
+    List.member id l
 
 
-toggle : { a | gears : Coll Gear, motor : Id Gear } -> Engine -> ( Engine, Cmd msg )
-toggle { gears, motor } (E e) =
-    if isPlaying (E e) then
-        ( init, stop )
-
-    else
-        let
-            ( addPlaying, cmd ) =
-                playPauseLinked motor gears
-        in
-        ( E { e | playing = addPlaying }, cmd )
+playingIds : Engine -> List (Id Geer)
+playingIds (E e) =
+    e
 
 
-addMotor : Link -> Coll Gear -> Engine -> ( Coll Gear, Engine, Cmd msg )
-addMotor l gears (E e) =
-    let
-        ( addPlaying, cmd ) =
-            case ( List.member (Tuple.first l) e.playing, List.member (Tuple.second l) e.playing ) of
-                ( True, False ) ->
-                    playPauseLinked (Tuple.second l) gears
-
-                ( False, True ) ->
-                    playPauseLinked (Tuple.first l) gears
-
-                _ ->
-                    ( [], Cmd.none )
-    in
-    ( Gear.addMotorLink l gears
-    , E { e | playing = e.playing ++ addPlaying }
-    , cmd
-    )
-
-
-rmMotors : List Link -> { a | gears : Coll Gear, motor : Id Gear } -> Engine -> ( Coll Gear, Engine, Cmd msg )
-rmMotors ls { gears, motor } (E e) =
-    let
-        newGears =
-            List.foldl Gear.rmMotorLink gears ls
-    in
-    if isPlaying (E e) then
-        let
-            motored =
-                visitMotors newGears motor []
-        in
-        ( newGears
-        , E { e | playing = motored }
-        , playPause (List.filter (\el -> not <| List.member el motored) e.playing) gears
-        )
-
-    else
-        ( newGears, E e, Cmd.none )
-
-
-mute : Id Gear -> Coll Gear -> Engine -> ( Coll Gear, Cmd msg )
-mute id gears (E e) =
-    let
-        g =
-            Coll.get id gears
-
-        newMute =
-            not <| Gear.getMute g
-    in
-    ( Coll.update id (Gear.setMute newMute) gears
-    , if isPlaying (E e) then
-        toEngine <|
-            E.object
-                [ ( "action", E.string "mute" )
-                , ( "gearId", E.string <| Gear.toUID id )
-                , ( "value", E.bool newMute )
-                ]
+setPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, Maybe E.Value )
+setPlaying l coll (E e) =
+    ( E l
+    , if List.isEmpty l then
+        Nothing
 
       else
-        Cmd.none
+        Just <| playPause coll <| List.filter (\el -> not <| List.member el l) e
     )
 
 
-volumeChanged : Id Gear -> Float -> Engine -> Cmd msg
-volumeChanged id volume e =
-    if isPlaying e then
-        toEngine <|
+addPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, Maybe E.Value )
+addPlaying l coll (E e) =
+    ( E (e ++ l)
+    , if List.isEmpty l then
+        Nothing
+
+      else
+        Just <| playPause coll l
+    )
+
+
+playPause : Coll Geer -> List (Id Geer) -> E.Value
+playPause coll els =
+    E.object
+        [ ( "action", E.string "playPause" )
+        , ( "gears", E.list (encodeGear coll) els )
+        ]
+
+
+stop : E.Value
+stop =
+    E.object [ ( "action", E.string "stopReset" ) ]
+
+
+playCollar : Colleer -> E.Value
+playCollar collar =
+    E.object
+        [ ( "action", E.string "playCollar" )
+        , ( "baseId", E.string <| String.dropRight 1 <| Collar.toUID 0 )
+        , ( "collar", encodeCollar collar )
+        ]
+
+
+muted : Id Geer -> Bool -> Engine -> Maybe E.Value
+muted id mute e =
+    if isPlaying id e then
+        Just <|
             E.object
-                [ ( "action", E.string "volume" )
-                , ( "gearId", E.string <| Gear.toUID id )
-                , ( "value", E.float volume )
+                [ ( "action", E.string "mute" )
+                , ( "gearId", E.string <| Gear.toUID <| Coll.idMap id )
+                , ( "value", E.bool mute )
                 ]
 
     else
-        Cmd.none
+        Nothing
 
 
-playPauseLinked : Id Gear -> Coll Gear -> ( List (Id Gear), Cmd msg )
-playPauseLinked motor gears =
+volumeChanged : Id Geer -> Float -> Engine -> Maybe E.Value
+volumeChanged id volume e =
+    if isPlaying id e then
+        Just <|
+            E.object
+                [ ( "action", E.string "volume" )
+                , ( "gearId", E.string <| Gear.toUID <| Coll.idMap id )
+                , ( "value", E.float <| clamp 0 1 volume )
+                ]
+
+    else
+        Nothing
+
+
+encodeWheel : Wheel -> List ( String, E.Value )
+encodeWheel w =
+    [ ( "mute", E.bool w.mute )
+    , ( "volume", E.float <| clamp 0 1 w.volume )
+    ]
+        ++ (case Wheel.getContent { wheel = w } of
+                Content.S s ->
+                    [ ( "soundName", E.string <| Sound.toString s ) ]
+
+                Content.M m ->
+                    [ ( "mobile", encodeMobile m ) ]
+
+                Content.C c ->
+                    [ ( "collar", encodeCollar c ) ]
+           )
+
+
+encodeGear : Coll Geer -> Id Geer -> E.Value
+encodeGear coll id =
     let
-        changed =
-            visitMotors gears motor []
+        g =
+            Coll.get id coll
+
+        length =
+            Harmo.getLength g.harmony coll
+
+        uid =
+            Gear.toUID id
     in
-    ( changed
-    , playPause changed gears
-    )
+    if length == 0 then
+        Debug.log (uid ++ "’s length is 0") E.null
 
-
-playPause : List (Id Gear) -> Coll Gear -> Cmd msg
-playPause ids gears =
-    toEngine <|
+    else
         E.object
-            [ ( "action", E.string "playPause" )
-            , ( "gears", E.list (\id -> Gear.encoderToEngine id gears) ids )
-            ]
+            ([ ( "id", E.string <| uid )
+             , ( "length", E.float length )
+             ]
+                ++ encodeWheel g.wheel
+            )
 
 
-stop : Cmd msg
-stop =
-    toEngine <| E.object [ ( "action", E.string "stopReset" ) ]
+encodeMobile : Mobeel -> E.Value
+encodeMobile { motor, gears } =
+    E.object
+        [ ( "length", E.float <| Harmo.getLengthId motor gears )
+        , ( "gears", E.list (encodeGear gears) <| Motor.getMotored motor gears )
+        ]
 
 
-getAllLinks : Coll Gear -> List Link
-getAllLinks gears =
-    Coll.ids gears
-        |> List.foldl (\id -> visitToLinks gears id Nothing) ( [], [] )
-        |> Tuple.second
+encodeCollar : Colleer -> E.Value
+encodeCollar c =
+    E.object
+        [ ( "length", E.float c.matrice )
+        , ( "loopStart", E.float c.loop )
+        , ( "beads", E.list encodeBead <| Collar.getBeads c )
+        ]
 
 
-
--- TODO sometimes double Link in the list
--- either Set Link or switch from adjacency list to edge list ?
-
-
-visitToLinks : Coll Gear -> Id Gear -> Maybe (Id Gear) -> ( List (Id Gear), List Link ) -> ( List (Id Gear), List Link )
-visitToLinks gears motorId mayFromId ( visited, links ) =
-    if List.member motorId visited then
-        ( visited, links )
-
-    else
-        let
-            g =
-                Coll.get motorId gears
-        in
-        getMotors g
-            |> List.foldl
-                (\neighbour ( v, l ) ->
-                    if Just neighbour == mayFromId then
-                        ( v, l )
-
-                    else
-                        visitToLinks gears neighbour (Just motorId) ( v, ( motorId, neighbour ) :: l )
-                )
-                ( motorId :: visited, links )
-
-
-visitMotors : Coll Gear -> Id Gear -> List (Id Gear) -> List (Id Gear)
-visitMotors gears motorId visited =
-    if List.member motorId visited then
-        visited
-
-    else
-        let
-            g =
-                Coll.get motorId gears
-        in
-        getMotors g
-            |> List.foldl
-                (\neighbour -> visitMotors gears neighbour)
-                (motorId :: visited)
+encodeBead : Beed -> E.Value
+encodeBead b =
+    E.object
+        (( "length", E.float b.length )
+            :: encodeWheel b.wheel
+        )

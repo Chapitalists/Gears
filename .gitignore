@@ -19,7 +19,6 @@ elm-stuff
 repl-temp-*
 
 # node stuff
-package.json
 package-lock.json
 node_modules
 

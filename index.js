@@ -18,6 +18,10 @@ if (!fs.existsSync(soundPath)) fs.mkdirSync(soundPath)
 if (!fs.existsSync(savePath)) fs.mkdirSync(savePath)
 if (!fs.existsSync(backupPath)) fs.mkdirSync(backupPath)
 
+function hidedFileFilter (name) {
+  return name.split('.')[0]
+}
+
 function soundExtensionFilter (name) {
   return soundExtensions.some(ext=>name.toLowerCase().endsWith(ext))
 }
@@ -35,12 +39,14 @@ const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
       
         soundList : (req, res) => {
             res.end(fs.readdirSync(soundPath)
+                .filter(hidedFileFilter)
                 .filter(soundExtensionFilter)
                 .join('\\'))
         }
 
         , savesList : (req, res) => {
             res.end(fs.readdirSync(savePath)
+                .filter(hidedFileFilter)
                 .filter(saveExtensionFilter)
                 .join('\\'))
         }

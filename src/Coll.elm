@@ -1,4 +1,25 @@
-module Coll exposing (Coll, Id, decoder, empty, encoder, fillReserved, filter, get, idDecoder, idEncoder, idToString, ids, insert, insertTellId, maybeGet, remove, reserve, startId, toList, update, values)
+module Coll exposing
+    ( Coll
+    , Id
+    , decoder
+    , empty
+    , encoder
+    , filter
+    , get
+    , idDecoder
+    , idEncoder
+    , idMap
+    , idToString
+    , ids
+    , insert
+    , insertTellId
+    , maybeGet
+    , remove
+    , startId
+    , toList
+    , update
+    , values
+    )
 
 import Dict exposing (Dict)
 import Json.Decode as D
@@ -13,11 +34,6 @@ type Id x
 getIdInternal : Id x -> Int
 getIdInternal (Id i) =
     i
-
-
-opacifyId : Int -> Id x
-opacifyId i =
-    Id i
 
 
 idToString : Id x -> String
@@ -35,8 +51,18 @@ idDecoder =
     D.map Id D.int
 
 
+idMap : Id a -> Id b
+idMap (Id i) =
+    Id i
+
+
 type Coll item
-    = C { nextId : Int, d : Dict Int item, default : item }
+    = C
+        { nextId : Int
+        , d : Dict Int item
+        , default : item
+        , typeString : String
+        }
 
 
 startInt : Int
@@ -46,19 +72,19 @@ startInt =
 
 startId : Id item
 startId =
-    opacifyId startInt
+    Id startInt
 
 
-empty : item -> Coll item
-empty default =
-    C { nextId = startInt, d = Dict.empty, default = default }
+empty : String -> item -> Coll item
+empty typeString default =
+    C { nextId = startInt, d = Dict.empty, default = default, typeString = typeString }
 
 
 get : Id item -> Coll item -> item
 get id (C coll) =
     case maybeGet id (C coll) of
         Nothing ->
-            Debug.log ("No item for id " ++ (String.fromInt <| getIdInternal id)) coll.default
+            Debug.log ("No " ++ coll.typeString ++ " for id " ++ (String.fromInt <| getIdInternal id)) coll.default
 
         Just item ->
             item
@@ -76,22 +102,12 @@ insert el (C coll) =
 
 insertTellId : item -> Coll item -> ( Id item, Coll item )
 insertTellId el (C coll) =
-    ( opacifyId coll.nextId, C { coll | d = Dict.insert coll.nextId el coll.d, nextId = coll.nextId + 1 } )
+    ( Id coll.nextId, C { coll | d = Dict.insert coll.nextId el coll.d, nextId = coll.nextId + 1 } )
 
 
 remove : Id item -> Coll item -> Coll item
 remove id (C coll) =
     C { coll | d = Dict.remove (getIdInternal id) coll.d }
-
-
-reserve : Coll item -> ( Coll item, Id item )
-reserve (C coll) =
-    ( C { coll | nextId = coll.nextId + 1 }, opacifyId coll.nextId )
-
-
-fillReserved : Id item -> item -> Coll item -> Coll item
-fillReserved id el (C coll) =
-    C { coll | d = Dict.insert (getIdInternal id) el coll.d }
 
 
 update : Id item -> (item -> item) -> Coll item -> Coll item
@@ -107,12 +123,12 @@ filter isGood (C coll) =
 toList : Coll item -> List ( Id item, item )
 toList (C { d }) =
     Dict.toList d
-        |> List.map (Tuple.mapFirst opacifyId)
+        |> List.map (Tuple.mapFirst Id)
 
 
 ids : Coll item -> List (Id item)
 ids (C { d }) =
-    List.map opacifyId <| Dict.keys d
+    List.map Id <| Dict.keys d
 
 
 values : Coll item -> List item
@@ -125,9 +141,9 @@ encoder (C coll) itemEncoder =
     E.list (keyValueEncoder itemEncoder) (Dict.toList coll.d)
 
 
-decoder : D.Decoder item -> item -> D.Decoder (Coll item)
-decoder itemDecoder defaultItem =
-    D.map (fromKeyValue defaultItem) <| D.list (keyValueDecoder itemDecoder)
+decoder : D.Decoder item -> String -> item -> D.Decoder (Coll item)
+decoder itemDecoder typeString defaultItem =
+    D.map (fromKeyValue typeString defaultItem) <| D.list (keyValueDecoder itemDecoder)
 
 
 keyValueEncoder : (item -> E.Value) -> ( Int, item ) -> E.Value
@@ -144,8 +160,8 @@ keyValueDecoder itemDecoder =
                     D.succeed ( i, item )
 
 
-fromKeyValue : item -> List ( Int, item ) -> Coll item
-fromKeyValue default l =
+fromKeyValue : String -> item -> List ( Int, item ) -> Coll item
+fromKeyValue typeString default l =
     let
         ( ints, _ ) =
             List.unzip l
@@ -160,4 +176,5 @@ fromKeyValue default l =
 
                 Just i ->
                     i + 1
+        , typeString = typeString
         }

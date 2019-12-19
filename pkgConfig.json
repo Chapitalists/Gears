@@ -2,7 +2,8 @@
 , "pkg":
   { "scripts":  []
   , "assets":
-    [ "ports.html"
+    [ "playable.js"
+    , "ports.html"
     , "ports.js"
     , "elmApp.js"
     , "lib/svg.js"

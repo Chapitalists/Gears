@@ -1,0 +1,17 @@
+{
+  "name": "gears",
+  "version": "0.2.0",
+  "description": "Gears",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "cbossut",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "dependencies": {
+    "static-route": "^0.2.0"
+  }
+}
