@@ -15,6 +15,9 @@ elmApp.js
 # elm-package generated files
 elm-stuff
 
+# unknown elm stuff ?
+.elm*
+
 # elm-repl generated files
 repl-temp-*
 
