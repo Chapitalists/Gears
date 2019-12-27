@@ -98,6 +98,49 @@ addButton('LOOP', ()=>{
   l.autostart = true
 })
 
+let players = [ new Tone.Player(baseUrl + '/sons/' + sons[0]).toMaster()
+              , new Tone.Player(baseUrl + '/sons/' + sons[2]).toMaster()
+              ]
+players[0].loop = players[1].loop = true
+addButton('COLLAR', ()=>{
+  let durs = players.map(v=>v.buffer.duration)
+    , totalDur = durs.reduce((a,b)=>a+b, 0)
+    , clocks = []
+    , pos = [0,0]
+    , estimated = 0
+  console.log(durs, totalDur)
+  for (let i in players) {
+    clocks.push(new Tone.Clock(t=>{
+      console.log(Math.round((t - estimated)*1000000), t, estimated)
+      estimated += durs[i]
+    }, 1/totalDur))
+  }
+  estimated = Tone.now() + 0.1
+  clocks[0].start("+0.1")
+  clocks[1].start("+"+(durs[0]+0.1))
+})
+//addButton('COLLAR', ()=>{
+//  let offsets = [0, -1]
+//    , part = [[0, 0], [players[0].buffer.duration, 1]]
+//    , estimated = 0.1
+//    , p = new Tone.Part((t, i) => {
+//      players[i].start(t, offsets[i])
+//      offsets[i] = t
+//      console.log(t - estimated)
+//      estimated += players[i].buffer.duration
+//      if (offsets[1-i] == -1) offsets[1-i] = 0
+//      else {
+//        players[1-i].stop(t)
+//        offsets[1-i] = t - offsets[1-i]
+//      }
+//      console.log(t, i, offsets[1-i], players[1-i].buffer.duration - offsets[1-i])
+//    }, part)
+//  players[0].loop = players[1].loop = p.loop = true
+//  p.loopEnd = players[0].buffer.duration + players[1].buffer.duration
+//  p.start()
+//  Tone.Transport.start()
+//})
+
 const gearMixin = {
   turn: function (dur) {
     dur = dur || (Math.random()*2000 + 1000)
