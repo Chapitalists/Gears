@@ -51,6 +51,13 @@ type Mode
     | ChangeSound (Id Geer)
 
 
+keyCodeToMode : List ( String, Mode )
+keyCodeToMode =
+    [ ( "KeyV", Nav )
+    , ( "KeyD", Move )
+    ]
+
+
 type alias LinkInfo =
     { link : Link Geer, fract : Maybe Fraction }
 
@@ -108,7 +115,7 @@ type Msg
     | SimplifyFractView
     | Capsuled (Id Geer)
     | Collared (Id Geer)
-    | Interacted (Interact.Event Interactable)
+    | Interacted (Interact.MouseEvent Interactable)
     | WheelMsg ( Id Geer, Wheel.Msg )
     | GearMsg ( Id Geer, Gear.Msg )
     | OutMsg DocMsg
@@ -845,7 +852,7 @@ computeCuts cut gears =
         |> List.filter (Link.cuts cut << Link.toSegment << Gear.toDrawLink gears)
 
 
-interactPlay : Bool -> Float -> Interact.Event Interactable -> Model -> Mobeel -> Return
+interactPlay : Bool -> Float -> Interact.MouseEvent Interactable -> Model -> Mobeel -> Return
 interactPlay on scale event model mobile =
     let
         return =
@@ -964,7 +971,7 @@ interactPlay on scale event model mobile =
             return
 
 
-interactHarmonize : Float -> Interact.Event Interactable -> Model -> Mobeel -> Return
+interactHarmonize : Float -> Interact.MouseEvent Interactable -> Model -> Mobeel -> Return
 interactHarmonize scale event model mobile =
     let
         return =

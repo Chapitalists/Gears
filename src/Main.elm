@@ -6,6 +6,7 @@ import Browser.Navigation as Nav
 import Coll exposing (Coll, Id)
 import Collar
 import Content
+import Dict exposing (Dict)
 import Doc exposing (Doc)
 import Editor.Mobile as MEditor exposing (Interactable(..))
 import Element exposing (..)
@@ -78,7 +79,7 @@ type alias Model =
     , svgSize : Size Float
     , screenSize : Size Int
     , fileExplorerTab : ExTab
-    , capsuling : Bool
+    , mode : Mode
     , interact : Interact.State MEditor.Interactable
     }
 
@@ -140,7 +141,7 @@ init screen url _ =
         (Size 0 0)
         screen
         Sounds
-        False
+        NoMode
         Interact.init
     , fetchSoundList url
     )
@@ -161,10 +162,9 @@ type Msg
     | SoundLoaded (Result D.Error Sound)
     | SoundClicked Sound
     | ChangedExplorerTab ExTab
-    | Capsuling Bool
+    | ChangedMode Mode
     | UpdateViewPos ViewPos
     | Zoom Float ( Float, Float )
-    | ReleasedMode
     | GotSVGSize (Result D.Error (Size Float))
     | GotScreenSize (Size Int)
     | DocMsg Doc.Msg
@@ -230,7 +230,7 @@ update msg model =
                                 )
                                 l
                     in
-                    if model.capsuling then
+                    if model.mode == Capsuling then
                         let
                             ( newDoc, pos, cmd ) =
                                 Doc.addGearToMobile (Content.M m) model.doc
@@ -316,12 +316,23 @@ update msg model =
         ChangedExplorerTab tab ->
             ( { model | fileExplorerTab = tab }, Cmd.none )
 
-        Capsuling on ->
-            if on then
-                ( { model | capsuling = on, fileExplorerTab = Saves }, Cmd.none )
+        -- FIXME Code smell?
+        ChangedMode mode ->
+            case mode of
+                MobileMode subMode ->
+                    update (DocMsg <| Doc.MobileMsg <| MEditor.ChangedMode subMode) { model | mode = mode }
 
-            else
-                ( { model | capsuling = on }, Cmd.none )
+                _ ->
+                    let
+                        ( newModel, cmds ) =
+                            update (DocMsg <| Doc.MobileMsg <| MEditor.ChangedMode MEditor.Normal) model
+                    in
+                    case mode of
+                        Capsuling ->
+                            ( { newModel | mode = Capsuling, fileExplorerTab = Saves }, cmds )
+
+                        _ ->
+                            ( { newModel | mode = mode }, cmds )
 
         UpdateViewPos vp ->
             ( { model | viewPos = vp }, Cmd.none )
@@ -348,9 +359,6 @@ update msg model =
             in
             ( { model | viewPos = { c = nC, smallestSize = nS } }, Cmd.none )
 
-        ReleasedMode ->
-            update (DocMsg <| Doc.KeyPressed Doc.Normal) { model | capsuling = False }
-
         GotSVGSize res ->
             case res of
                 Result.Err e ->
@@ -374,6 +382,7 @@ update msg model =
                 _ ->
                     ( { model | doc = doc }, Cmd.map DocMsg cmd )
 
+        -- TODO use some pattern like outMessage package? or elm-state? elm-return?
         InteractMsg subMsg ->
             let
                 ( interact, event ) =
@@ -381,19 +390,41 @@ update msg model =
             in
             case event of
                 Just e ->
-                    let
-                        svgEvent =
-                            case e.action of
-                                Interact.Dragged pos1 pos2 k ->
-                                    { e | action = Interact.Dragged (posToSvg pos1 model) (posToSvg pos2 model) k }
+                    case e of
+                        Interact.Mouse me ->
+                            let
+                                svgEvent =
+                                    case me.action of
+                                        Interact.Dragged pos1 pos2 k ->
+                                            { me | action = Interact.Dragged (posToSvg pos1 model) (posToSvg pos2 model) k }
+
+                                        _ ->
+                                            me
+
+                                ( doc, cmd ) =
+                                    Doc.update (Doc.InteractEvent svgEvent) (getScale model) model.doc
+                            in
+                            ( { model | interact = interact, doc = doc }, Cmd.map DocMsg cmd )
+
+                        Interact.Hold hold ->
+                            case List.filterMap (\code -> Dict.get code keyCodeToMode) <| Set.toList hold of
+                                [ only ] ->
+                                    update (ChangedMode only) { model | interact = interact }
 
                                 _ ->
-                                    e
+                                    update (ChangedMode NoMode) { model | interact = interact }
 
-                        ( doc, cmd ) =
-                            Doc.update (Doc.InteractEvent svgEvent) (getScale model) model.doc
-                    in
-                    ( { model | interact = interact, doc = doc }, Cmd.map DocMsg cmd )
+                        Interact.Press code ->
+                            case Dict.get code keyCodeToShortcut of
+                                Just press ->
+                                    let
+                                        ( doc, cmd ) =
+                                            Doc.update (Doc.KeyPressed press) (getScale model) model.doc
+                                    in
+                                    ( { model | interact = interact, doc = doc }, Cmd.map DocMsg cmd )
+
+                                Nothing ->
+                                    ( { model | interact = interact }, Cmd.none )
 
                 Nothing ->
                     ( { model | interact = interact }, Cmd.none )
@@ -406,61 +437,37 @@ update msg model =
 -- SUBS
 
 
+subs : Model -> Sub Msg
 subs { interact } =
     Sub.batch <|
         [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , newSVGSize (sizeDecoder >> GotSVGSize)
-        , BE.onKeyPress shortcutDecoder
-        , BE.onKeyDown modeDecoder
-        , BE.onKeyUp <| D.succeed <| ReleasedMode
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
         ]
             ++ List.map (Sub.map InteractMsg) (Interact.subs interact)
 
 
-shortcutDecoder : D.Decoder Msg
-shortcutDecoder =
-    D.map keyCodeToMsg <| D.field "code" D.string
+type Mode
+    = MobileMode MEditor.Mode -- FIXME Two sources of truth
+    | Capsuling
+    | NoMode
 
 
-modeDecoder : D.Decoder Msg
-modeDecoder =
-    D.field "code" D.string
-        |> D.andThen
-            (\str ->
-                D.succeed <|
-                    case str of
-                        "KeyV" ->
-                            DocMsg <| Doc.KeyPressed Doc.Nav
-
-                        "KeyE" ->
-                            Capsuling True
-
-                        "KeyD" ->
-                            DocMsg <| Doc.KeyPressed Doc.Move
-
-                        _ ->
-                            NOOP
-            )
+keyCodeToMode : Dict String Mode
+keyCodeToMode =
+    Dict.fromList <|
+        ( "KeyE", Capsuling )
+            :: List.map (Tuple.mapSecond MobileMode) MEditor.keyCodeToMode
 
 
-keyCodeToMsg : String -> Msg
-keyCodeToMsg str =
-    case str of
-        "KeyZ" ->
-            DocMsg <| Doc.KeyPressed <| Doc.Tool 1
-
-        "KeyX" ->
-            DocMsg <| Doc.KeyPressed <| Doc.Tool 2
-
-        "KeyC" ->
-            DocMsg <| Doc.KeyPressed <| Doc.Tool 3
-
-        "Space" ->
-            DocMsg <| Doc.KeyPressed Doc.Play
-
-        _ ->
-            NOOP
+keyCodeToShortcut : Dict String Doc.Shortcut
+keyCodeToShortcut =
+    Dict.fromList
+        [ ( "KeyZ", Doc.Tool 1 )
+        , ( "KeyX", Doc.Tool 2 )
+        , ( "KeyC", Doc.Tool 3 )
+        , ( "Space", Doc.Play )
+        ]
 
 
 
@@ -524,7 +531,7 @@ viewFileExplorer : Model -> Element Msg
 viewFileExplorer model =
     let
         bgColor =
-            if model.capsuling then
+            if model.mode == Capsuling then
                 rgb 0.2 0.2 0.8
 
             else

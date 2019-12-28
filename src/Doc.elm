@@ -166,9 +166,6 @@ addGearToMobile c (D doc) =
 type Shortcut
     = Tool Int
     | Play
-    | Nav
-    | Normal
-    | Move
 
 
 type Msg
@@ -182,7 +179,7 @@ type Msg
     | KeyPressed Shortcut
     | MobileMsg MEditor.Msg
     | CollarMsg CEditor.Msg
-    | InteractEvent (Interact.Event MEditor.Interactable)
+    | InteractEvent (Interact.MouseEvent MEditor.Interactable)
 
 
 update : Msg -> Float -> Doc -> ( Doc, Cmd Msg )
@@ -240,15 +237,6 @@ update msg scale (D doc) =
 
         KeyPressed sh ->
             case ( sh, doc.editor ) of
-                ( Nav, M _ ) ->
-                    update (MobileMsg <| MEditor.ChangedMode MEditor.Nav) scale (D doc)
-
-                ( Move, M _ ) ->
-                    update (MobileMsg <| MEditor.ChangedMode MEditor.Move) scale (D doc)
-
-                ( Normal, M _ ) ->
-                    update (MobileMsg <| MEditor.ChangedMode MEditor.Normal) scale (D doc)
-
                 ( Tool i, M _ ) ->
                     case i of
                         1 ->
