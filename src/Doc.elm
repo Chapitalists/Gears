@@ -26,12 +26,11 @@ import Wheel exposing (Wheel)
 port toEngine : E.Value -> Cmd msg
 
 
-type Doc
-    = D
-        { data : Data Mobeel
-        , viewing : List ( String, Identifier )
-        , editor : Editor
-        }
+type alias Doc =
+    { data : Data Mobeel
+    , viewing : List ( String, Identifier )
+    , editor : Editor
+    }
 
 
 type Identifier
@@ -50,11 +49,10 @@ type alias WContent =
 
 init : Maybe Url -> Doc
 init url =
-    D
-        { data = Data.init Mobile.new url
-        , viewing = []
-        , editor = M MEditor.init
-        }
+    { data = Data.init Mobile.new url
+    , viewing = []
+    , editor = M MEditor.init
+    }
 
 
 
@@ -62,12 +60,12 @@ init url =
 
 
 changeMobile : Mobeel -> String -> Doc -> Doc
-changeMobile m name (D d) =
+changeMobile m name d =
     let
-        (D n) =
+        n =
             init Nothing
     in
-    D { n | data = Data.load m name d.data }
+    { n | data = Data.load m name d.data }
 
 
 
@@ -76,25 +74,24 @@ changeMobile m name (D d) =
 
 
 soundClicked : Sound -> Doc -> ( Doc, Maybe Vec2, Cmd Msg )
-soundClicked sound (D doc) =
+soundClicked sound doc =
     case doc.editor of
         C editor ->
-            ( D
-                { doc
-                    | data =
-                        Data.do
-                            (updateCollar doc.viewing
-                                (Collar.add editor.cursor <| Collar.beadFromSound sound)
-                                (Data.current doc.data)
-                            )
-                            doc.data
-                }
+            ( { doc
+                | data =
+                    Data.do
+                        (updateCollar doc.viewing
+                            (Collar.add editor.cursor <| Collar.beadFromSound sound)
+                            (Data.current doc.data)
+                        )
+                        doc.data
+              }
             , Nothing
             , Cmd.none
             )
 
         M editor ->
-            case ( editor.mode, getViewing (D doc) ) of
+            case ( editor.mode, getViewing doc ) of
                 ( MEditor.ChangeSound id, Content.M mobile ) ->
                     let
                         group =
@@ -103,34 +100,33 @@ soundClicked sound (D doc) =
                         chSound =
                             Wheel.update <| Wheel.ChangeContent <| Content.S sound
                     in
-                    ( D
-                        { doc
-                            | data =
-                                Data.do
-                                    (updateMobile doc.viewing
-                                        (\m ->
-                                            { m
-                                                | gears =
-                                                    List.foldl (\el -> Coll.update el chSound) m.gears group
-                                            }
-                                        )
-                                     <|
-                                        Data.current doc.data
+                    ( { doc
+                        | data =
+                            Data.do
+                                (updateMobile doc.viewing
+                                    (\m ->
+                                        { m
+                                            | gears =
+                                                List.foldl (\el -> Coll.update el chSound) m.gears group
+                                        }
                                     )
-                                    doc.data
-                            , editor = M { editor | mode = MEditor.Normal }
-                        }
+                                 <|
+                                    Data.current doc.data
+                                )
+                                doc.data
+                        , editor = M { editor | mode = MEditor.Normal }
+                      }
                     , Nothing
                     , Cmd.none
                     )
 
                 _ ->
-                    (\( a, b, c ) -> ( a, Just b, c )) <| addGearToMobile (Content.S sound) (D doc)
+                    (\( a, b, c ) -> ( a, Just b, c )) <| addGearToMobile (Content.S sound) doc
 
 
 addGearToMobile : Content Wheel -> Doc -> ( Doc, Vec2, Cmd Msg )
-addGearToMobile c (D doc) =
-    case getViewing (D doc) of
+addGearToMobile c doc =
+    case getViewing doc of
         Content.M mobile ->
             let
                 pos =
@@ -142,25 +138,24 @@ addGearToMobile c (D doc) =
                 colorGen =
                     Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
             in
-            ( D
-                { doc
-                    | data =
-                        Data.do
-                            (updateMobile doc.viewing
-                                (\m ->
-                                    { m | gears = gears }
-                                )
-                             <|
-                                Data.current doc.data
+            ( { doc
+                | data =
+                    Data.do
+                        (updateMobile doc.viewing
+                            (\m ->
+                                { m | gears = gears }
                             )
-                            doc.data
-                }
+                         <|
+                            Data.current doc.data
+                        )
+                        doc.data
+              }
             , pos
             , Random.generate (\color -> MobileMsg <| MEditor.WheelMsg ( id, Wheel.ChangeColor color )) colorGen
             )
 
         _ ->
-            ( D doc, vec2 50 50, Cmd.none )
+            ( doc, vec2 50 50, Cmd.none )
 
 
 type Shortcut
@@ -183,39 +178,39 @@ type Msg
 
 
 update : Msg -> Float -> Doc -> ( Doc, Cmd Msg )
-update msg scale (D doc) =
+update msg scale doc =
     -- TODO Maybe clean view right here
     case msg of
         EnteredFileName name ->
             if String.all (\c -> Char.isAlphaNum c || c == '-') name then
-                ( D { doc | data = Data.setName name doc.data }, Cmd.none )
+                ( { doc | data = Data.setName name doc.data }, Cmd.none )
 
             else
-                ( D doc, Cmd.none )
+                ( doc, Cmd.none )
 
         Save ->
             let
                 ( data, cmd ) =
                     Data.save doc.data Mobile.encoder Saved
             in
-            ( D { doc | data = data }, cmd )
+            ( { doc | data = data }, cmd )
 
         Saved ->
             --TODO handle server response
-            ( D doc, Cmd.none )
+            ( doc, Cmd.none )
 
         New ->
             let
-                (D n) =
+                n =
                     init Nothing
             in
-            ( D { n | data = Data.new Mobile.new doc.data }, toEngine Engine.stop )
+            ( { n | data = Data.new Mobile.new doc.data }, toEngine Engine.stop )
 
         Undo ->
-            ( D { doc | data = Data.undo doc.data }, Cmd.none )
+            ( { doc | data = Data.undo doc.data }, Cmd.none )
 
         Redo ->
-            ( D { doc | data = Data.redo doc.data }, Cmd.none )
+            ( { doc | data = Data.redo doc.data }, Cmd.none )
 
         View l ->
             let
@@ -227,41 +222,41 @@ update msg scale (D doc) =
             in
             case getViewingHelper v mobileContent of
                 Content.C c ->
-                    ( D { doc | viewing = v, editor = C CEditor.init }, toEngine Engine.stop )
+                    ( { doc | viewing = v, editor = C CEditor.init }, toEngine Engine.stop )
 
                 Content.M m ->
-                    ( D { doc | viewing = l, editor = M MEditor.init }, toEngine Engine.stop )
+                    ( { doc | viewing = l, editor = M MEditor.init }, toEngine Engine.stop )
 
                 _ ->
-                    Debug.log "IMPOSSIBLE Cannot view Sound" ( D doc, Cmd.none )
+                    Debug.log "IMPOSSIBLE Cannot view Sound" ( doc, Cmd.none )
 
         KeyPressed sh ->
             case ( sh, doc.editor ) of
                 ( Tool i, M _ ) ->
                     case i of
                         1 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False) scale (D doc)
+                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False) scale doc
 
                         2 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Harmonize) scale (D doc)
+                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Harmonize) scale doc
 
                         3 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Edit) scale (D doc)
+                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Edit) scale doc
 
                         _ ->
-                            ( D doc, Cmd.none )
+                            ( doc, Cmd.none )
 
                 ( Play, M _ ) ->
-                    update (MobileMsg <| MEditor.ToggleEngine) scale (D doc)
+                    update (MobileMsg <| MEditor.ToggleEngine) scale doc
 
                 ( Play, C _ ) ->
-                    update (CollarMsg <| CEditor.ToggleEngine) scale (D doc)
+                    update (CollarMsg <| CEditor.ToggleEngine) scale doc
 
                 _ ->
-                    ( D doc, Cmd.none )
+                    ( doc, Cmd.none )
 
         MobileMsg subMsg ->
-            case ( doc.editor, getViewing (D doc) ) of
+            case ( doc.editor, getViewing doc ) of
                 ( M editor, Content.M mobile ) ->
                     let
                         res =
@@ -282,7 +277,7 @@ update msg scale (D doc) =
                                     doc.data
 
                         newDoc =
-                            D { doc | data = data, editor = M res.model }
+                            { doc | data = data, editor = M res.model }
                     in
                     ( Maybe.withDefault newDoc
                         (res.outMsg
@@ -304,10 +299,10 @@ update msg scale (D doc) =
                     )
 
                 _ ->
-                    Debug.log "IMPOSSIBLE MobileMsg while viewing no mobile" ( D doc, Cmd.none )
+                    Debug.log "IMPOSSIBLE MobileMsg while viewing no mobile" ( doc, Cmd.none )
 
         CollarMsg subMsg ->
-            case ( doc.editor, getViewing (D doc) ) of
+            case ( doc.editor, getViewing doc ) of
                 ( C editor, Content.C collar ) ->
                     let
                         ( newEditor, ( co, to ), engineCmd ) =
@@ -327,7 +322,7 @@ update msg scale (D doc) =
                                 CEditor.NOOP ->
                                     doc.data
                     in
-                    ( D { doc | data = data }
+                    ( { doc | data = data }
                     , case engineCmd of
                         Nothing ->
                             Cmd.none
@@ -337,16 +332,16 @@ update msg scale (D doc) =
                     )
 
                 _ ->
-                    Debug.log "IMPOSSIBLE CollarMsg while viewing no collar" ( D doc, Cmd.none )
+                    Debug.log "IMPOSSIBLE CollarMsg while viewing no collar" ( doc, Cmd.none )
 
         InteractEvent event ->
-            update (MobileMsg <| MEditor.Interacted event) scale (D doc)
+            update (MobileMsg <| MEditor.Interacted event) scale doc
 
 
 viewTop : Doc -> Element Msg
-viewTop (D doc) =
+viewTop doc =
     column [ width fill ]
-        [ viewNav (D doc)
+        [ viewNav doc
         , row [ width fill, padding 10, spacing 20, Font.size 14 ]
             ((case doc.editor of
                 M editor ->
@@ -401,7 +396,7 @@ viewTop (D doc) =
 
 
 viewNav : Doc -> Element Msg
-viewNav (D doc) =
+viewNav doc =
     row [] <|
         List.intersperse (text ">") <|
             Input.button []
@@ -419,7 +414,7 @@ viewNav (D doc) =
 
 
 viewBottom : Doc -> List (Element Msg)
-viewBottom (D doc) =
+viewBottom doc =
     case doc.editor of
         M editor ->
             [ Element.map MobileMsg <| MEditor.viewExtraTools editor ]
@@ -429,8 +424,8 @@ viewBottom (D doc) =
 
 
 viewSide : Doc -> List (Element Msg)
-viewSide (D doc) =
-    case ( doc.editor, getViewing (D doc) ) of
+viewSide doc =
+    case ( doc.editor, getViewing doc ) of
         ( M editor, Content.M m ) ->
             List.map (Element.map MobileMsg) <| MEditor.viewDetails editor m
 
@@ -438,8 +433,8 @@ viewSide (D doc) =
             []
 
 
-viewContent (D doc) =
-    case ( getViewing (D doc), doc.editor ) of
+viewContent doc =
+    case ( getViewing doc, doc.editor ) of
         ( Content.M m, M editor ) ->
             MEditor.viewContent ( editor, m )
 
@@ -451,7 +446,7 @@ viewContent (D doc) =
 
 
 getViewing : Doc -> WContent
-getViewing (D { viewing, data }) =
+getViewing { viewing, data } =
     getViewingHelper viewing <| Content.M <| Data.current data
 
 
