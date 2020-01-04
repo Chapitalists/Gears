@@ -2,7 +2,6 @@ port module Doc exposing (..)
 
 import Coll exposing (Coll, Id)
 import Collar exposing (Colleer)
-import Color
 import Content exposing (Content)
 import Data exposing (Data)
 import Editor.Collar as CEditor
@@ -11,14 +10,11 @@ import Element exposing (..)
 import Element.Font as Font
 import Element.Input as Input
 import Engine
-import Harmony as Harmo
-import Interact
+import Html.Attributes
 import Json.Encode as E
-import Math.Vector2 exposing (Vec2, vec2)
 import Mobile exposing (Geer, Mobeel)
-import Random
+import PanSvg
 import Sound exposing (Sound)
-import TypedSvg.Core as Svg
 import Url exposing (Url)
 import Wheel exposing (Wheel)
 
@@ -51,111 +47,8 @@ init : Maybe Url -> Doc
 init url =
     { data = Data.init Mobile.new url
     , viewing = []
-    , editor = M MEditor.init
+    , editor = M <| MEditor.init Nothing Nothing
     }
-
-
-
--- TODO why not msg in update ?
-
-
-changeMobile : Mobeel -> String -> Doc -> Doc
-changeMobile m name d =
-    let
-        n =
-            init Nothing
-    in
-    { n | data = Data.load m name d.data }
-
-
-
--- TODO Should be in Mobile.update, but shouldn’t return pos for that
--- Possible when viewPos moves to Mobile
-
-
-soundClicked : Sound -> Doc -> ( Doc, Maybe Vec2, Cmd Msg )
-soundClicked sound doc =
-    case doc.editor of
-        C editor ->
-            ( { doc
-                | data =
-                    Data.do
-                        (updateCollar doc.viewing
-                            (Collar.add editor.cursor <| Collar.beadFromSound sound)
-                            (Data.current doc.data)
-                        )
-                        doc.data
-              }
-            , Nothing
-            , Cmd.none
-            )
-
-        M editor ->
-            case ( editor.mode, getViewing doc ) of
-                ( MEditor.ChangeSound id, Content.M mobile ) ->
-                    let
-                        group =
-                            Harmo.getHarmonicGroup (Coll.idMap id) mobile.gears
-
-                        chSound =
-                            Wheel.update <| Wheel.ChangeContent <| Content.S sound
-                    in
-                    ( { doc
-                        | data =
-                            Data.do
-                                (updateMobile doc.viewing
-                                    (\m ->
-                                        { m
-                                            | gears =
-                                                List.foldl (\el -> Coll.update el chSound) m.gears group
-                                        }
-                                    )
-                                 <|
-                                    Data.current doc.data
-                                )
-                                doc.data
-                        , editor = M { editor | mode = MEditor.Normal }
-                      }
-                    , Nothing
-                    , Cmd.none
-                    )
-
-                _ ->
-                    (\( a, b, c ) -> ( a, Just b, c )) <| addGearToMobile (Content.S sound) doc
-
-
-addGearToMobile : Content Wheel -> Doc -> ( Doc, Vec2, Cmd Msg )
-addGearToMobile c doc =
-    case getViewing doc of
-        Content.M mobile ->
-            let
-                pos =
-                    vec2 50 50
-
-                ( id, gears ) =
-                    Coll.insertTellId (Mobile.gearFromContent c pos) mobile.gears
-
-                colorGen =
-                    Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
-            in
-            ( { doc
-                | data =
-                    Data.do
-                        (updateMobile doc.viewing
-                            (\m ->
-                                { m | gears = gears }
-                            )
-                         <|
-                            Data.current doc.data
-                        )
-                        doc.data
-              }
-            , pos
-            , Random.generate (\color -> MobileMsg <| MEditor.WheelMsg ( id, Wheel.ChangeColor color )) colorGen
-            )
-
-        _ ->
-            ( doc, vec2 50 50, Cmd.none )
 
 
 type Shortcut
@@ -168,18 +61,20 @@ type Msg
     | Save
     | Saved
     | New
+    | Loaded Mobeel String
     | Undo
     | Redo
     | View (List ( String, Identifier ))
+    | SoundClicked Sound
+    | AddContent WContent
     | KeyPressed Shortcut
     | MobileMsg MEditor.Msg
     | CollarMsg CEditor.Msg
-    | InteractEvent (Interact.MouseEvent MEditor.Interactable)
 
 
-update : Msg -> Float -> Doc -> ( Doc, Cmd Msg )
-update msg scale doc =
-    -- TODO Maybe clean view right here
+update : Msg -> Doc -> ( Doc, Cmd Msg )
+update msg doc =
+    -- TODO Maybe clean viewing right here
     case msg of
         EnteredFileName name ->
             if String.all (\c -> Char.isAlphaNum c || c == '-') name then
@@ -206,6 +101,14 @@ update msg scale doc =
             in
             ( { n | data = Data.new Mobile.new doc.data }, toEngine Engine.stop )
 
+        Loaded m name ->
+            ( { data = Data.load m name doc.data
+              , viewing = []
+              , editor = M <| MEditor.init (Just m) <| Just <| getSvg doc
+              }
+            , toEngine Engine.stop
+            )
+
         Undo ->
             ( { doc | data = Data.undo doc.data }, Cmd.none )
 
@@ -225,32 +128,50 @@ update msg scale doc =
                     ( { doc | viewing = v, editor = C CEditor.init }, toEngine Engine.stop )
 
                 Content.M m ->
-                    ( { doc | viewing = l, editor = M MEditor.init }, toEngine Engine.stop )
+                    ( { doc | viewing = l, editor = M <| MEditor.init (Just m) <| Just <| getSvg doc }
+                    , toEngine Engine.stop
+                    )
 
                 _ ->
                     Debug.log "IMPOSSIBLE Cannot view Sound" ( doc, Cmd.none )
+
+        SoundClicked sound ->
+            case doc.editor of
+                M _ ->
+                    update (MobileMsg <| MEditor.SoundClicked sound) doc
+
+                C _ ->
+                    update (CollarMsg <| CEditor.SoundClicked sound) doc
+
+        AddContent content ->
+            case doc.editor of
+                M _ ->
+                    update (MobileMsg <| MEditor.NewGear content) doc
+
+                C _ ->
+                    update (CollarMsg <| CEditor.NewBead content) doc
 
         KeyPressed sh ->
             case ( sh, doc.editor ) of
                 ( Tool i, M _ ) ->
                     case i of
                         1 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False) scale doc
+                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False) doc
 
                         2 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Harmonize) scale doc
+                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Harmonize) doc
 
                         3 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Edit) scale doc
+                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Edit) doc
 
                         _ ->
                             ( doc, Cmd.none )
 
                 ( Play, M _ ) ->
-                    update (MobileMsg <| MEditor.ToggleEngine) scale doc
+                    update (MobileMsg <| MEditor.ToggleEngine) doc
 
                 ( Play, C _ ) ->
-                    update (CollarMsg <| CEditor.ToggleEngine) scale doc
+                    update (CollarMsg <| CEditor.ToggleEngine) doc
 
                 _ ->
                     ( doc, Cmd.none )
@@ -260,7 +181,7 @@ update msg scale doc =
                 ( M editor, Content.M mobile ) ->
                     let
                         res =
-                            MEditor.update subMsg scale ( editor, mobile )
+                            MEditor.update subMsg ( editor, mobile )
 
                         newMobile =
                             updateMobile doc.viewing (always res.mobile) <| Data.current doc.data
@@ -291,11 +212,13 @@ update msg scale doc =
                                                         doc.viewing
                                                             ++ [ ( Mobile.gearName id mobile.gears, G id ) ]
                                                     )
-                                                    scale
                                                     newDoc
                                 )
                         )
-                    , Maybe.withDefault Cmd.none <| Maybe.map toEngine res.toEngine
+                    , Cmd.batch
+                        [ Cmd.map MobileMsg res.cmd
+                        , Maybe.withDefault Cmd.none <| Maybe.map toEngine res.toEngine
+                        ]
                     )
 
                 _ ->
@@ -305,14 +228,14 @@ update msg scale doc =
             case ( doc.editor, getViewing doc ) of
                 ( C editor, Content.C collar ) ->
                     let
-                        ( newEditor, ( co, to ), engineCmd ) =
+                        res =
                             CEditor.update subMsg ( editor, collar )
 
                         newMobile =
-                            updateCollar doc.viewing (always co) <| Data.current doc.data
+                            updateCollar doc.viewing (always res.collar) <| Data.current doc.data
 
                         data =
-                            case to of
+                            case res.toUndo of
                                 CEditor.Do ->
                                     Data.do newMobile doc.data
 
@@ -322,8 +245,8 @@ update msg scale doc =
                                 CEditor.NOOP ->
                                     doc.data
                     in
-                    ( { doc | data = data }
-                    , case engineCmd of
+                    ( { doc | data = data, editor = C res.model }
+                    , case res.toEngine of
                         Nothing ->
                             Cmd.none
 
@@ -334,8 +257,34 @@ update msg scale doc =
                 _ ->
                     Debug.log "IMPOSSIBLE CollarMsg while viewing no collar" ( doc, Cmd.none )
 
-        InteractEvent event ->
-            update (MobileMsg <| MEditor.Interacted event) scale doc
+
+subs : Doc -> List (Sub Msg)
+subs doc =
+    case doc.editor of
+        M e ->
+            List.map (Sub.map MobileMsg) <| MEditor.subs e
+
+        C e ->
+            []
+
+
+view : Doc -> Element Msg
+view doc =
+    row [ height fill, width fill ] <|
+        (column [ width fill, height fill ]
+            ([ viewTop doc
+             , el
+                [ width fill
+                , height fill
+                , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
+                ]
+               <|
+                viewContent doc
+             ]
+                ++ viewBottom doc
+            )
+            :: viewSide doc
+        )
 
 
 viewTop : Doc -> Element Msg
@@ -433,16 +382,27 @@ viewSide doc =
             []
 
 
+viewContent : Doc -> Element Msg
 viewContent doc =
     case ( getViewing doc, doc.editor ) of
         ( Content.M m, M editor ) ->
-            MEditor.viewContent ( editor, m )
+            Element.map MobileMsg <| MEditor.viewContent ( editor, m )
 
         ( Content.C c, C editor ) ->
-            always <| always <| CEditor.viewContent ( editor, c )
+            Element.map CollarMsg <| CEditor.viewContent ( editor, c )
 
         _ ->
-            always <| always <| [ Svg.text "Cannot edit Sound currently" ]
+            text "Cannot edit Sound currently"
+
+
+getSvg : Doc -> PanSvg.Model
+getSvg doc =
+    case doc.editor of
+        M e ->
+            e.svg
+
+        C e ->
+            e.svg
 
 
 getViewing : Doc -> WContent
@@ -467,7 +427,7 @@ getViewingHelper l content =
 
 
 
--- TODO Should clean View with each update of data, do it in update before case ?
+-- TODO Should clean Viewing with each update of data, do it in update before case ?
 
 
 cleanViewing : List ( String, Identifier ) -> WContent -> List ( String, Identifier )

@@ -13,6 +13,8 @@ import Wheel exposing (Wheel)
 
 
 --TODO Put here half Editor.Mobile, let there only interaction and tools view
+--TODO Would lead to separate View and Controller, anti Elm Architecture
+--TODO Should find another way to split these two files?
 
 
 type alias Mobeel =
@@ -74,6 +76,15 @@ gearName id coll =
 
     else
         name
+
+
+gearPosSize : Id Geer -> Coll Geer -> ( Vec2, Float )
+gearPosSize id coll =
+    let
+        g =
+            Coll.get id coll
+    in
+    ( g.pos, Harmo.getLength g.harmony coll )
 
 
 encoder : Mobeel -> E.Value

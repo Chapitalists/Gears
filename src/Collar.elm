@@ -1,6 +1,5 @@
 module Collar exposing (..)
 
-import Coll
 import Content exposing (Bead, Collar)
 import Interact
 import Json.Decode as D
@@ -83,7 +82,7 @@ updateBead i f c =
         }
 
 
-view : Colleer -> List (Svg (Interact.Msg (Wheel.Interactable item)))
+view : Colleer -> List (Svg (Interact.Msg (Wheel.Interactable Int)))
 view c =
     List.foldl
         (\b ( l, ( p, i ) ) ->
@@ -91,7 +90,7 @@ view c =
                 (vec2 (p + b.length / 2) 50)
                 b.length
                 { mod = Wheel.None, motor = False, dashed = False }
-                Coll.startId
+                i
                 (toUID i)
                 :: l
             , ( p + b.length

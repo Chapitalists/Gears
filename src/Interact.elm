@@ -5,7 +5,6 @@ import Html
 import Html.Events.Extra.Mouse as Mouse
 import Json.Decode as D
 import Math.Vector2 exposing (Vec2, vec2)
-import Set exposing (Set)
 
 
 type alias Interact item =
@@ -39,7 +38,6 @@ type State item
     = S
         { hover : Maybe item
         , click : Maybe (ClickState item)
-        , hold : Set String
         }
 
 
@@ -56,7 +54,6 @@ init =
     S
         { hover = Nothing
         , click = Nothing
-        , hold = Set.empty
         }
 
 
@@ -67,9 +64,6 @@ type Msg item
     | ClickMove Vec2
     | EndClick
     | AbortClick
-    | Pressed String
-    | HoldDown String
-    | HoldUp String
     | NOOP
 
 
@@ -97,29 +91,14 @@ map f m =
         NOOP ->
             NOOP
 
-        Pressed v ->
-            Pressed v
 
-        HoldDown v ->
-            HoldDown v
-
-        HoldUp v ->
-            HoldUp v
-
-
-type Event item
-    = Mouse (MouseEvent item)
-    | Hold (Set String)
-    | Press String
-
-
-type alias MouseEvent item =
-    { action : MouseAction
+type alias Event item =
+    { action : Action
     , item : item
     }
 
 
-type MouseAction
+type Action
     = Clicked ( Bool, Bool, Bool )
     | Dragged Vec2 Vec2 ( Bool, Bool, Bool ) -- oldPos newPos
     | DragIn
@@ -132,14 +111,14 @@ update msg (S state) =
     case msg of
         HoverIn id ->
             ( S { state | hover = Just id }
-            , Maybe.map (always <| Mouse <| MouseEvent DragIn id) state.click
+            , Maybe.map (always <| Event DragIn id) state.click
             )
 
         HoverOut ->
             case state.hover of
                 Just id ->
                     ( S { state | hover = Nothing }
-                    , Maybe.map (always <| Mouse <| MouseEvent DragOut id) state.click
+                    , Maybe.map (always <| Event DragOut id) state.click
                     )
 
                 Nothing ->
@@ -152,7 +131,7 @@ update msg (S state) =
             case state.click of
                 Just click ->
                     ( S { state | click = Just { click | pos = pos, moved = True } }
-                    , Just <| Mouse <| MouseEvent (Dragged click.pos pos <| tupleFromKeys click.keys) click.item
+                    , Just <| Event (Dragged click.pos pos <| tupleFromKeys click.keys) click.item
                     )
 
                 _ ->
@@ -163,10 +142,10 @@ update msg (S state) =
                 Just { item, moved, keys } ->
                     ( S { state | click = Nothing }
                     , if moved then
-                        Just <| Mouse <| MouseEvent (DragEnded True) item
+                        Just <| Event (DragEnded True) item
 
                       else
-                        Just <| Mouse <| MouseEvent (Clicked <| tupleFromKeys keys) item
+                        Just <| Event (Clicked <| tupleFromKeys keys) item
                     )
 
                 _ ->
@@ -177,7 +156,7 @@ update msg (S state) =
                 Just { item, moved, keys } ->
                     ( S { state | click = Nothing }
                     , if moved then
-                        Just <| Mouse <| MouseEvent (DragEnded False) item
+                        Just <| Event (DragEnded False) item
 
                       else
                         Nothing
@@ -186,51 +165,29 @@ update msg (S state) =
                 _ ->
                     ( S state, Nothing )
 
-        Pressed code ->
-            ( S state, Just <| Press code )
-
-        HoldDown code ->
-            let
-                hold =
-                    Set.insert code state.hold
-            in
-            ( S { state | hold = hold }, Just <| Hold hold )
-
-        HoldUp code ->
-            let
-                hold =
-                    Set.remove code state.hold
-            in
-            ( S { state | hold = hold }, Just <| Hold hold )
-
         NOOP ->
             ( S state, Nothing )
 
 
 subs : State item -> List (Sub (Msg item))
 subs (S { click }) =
-    [ BE.onKeyPress <| D.andThen (\str -> D.succeed <| Pressed str) <| D.field "code" D.string
-    , BE.onKeyDown <| D.andThen (\str -> D.succeed <| HoldDown str) <| D.field "code" D.string
-    , BE.onKeyUp <| D.andThen (\str -> D.succeed <| HoldUp str) <| D.field "code" D.string
-    ]
-        ++ (case click of
-                Nothing ->
-                    []
+    case click of
+        Nothing ->
+            []
 
-                Just _ ->
-                    [ BE.onMouseUp <| D.succeed <| EndClick
-                    , BE.onVisibilityChange
-                        (\v ->
-                            Debug.log (Debug.toString v) <|
-                                case v of
-                                    BE.Hidden ->
-                                        AbortClick
+        Just _ ->
+            [ BE.onMouseUp <| D.succeed <| EndClick
+            , BE.onVisibilityChange
+                (\v ->
+                    Debug.log (Debug.toString v) <|
+                        case v of
+                            BE.Hidden ->
+                                AbortClick
 
-                                    _ ->
-                                        NOOP
-                        )
-                    ]
-           )
+                            _ ->
+                                NOOP
+                )
+            ]
 
 
 dragSpaceEvents : State item -> List (Html.Attribute (Msg item))
