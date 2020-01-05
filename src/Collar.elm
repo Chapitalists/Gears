@@ -44,6 +44,16 @@ getTotalLength =
     List.foldl (\b sum -> sum + b.length) 0 << getBeads
 
 
+getMinLength : Colleer -> Float
+getMinLength =
+    List.foldl (\b m -> min m b.length) (1 / 0) << getBeads
+
+
+getMaxLength : Colleer -> Float
+getMaxLength =
+    List.foldl (\b m -> max m b.length) 0 << getBeads
+
+
 get : Int -> Colleer -> Beed
 get i c =
     Maybe.withDefault

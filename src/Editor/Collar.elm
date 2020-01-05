@@ -51,7 +51,7 @@ init c svg =
         { svg
             | viewPos =
                 { c = Vec.add leftmostPoint <| vec2 (Collar.getTotalLength c / 2) 0
-                , smallestSize = 8 * (List.foldl (\b biggest -> max biggest b.length) 0 <| Collar.getBeads c)
+                , smallestSize = 8 * Collar.getMaxLength c
                 }
         }
     }
