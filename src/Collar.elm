@@ -25,6 +25,19 @@ beadFromContent c =
     { length = getContentLength c, wheel = Wheel.fromContent c }
 
 
+beadName : Int -> Colleer -> String
+beadName i collar =
+    let
+        name =
+            (get i collar).wheel.name
+    in
+    if String.isEmpty name then
+        toUID i
+
+    else
+        name
+
+
 fromWheel : Wheel -> Float -> Colleer
 fromWheel w l =
     { matrice = l

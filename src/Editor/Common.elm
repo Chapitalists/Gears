@@ -12,6 +12,16 @@ type ToUndo
     | NOOP
 
 
+type CommonMode
+    = Normal
+    | Nav
+
+
+keyCodeToMode : List ( String, CommonMode )
+keyCodeToMode =
+    [ ( "KeyV", Nav ) ]
+
+
 
 -- TODO not used in editors but in datas (collar and mobile) -> Data.Common?
 

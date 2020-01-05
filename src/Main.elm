@@ -8,6 +8,7 @@ import Collar
 import Content
 import Dict exposing (Dict)
 import Doc exposing (Doc)
+import Editor.Common as Editors
 import Editor.Mobile as MEditor exposing (Interactable(..))
 import Element exposing (..)
 import Element.Background as Bg
@@ -238,13 +239,13 @@ update msg model =
         -- FIXME Code smell?
         ChangedMode mode ->
             case mode of
-                MobileMode subMode ->
-                    update (DocMsg <| Doc.MobileMsg <| MEditor.ChangedMode subMode) { model | mode = mode }
+                DocMode subMode ->
+                    update (DocMsg <| Doc.ChangedMode subMode) { model | mode = mode }
 
                 _ ->
                     let
                         ( newModel, cmds ) =
-                            update (DocMsg <| Doc.MobileMsg <| MEditor.ChangedMode MEditor.Normal) model
+                            update (DocMsg <| Doc.ChangedMode <| Doc.CommonMode Editors.Normal) model
                     in
                     case mode of
                         Capsuling ->
@@ -313,7 +314,7 @@ subs { doc } =
 
 
 type Mode
-    = MobileMode MEditor.Mode -- FIXME Two sources of truth
+    = DocMode Doc.Mode -- FIXME Second source of truth, not reliable
     | Capsuling
     | NoMode
 
@@ -322,7 +323,7 @@ keyCodeToMode : Dict String Mode
 keyCodeToMode =
     Dict.fromList <|
         ( "KeyE", Capsuling )
-            :: List.map (Tuple.mapSecond MobileMode) MEditor.keyCodeToMode
+            :: List.map (Tuple.mapSecond DocMode) Doc.keyCodeToMode
 
 
 keyCodeToShortcut : Dict String Doc.Shortcut

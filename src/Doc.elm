@@ -66,6 +66,7 @@ type Msg
     | Undo
     | Redo
     | View (List ( String, Identifier ))
+    | ChangedMode Mode
     | SoundClicked Sound
     | AddContent WContent
     | KeyPressed Shortcut
@@ -135,6 +136,23 @@ update msg doc =
 
                 _ ->
                     Debug.log "IMPOSSIBLE Cannot view Sound" ( doc, Cmd.none )
+
+        ChangedMode mode ->
+            case ( mode, doc.editor ) of
+                ( MobileMode subMode, M _ ) ->
+                    update (MobileMsg <| MEditor.ChangedMode subMode) doc
+
+                ( CollarMode subMode, C _ ) ->
+                    update (CollarMsg <| CEditor.ChangedMode subMode) doc
+
+                ( CommonMode subMode, M _ ) ->
+                    update (MobileMsg <| MEditor.ChangedMode <| MEditor.CommonMode subMode) doc
+
+                ( CommonMode subMode, C _ ) ->
+                    update (CollarMsg <| CEditor.ChangedMode <| CEditor.CommonMode subMode) doc
+
+                _ ->
+                    Debug.log "IMPOSSIBLE Mode for wrong editor" ( doc, Cmd.none )
 
         SoundClicked sound ->
             case doc.editor of
@@ -229,14 +247,29 @@ update msg doc =
 
                         data =
                             updateData res.toUndo newMobile doc
-                    in
-                    ( { doc | data = data, editor = C res.model }
-                    , case res.toEngine of
-                        Nothing ->
-                            Cmd.none
 
-                        Just cmd ->
-                            toEngine cmd
+                        newDoc =
+                            { doc | data = data, editor = C res.model }
+                    in
+                    ( Maybe.withDefault newDoc
+                        (res.outMsg
+                            |> Maybe.map
+                                (\outMsg ->
+                                    Tuple.first <|
+                                        case outMsg of
+                                            CEditor.Inside id ->
+                                                update
+                                                    (View <|
+                                                        doc.viewing
+                                                            ++ [ ( Collar.beadName id collar, B id ) ]
+                                                    )
+                                                    newDoc
+                                )
+                        )
+                    , Cmd.batch
+                        [ Cmd.map CollarMsg res.cmd
+                        , Maybe.withDefault Cmd.none <| Maybe.map toEngine res.toEngine
+                        ]
                     )
 
                 _ ->
@@ -251,6 +284,19 @@ subs doc =
 
         C e ->
             List.map (Sub.map CollarMsg) <| CEditor.subs e
+
+
+type Mode
+    = CommonMode Editors.CommonMode
+    | MobileMode MEditor.Mode
+    | CollarMode CEditor.Mode
+
+
+keyCodeToMode : List ( String, Mode )
+keyCodeToMode =
+    List.map (Tuple.mapSecond CommonMode) Editors.keyCodeToMode
+        ++ List.map (Tuple.mapSecond MobileMode) MEditor.keyCodeToMode
+        ++ List.map (Tuple.mapSecond CollarMode) CEditor.keyCodeToMode
 
 
 view : Doc -> Element Msg

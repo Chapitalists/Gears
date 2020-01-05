@@ -11,6 +11,7 @@ import Interact
 import Json.Encode as E
 import Math.Vector2 as Vec exposing (vec2)
 import PanSvg
+import Random
 import Sound exposing (Sound)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
@@ -22,6 +23,7 @@ import Wheel exposing (Wheel)
 type alias Model =
     { tool : Tool
     , cursor : Int
+    , mode : Mode
     , interact : Interact.State Interactable
     , svg : PanSvg.Model
     }
@@ -31,25 +33,36 @@ type Tool
     = Play Bool
 
 
+type Mode
+    = CommonMode CommonMode
+
+
+keyCodeToMode : List ( String, Mode )
+keyCodeToMode =
+    []
+
+
 type Interactable
     = Ignore
-    | IReizeHandle Int Bool
+    | IBead Int
+    | IResizeHandle Int Bool
 
 
 fromWheelInteractable : Wheel.Interactable Int -> Interactable
 fromWheelInteractable i =
     case i of
         Wheel.IWheel id ->
-            Ignore
+            IBead id
 
         Wheel.IResizeHandle id bool ->
-            IReizeHandle id bool
+            IResizeHandle id bool
 
 
 init : Colleer -> PanSvg.Model -> Model
 init c svg =
     { tool = Play False
     , cursor = 0
+    , mode = CommonMode Normal
     , interact = Interact.init
     , svg =
         { svg
@@ -62,11 +75,18 @@ init c svg =
 
 
 type Msg
-    = ToggleEngine
+    = ChangedTool Tool
+    | ChangedMode Mode
+    | ToggleEngine
     | SoundClicked Sound
     | NewBead (Content Wheel)
+    | WheelMsg ( Int, Wheel.Msg )
     | SvgMsg PanSvg.Msg
     | InteractMsg (Interact.Msg Interactable)
+
+
+type DocMsg
+    = Inside Int
 
 
 type alias Return =
@@ -74,6 +94,8 @@ type alias Return =
     , collar : Colleer
     , toUndo : ToUndo
     , toEngine : Maybe E.Value
+    , outMsg : Maybe DocMsg
+    , cmd : Cmd Msg
     }
 
 
@@ -85,9 +107,17 @@ update msg ( model, collar ) =
             , collar = collar
             , toUndo = NOOP
             , toEngine = Nothing
+            , outMsg = Nothing
+            , cmd = Cmd.none
             }
     in
     case msg of
+        ChangedTool tool ->
+            { return | model = { model | tool = tool } }
+
+        ChangedMode mode ->
+            { return | model = { model | mode = mode } }
+
         ToggleEngine ->
             { return | toEngine = Just <| Engine.playCollar collar }
 
@@ -95,13 +125,37 @@ update msg ( model, collar ) =
             update (NewBead <| Content.S s) ( model, collar )
 
         NewBead c ->
-            { return | collar = Collar.add model.cursor (Collar.beadFromContent c) collar, toUndo = Do }
+            let
+                colorGen =
+                    Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
+            in
+            { return
+                | collar = Collar.add model.cursor (Collar.beadFromContent c) collar
+                , toUndo = Do
+                , model = { model | cursor = model.cursor + 1 }
+                , cmd = Random.generate (\color -> WheelMsg ( model.cursor, Wheel.ChangeColor color )) colorGen
+            }
+
+        WheelMsg ( i, subMsg ) ->
+            { return | collar = Collar.updateBead i (Wheel.update subMsg) collar, toUndo = Do }
 
         SvgMsg subMsg ->
             { return | model = { model | svg = PanSvg.update subMsg model.svg } }
 
         InteractMsg subMsg ->
-            return
+            let
+                ( interact, event ) =
+                    Interact.update subMsg model.interact
+
+                newModel =
+                    { model | interact = interact }
+            in
+            case event of
+                Nothing ->
+                    { return | model = newModel }
+
+                Just e ->
+                    manageInteractEvent e model collar
 
 
 subs : Model -> List (Sub Msg)
@@ -171,3 +225,33 @@ viewCursor { cursor } c =
 viewTools : Model -> Element msg
 viewTools model =
     text "TOOLS"
+
+
+manageInteractEvent : Interact.Event Interactable -> Model -> Colleer -> Return
+manageInteractEvent event model collar =
+    let
+        return =
+            { model = model
+            , collar = collar
+            , toUndo = NOOP
+            , toEngine = Nothing
+            , outMsg = Nothing
+            , cmd = Cmd.none
+            }
+    in
+    case model.mode of
+        CommonMode Nav ->
+            case ( event.item, event.action ) of
+                ( IBead i, Interact.Clicked _ ) ->
+                    case Wheel.getContent <| Collar.get i collar of
+                        Content.S _ ->
+                            return
+
+                        _ ->
+                            { return | outMsg = Just <| Inside i }
+
+                _ ->
+                    return
+
+        CommonMode Normal ->
+            return

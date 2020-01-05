@@ -51,8 +51,7 @@ type Tool
 
 
 type Mode
-    = Normal
-    | Nav
+    = CommonMode CommonMode
     | Move
     | SelectMotor
     | ChangeSound (Id Geer)
@@ -60,8 +59,7 @@ type Mode
 
 keyCodeToMode : List ( String, Mode )
 keyCodeToMode =
-    [ ( "KeyV", Nav )
-    , ( "KeyD", Move )
+    [ ( "KeyD", Move )
     ]
 
 
@@ -99,7 +97,7 @@ init : Maybe Mobeel -> Maybe PanSvg.Model -> Model
 init may svg =
     { dragging = NoDrag
     , tool = Play False
-    , mode = Normal
+    , mode = CommonMode Normal
     , edit = Nothing
     , link = Nothing
     , engine = Engine.init
@@ -229,7 +227,7 @@ update msg ( model, mobile ) =
                     { return
                         | mobile = { mobile | gears = List.foldl (\el -> Coll.update el chSound) mobile.gears group }
                         , toUndo = Do
-                        , model = { model | mode = Normal }
+                        , model = { model | mode = CommonMode Normal }
                     }
 
                 _ ->
@@ -618,7 +616,7 @@ viewDetails model mobile =
                 , text "Choisir un son chargé"
                 , Input.button []
                     { label = text "Annuler"
-                    , onPress = Just <| ChangedMode Normal
+                    , onPress = Just <| ChangedMode <| CommonMode Normal
                     }
                 ]
             ]
@@ -628,7 +626,7 @@ viewDetails model mobile =
                 [ text "Choisir nouvelle Motrice"
                 , Input.button []
                     { label = text "Annuler"
-                    , onPress = Just <| ChangedMode Normal
+                    , onPress = Just <| ChangedMode <| CommonMode Normal
                     }
                 ]
             ]
@@ -883,7 +881,7 @@ manageInteractEvent event model mobile =
     in
     -- TODO Find good pattern for big mess there
     case model.mode of
-        Nav ->
+        CommonMode Nav ->
             case ( event.item, event.action ) of
                 ( IGear id, Interact.Clicked _ ) ->
                     case Wheel.getContent <| Coll.get id mobile.gears of
@@ -921,7 +919,7 @@ manageInteractEvent event model mobile =
             case ( event.item, event.action ) of
                 ( IGear id, Interact.Clicked _ ) ->
                     { return
-                        | model = { model | mode = Normal }
+                        | model = { model | mode = CommonMode Normal }
                         , mobile = { mobile | motor = id }
                         , toUndo = Do
                     }
@@ -932,7 +930,7 @@ manageInteractEvent event model mobile =
         ChangeSound _ ->
             return
 
-        Normal ->
+        CommonMode Normal ->
             case model.tool of
                 -- PLAY --------
                 Play on ->
