@@ -94,10 +94,10 @@ update msg ( model, collar ) =
             { return | toEngine = Just <| Engine.playCollar collar }
 
         SoundClicked s ->
-            { return | collar = Collar.add model.cursor (Collar.beadFromSound s) collar, toUndo = Do }
+            update (NewBead <| Content.S s) ( model, collar )
 
-        NewBead content ->
-            return
+        NewBead c ->
+            { return | collar = Collar.add model.cursor (Collar.beadFromContent c) collar, toUndo = Do }
 
         SvgMsg subMsg ->
             { return | model = { model | svg = PanSvg.update subMsg model.svg } }

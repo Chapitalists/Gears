@@ -1,12 +1,9 @@
 module Collar exposing (..)
 
-import Content exposing (Bead, Collar)
-import Interact
+import Content exposing (Bead, Collar, Content)
+import Editor.Common exposing (..)
 import Json.Decode as D
 import Json.Encode as E
-import Math.Vector2 exposing (vec2)
-import Sound exposing (Sound)
-import TypedSvg.Core exposing (Svg)
 import Wheel exposing (Wheel)
 
 
@@ -23,9 +20,9 @@ toUID i =
     "bead-" ++ String.fromInt i
 
 
-beadFromSound : Sound -> Beed
-beadFromSound s =
-    { length = Sound.length s, wheel = Wheel.fromContent <| Content.S s }
+beadFromContent : Content Wheel -> Beed
+beadFromContent c =
+    { length = getContentLength c, wheel = Wheel.fromContent c }
 
 
 fromWheel : Wheel -> Float -> Colleer

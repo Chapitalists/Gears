@@ -2,12 +2,12 @@ module Mobile exposing (..)
 
 import Coll exposing (Coll, Id)
 import Content exposing (Content, Mobile)
+import Editor.Common exposing (..)
 import Gear exposing (Gear)
 import Harmony as Harmo exposing (Harmony)
 import Json.Decode as D
 import Json.Encode as E
 import Math.Vector2 exposing (Vec2)
-import Sound exposing (Sound)
 import Wheel exposing (Wheel)
 
 
@@ -46,20 +46,8 @@ defaultGear =
 
 gearFromContent : Content Wheel -> Vec2 -> Geer
 gearFromContent c pos =
-    let
-        length =
-            case c of
-                Content.S s ->
-                    Sound.length s
-
-                Content.M m ->
-                    Harmo.getLengthId m.motor m.gears
-
-                Content.C col ->
-                    col.matrice
-    in
     { pos = pos
-    , harmony = Harmo.newSelf length
+    , harmony = Harmo.newSelf <| getContentLength c
     , motor = []
     , wheel = Wheel.fromContent c
     }
