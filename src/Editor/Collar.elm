@@ -7,6 +7,7 @@ import Engine
 import Html.Attributes
 import Interact
 import Json.Encode as E
+import Math.Vector2 as Vec exposing (vec2)
 import PanSvg
 import Sound exposing (Sound)
 import TypedSvg as S
@@ -17,8 +18,8 @@ import Wheel exposing (Wheel)
 type alias Model =
     { tool : Tool
     , cursor : Int
-    , svg : PanSvg.Model
     , interact : Interact.State Interactable
+    , svg : PanSvg.Model
     }
 
 
@@ -41,11 +42,18 @@ fromWheelInteractable i =
             IReizeHandle id bool
 
 
-init =
+init : Colleer -> PanSvg.Model -> Model
+init c svg =
     { tool = Play False
     , cursor = 0
-    , svg = PanSvg.init
     , interact = Interact.init
+    , svg =
+        { svg
+            | viewPos =
+                { c = Vec.add leftmostPoint <| vec2 (Collar.getTotalLength c / 2) 0
+                , smallestSize = 8 * (List.foldl (\b biggest -> max biggest b.length) 0 <| Collar.getBeads c)
+                }
+        }
     }
 
 
@@ -92,10 +100,21 @@ update msg ( model, collar ) =
             return
 
         SvgMsg subMsg ->
-            return
+            { return | model = { model | svg = PanSvg.update subMsg model.svg } }
 
         InteractMsg subMsg ->
             return
+
+
+subs : Model -> List (Sub Msg)
+subs { interact } =
+    (Sub.map SvgMsg <| PanSvg.sub)
+        :: (List.map (Sub.map InteractMsg) <| Interact.subs interact)
+
+
+leftmostPoint : Vec.Vec2
+leftmostPoint =
+    vec2 0 0
 
 
 viewContent : ( Model, Colleer ) -> Element Msg
@@ -106,8 +125,25 @@ viewContent ( model, collar ) =
                 ++ (List.map (Html.Attributes.map InteractMsg) <| Interact.dragSpaceEvents model.interact)
             )
         <|
-            List.map (Svg.map <| InteractMsg << Interact.map fromWheelInteractable) <|
-                Collar.view collar
+            List.map (Svg.map <| InteractMsg << Interact.map fromWheelInteractable)
+                (List.foldl
+                    (\b ( l, ( p, i ) ) ->
+                        ( Wheel.view b.wheel
+                            (vec2 (p + b.length / 2) <| Vec.getY leftmostPoint)
+                            b.length
+                            { mod = Wheel.None, motor = False, dashed = False }
+                            i
+                            (Collar.toUID i)
+                            :: l
+                        , ( p + b.length
+                          , i + 1
+                          )
+                        )
+                    )
+                    ( [], ( Vec.getX leftmostPoint, 0 ) )
+                    (Collar.getBeads collar)
+                    |> Tuple.first
+                )
 
 
 viewTools : Model -> Element msg

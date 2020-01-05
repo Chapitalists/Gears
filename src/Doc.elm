@@ -125,7 +125,7 @@ update msg doc =
             in
             case getViewingHelper v mobileContent of
                 Content.C c ->
-                    ( { doc | viewing = v, editor = C CEditor.init }, toEngine Engine.stop )
+                    ( { doc | viewing = v, editor = C <| CEditor.init c <| getSvg doc }, toEngine Engine.stop )
 
                 Content.M m ->
                     ( { doc | viewing = l, editor = M <| MEditor.init (Just m) <| Just <| getSvg doc }
@@ -265,7 +265,7 @@ subs doc =
             List.map (Sub.map MobileMsg) <| MEditor.subs e
 
         C e ->
-            []
+            List.map (Sub.map CollarMsg) <| CEditor.subs e
 
 
 view : Doc -> Element Msg

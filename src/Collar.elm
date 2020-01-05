@@ -42,6 +42,11 @@ getBeads =
     Content.getBeads
 
 
+getTotalLength : Colleer -> Float
+getTotalLength =
+    List.foldl (\b sum -> sum + b.length) 0 << getBeads
+
+
 get : Int -> Colleer -> Beed
 get i c =
     Maybe.withDefault
@@ -80,27 +85,6 @@ updateBead i f c =
                     , List.drop i c.beads
                     ]
         }
-
-
-view : Colleer -> List (Svg (Interact.Msg (Wheel.Interactable Int)))
-view c =
-    List.foldl
-        (\b ( l, ( p, i ) ) ->
-            ( Wheel.view b.wheel
-                (vec2 (p + b.length / 2) 50)
-                b.length
-                { mod = Wheel.None, motor = False, dashed = False }
-                i
-                (toUID i)
-                :: l
-            , ( p + b.length
-              , i + 1
-              )
-            )
-        )
-        ( [], ( 50, 0 ) )
-        (getBeads c)
-        |> Tuple.first
 
 
 encoder : Colleer -> E.Value
