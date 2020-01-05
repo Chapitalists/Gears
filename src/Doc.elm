@@ -5,6 +5,7 @@ import Collar exposing (Colleer)
 import Content exposing (Content)
 import Data exposing (Data)
 import Editor.Collar as CEditor
+import Editor.Common as Editors
 import Editor.Mobile as MEditor
 import Element exposing (..)
 import Element.Font as Font
@@ -187,15 +188,7 @@ update msg doc =
                             updateMobile doc.viewing (always res.mobile) <| Data.current doc.data
 
                         data =
-                            case res.toUndo of
-                                MEditor.Do ->
-                                    Data.do newMobile doc.data
-
-                                MEditor.Group ->
-                                    Data.group newMobile doc.data
-
-                                MEditor.NOOP ->
-                                    doc.data
+                            updateData res.toUndo newMobile doc
 
                         newDoc =
                             { doc | data = data, editor = M res.model }
@@ -235,15 +228,7 @@ update msg doc =
                             updateCollar doc.viewing (always res.collar) <| Data.current doc.data
 
                         data =
-                            case res.toUndo of
-                                CEditor.Do ->
-                                    Data.do newMobile doc.data
-
-                                CEditor.Group ->
-                                    Data.do newMobile doc.data
-
-                                CEditor.NOOP ->
-                                    doc.data
+                            updateData res.toUndo newMobile doc
                     in
                     ( { doc | data = data, editor = C res.model }
                     , case res.toEngine of
@@ -513,3 +498,16 @@ updateCollar l f m =
 
         _ ->
             Debug.log "IMPOSSIBLE Racine isn’t a mobile" m
+
+
+updateData : Editors.ToUndo -> Mobeel -> Doc -> Data Mobeel
+updateData to newMobile { data } =
+    case to of
+        Editors.Do ->
+            Data.do newMobile data
+
+        Editors.Group ->
+            Data.group newMobile data
+
+        Editors.NOOP ->
+            data

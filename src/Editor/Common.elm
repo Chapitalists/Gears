@@ -6,6 +6,16 @@ import Sound
 import Wheel exposing (Wheel)
 
 
+type ToUndo
+    = Do
+    | Group
+    | NOOP
+
+
+
+-- TODO not used in editors but in datas (collar and mobile) -> Data.Common?
+
+
 getContentLength : Content Wheel -> Float
 getContentLength c =
     case c of

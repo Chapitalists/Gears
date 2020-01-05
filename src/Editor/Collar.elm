@@ -3,6 +3,7 @@ module Editor.Collar exposing (..)
 import Collar exposing (Colleer)
 import Color
 import Content exposing (Content)
+import Editor.Common exposing (..)
 import Element exposing (Element, text)
 import Engine
 import Html.Attributes
@@ -58,12 +59,6 @@ init c svg =
                 }
         }
     }
-
-
-type ToUndo
-    = Do
-    | Group
-    | NOOP
 
 
 type Msg

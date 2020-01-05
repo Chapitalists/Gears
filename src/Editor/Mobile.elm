@@ -4,6 +4,7 @@ import Coll exposing (Coll, Id)
 import Collar
 import Color
 import Content exposing (Content)
+import Editor.Common exposing (..)
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Font as Font
@@ -138,12 +139,6 @@ type Msg
 
 type DocMsg
     = Inside (Id Geer)
-
-
-type ToUndo
-    = Do
-    | Group
-    | NOOP
 
 
 type alias Return =
