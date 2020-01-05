@@ -1,6 +1,7 @@
 module Editor.Collar exposing (..)
 
 import Collar exposing (Colleer)
+import Color
 import Content exposing (Content)
 import Element exposing (Element, text)
 import Engine
@@ -11,7 +12,9 @@ import Math.Vector2 as Vec exposing (vec2)
 import PanSvg
 import Sound exposing (Sound)
 import TypedSvg as S
+import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
+import TypedSvg.Types exposing (Fill(..), Length(..))
 import Wheel exposing (Wheel)
 
 
@@ -144,6 +147,30 @@ viewContent ( model, collar ) =
                     (Collar.getBeads collar)
                     |> Tuple.first
                 )
+                ++ viewCursor model collar
+
+
+viewCursor : Model -> Colleer -> List (Svg msg)
+viewCursor { cursor } c =
+    let
+        medLength =
+            Collar.getMinLength c + Collar.getMaxLength c / 2
+
+        cursorW =
+            medLength / 15
+
+        cursorH =
+            medLength * 2
+    in
+    [ S.rect
+        [ SA.x <| Num <| Collar.getLengthAt cursor c - cursorW / 2
+        , SA.y <| Num <| -cursorH / 2
+        , SA.width <| Num cursorW
+        , SA.height <| Num cursorH
+        , SA.fill <| Fill Color.lightBlue
+        ]
+        []
+    ]
 
 
 viewTools : Model -> Element msg
