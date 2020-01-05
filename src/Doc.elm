@@ -422,13 +422,13 @@ cleanViewing l content =
             []
 
         ( ( str, G next ) :: rest, Content.M m ) ->
-            ( str, G next ) :: (cleanViewing rest <| Content.M m)
+            ( str, G next ) :: (cleanViewing rest <| Wheel.getContent <| Coll.get next m.gears)
 
         ( ( str, B next ) :: rest, Content.C c ) ->
-            ( str, B next ) :: (cleanViewing rest <| Content.C c)
+            ( str, B next ) :: (cleanViewing rest <| Wheel.getContent <| Collar.get next c)
 
         _ ->
-            Debug.log ("Cleaned view" ++ (String.concat <| List.map Tuple.first l) ++ Debug.toString content) []
+            Debug.log ("Cleaned view " ++ (String.concat <| List.map Tuple.first l) ++ Debug.toString content) []
 
 
 updateViewing : List ( String, Identifier ) -> (WContent -> WContent) -> WContent -> WContent

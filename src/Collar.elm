@@ -61,12 +61,12 @@ getLengthAt i c =
 
 get : Int -> Colleer -> Beed
 get i c =
-    Maybe.withDefault
-        (Debug.log ("Cannot get Bead " ++ String.fromInt i) <| c.head)
-    <|
-        List.head <|
-            List.drop i <|
-                Content.getBeads c
+    case List.head <| List.drop i <| getBeads c of
+        Just b ->
+            b
+
+        Nothing ->
+            Debug.log ("Cannot get Bead " ++ String.fromInt i) <| c.head
 
 
 add : Int -> Beed -> Colleer -> Colleer
