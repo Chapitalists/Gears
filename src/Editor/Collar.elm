@@ -187,7 +187,7 @@ update msg ( model, collar ) =
                     { return | model = newModel }
 
                 Just e ->
-                    manageInteractEvent e model collar
+                    manageInteractEvent e newModel collar
 
 
 subs : Model -> List (Sub Msg)
@@ -269,8 +269,8 @@ viewTools model =
 
 viewDetails : Model -> Colleer -> List (Element Msg)
 viewDetails model c =
-    case model.edit of
-        Just i ->
+    case ( model.tool, model.edit ) of
+        ( Edit, Just i ) ->
             let
                 b =
                     Collar.get i c
@@ -283,7 +283,7 @@ viewDetails model c =
                 ]
             ]
 
-        Nothing ->
+        _ ->
             []
 
 
