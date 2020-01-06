@@ -338,6 +338,8 @@ keyCodeToShortcut =
         , ( "KeyX", Doc.Tool 2 )
         , ( "KeyC", Doc.Tool 3 )
         , ( "Space", Doc.Play )
+        , ( "ArrowLeft", Doc.Left )
+        , ( "ArrowRight", Doc.Right )
         ]
 
 

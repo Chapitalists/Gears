@@ -52,9 +52,15 @@ init url =
     }
 
 
+
+-- TODO Should be defined in each editor, as Modes
+
+
 type Shortcut
     = Tool Int
     | Play
+    | Left
+    | Right
 
 
 type Msg
@@ -191,6 +197,12 @@ update msg doc =
 
                 ( Play, C _ ) ->
                     update (CollarMsg <| CEditor.ToggleEngine) doc
+
+                ( Left, C _ ) ->
+                    update (CollarMsg <| CEditor.CursorLeft) doc
+
+                ( Right, C _ ) ->
+                    update (CollarMsg <| CEditor.CursorRight) doc
 
                 _ ->
                     ( doc, Cmd.none )

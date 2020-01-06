@@ -77,6 +77,8 @@ init c svg =
 type Msg
     = ChangedTool Tool
     | ChangedMode Mode
+    | CursorRight
+    | CursorLeft
     | ToggleEngine
     | SoundClicked Sound
     | NewBead (Content Wheel)
@@ -117,6 +119,12 @@ update msg ( model, collar ) =
 
         ChangedMode mode ->
             { return | model = { model | mode = mode } }
+
+        CursorRight ->
+            { return | model = { model | cursor = min (model.cursor + 1) <| Collar.length collar } }
+
+        CursorLeft ->
+            { return | model = { model | cursor = max (model.cursor - 1) 0 } }
 
         ToggleEngine ->
             { return | toEngine = Just <| Engine.playCollar collar }

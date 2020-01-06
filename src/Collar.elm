@@ -47,6 +47,11 @@ fromWheel w l =
     }
 
 
+length : Colleer -> Int
+length =
+    List.length << getBeads
+
+
 getBeads : Colleer -> List Beed
 getBeads =
     Content.getBeads
