@@ -651,28 +651,9 @@ viewEditDetails model mobile =
                 g =
                     Coll.get id mobile.gears
             in
-            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ]
-                [ Input.text [ Font.color (rgb 0 0 0) ]
-                    { label = Input.labelAbove [] <| text "Roue :"
-                    , text = g.wheel.name
-                    , placeholder = Just <| Input.placeholder [] <| text <| Gear.toUID id
-                    , onChange = \str -> WheelMsg ( id, Wheel.Named str )
-                    }
-                , case Wheel.getContent g of
-                    Content.S s ->
-                        text <| Sound.toString s
-
-                    Content.M m ->
-                        Input.button []
-                            { label = text "Voir Mobile"
-                            , onPress = Just <| OutMsg <| Inside id
-                            }
-
-                    Content.C c ->
-                        Input.button []
-                            { label = text "Voir Collier"
-                            , onPress = Just <| OutMsg <| Inside id
-                            }
+            [ viewDetailsColumn
+                [ viewNameInput g (Gear.toUID id) <| \str -> WheelMsg ( id, Wheel.Named str )
+                , viewContentButton g <| OutMsg <| Inside id
                 , Input.button []
                     { label = text "PlayPause"
                     , onPress = Just <| PlayGear id
@@ -681,15 +662,7 @@ viewEditDetails model mobile =
                     { label = text "Stop"
                     , onPress = Just <| StopGear id
                     }
-                , Input.slider []
-                    { label = Input.labelAbove [] <| text "Volume"
-                    , onChange = \f -> WheelMsg ( id, Wheel.ChangeVolume f )
-                    , value = g.wheel.volume
-                    , min = 0
-                    , max = 1
-                    , step = Just 0.01
-                    , thumb = Input.defaultThumb
-                    }
+                , viewVolumeSlider g <| \f -> WheelMsg ( id, Wheel.ChangeVolume f )
                 , Input.button []
                     { label = text "Copie"
                     , onPress = Just <| CopyGear id
@@ -714,10 +687,7 @@ viewEditDetails model mobile =
                                     }
                             )
                             [ 2, 3, 5, 7 ]
-                , Input.button []
-                    { label = text "Changer son"
-                    , onPress = Just <| ChangedMode <| ChangeSound id
-                    }
+                , viewChangeContent <| ChangedMode <| ChangeSound id
                 , Input.button []
                     { label = text "Encapsuler"
                     , onPress = Just <| Capsuled id
@@ -733,10 +703,7 @@ viewEditDetails model mobile =
                         }
 
                   else
-                    Input.button []
-                        { onPress = Just <| DeleteGear id
-                        , label = text "Supprimer"
-                        }
+                    viewDeleteButton <| DeleteGear id
                 ]
             ]
 
@@ -748,7 +715,7 @@ viewHarmonizeDetails : Model -> Mobeel -> List (Element Msg)
 viewHarmonizeDetails model mobile =
     case model.link of
         Just { link, fract } ->
-            [ column [ height fill, Bg.color (rgb 0.5 0.5 0.5), Font.color (rgb 1 1 1), spacing 20, padding 10 ]
+            [ viewDetailsColumn
                 ([ text <| (Gear.toUID <| Tuple.first link) ++ (Gear.toUID <| Tuple.second link) ]
                     ++ (case fract of
                             Nothing ->
