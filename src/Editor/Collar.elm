@@ -1,8 +1,9 @@
 module Editor.Collar exposing (..)
 
-import Collar exposing (Colleer)
 import Color
-import Content exposing (Content)
+import Data.Collar as Collar exposing (Colleer)
+import Data.Content as Content exposing (Content)
+import Data.Wheel as Wheel exposing (Wheel)
 import Editor.Common exposing (..)
 import Element exposing (..)
 import Element.Input as Input
@@ -18,7 +19,6 @@ import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
 import TypedSvg.Types exposing (Fill(..), Length(..))
-import Wheel exposing (Wheel)
 
 
 type alias Model =

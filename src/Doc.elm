@@ -1,11 +1,13 @@
 port module Doc exposing (..)
 
 import Coll exposing (Coll, Id)
-import Collar exposing (Colleer)
-import Content exposing (Content)
 import Data exposing (Data)
+import Data.Collar as Collar exposing (Colleer)
+import Data.Content as Content exposing (Content)
+import Data.Mobile as Mobile exposing (Geer, Mobeel)
+import Data.Wheel as Wheel exposing (Wheel)
 import Editor.Collar as CEditor
-import Editor.Common as Editors
+import Editor.Common as Editors exposing (Identifier(..))
 import Editor.Mobile as MEditor
 import Element exposing (..)
 import Element.Font as Font
@@ -13,11 +15,9 @@ import Element.Input as Input
 import Engine
 import Html.Attributes
 import Json.Encode as E
-import Mobile exposing (Geer, Mobeel)
 import PanSvg
 import Sound exposing (Sound)
 import Url exposing (Url)
-import Wheel exposing (Wheel)
 
 
 port toEngine : E.Value -> Cmd msg
@@ -28,11 +28,6 @@ type alias Doc =
     , viewing : List ( String, Identifier )
     , editor : Editor
     }
-
-
-type Identifier
-    = G (Id Geer)
-    | B Int
 
 
 type Editor

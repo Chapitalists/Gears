@@ -1,10 +1,10 @@
-module Collar exposing (..)
+module Data.Collar exposing (..)
 
-import Content exposing (Bead, Collar, Content)
-import Editor.Common exposing (..)
+import Data.Common exposing (..)
+import Data.Content as Content exposing (Bead, Collar, Content)
+import Data.Wheel as Wheel exposing (Wheel)
 import Json.Decode as D
 import Json.Encode as E
-import Wheel exposing (Wheel)
 
 
 type alias Colleer =

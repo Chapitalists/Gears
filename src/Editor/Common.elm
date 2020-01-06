@@ -1,13 +1,19 @@
 module Editor.Common exposing (..)
 
-import Content exposing (Content)
+import Coll exposing (Id)
+import Data.Content as Content exposing (Content)
+import Data.Mobile exposing (Geer)
+import Data.Wheel as Wheel exposing (Wheel, Wheeled)
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
-import Harmony as Harmo
 import Sound
-import Wheel exposing (Wheel, Wheeled)
+
+
+type Identifier
+    = G (Id Geer)
+    | B Int
 
 
 type ToUndo
@@ -94,20 +100,3 @@ viewDeleteButton msg =
         { onPress = Just msg
         , label = text "Supprimer"
         }
-
-
-
--- TODO not used in editors but in datas (collar and mobile) -> Data.Common?
-
-
-getContentLength : Content Wheel -> Float
-getContentLength c =
-    case c of
-        Content.S s ->
-            Sound.length s
-
-        Content.M m ->
-            Harmo.getLengthId m.motor m.gears
-
-        Content.C col ->
-            col.matrice

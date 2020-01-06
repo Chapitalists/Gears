@@ -12,15 +12,15 @@ module Engine exposing
     )
 
 import Coll exposing (Coll, Id)
-import Collar exposing (Beed, Colleer)
-import Content
-import Gear exposing (Gear)
+import Data.Collar as Collar exposing (Beed, Colleer)
+import Data.Content as Content
+import Data.Gear as Gear exposing (Gear)
+import Data.Mobile exposing (Geer, Mobeel)
+import Data.Wheel as Wheel exposing (Wheel)
 import Harmony as Harmo
 import Json.Encode as E
-import Mobile exposing (Geer, Mobeel)
 import Motor
 import Sound
-import Wheel exposing (Wheel)
 
 
 type Engine

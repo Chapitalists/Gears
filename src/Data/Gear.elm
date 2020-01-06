@@ -1,4 +1,4 @@
-module Gear exposing (..)
+module Data.Gear exposing (..)
 
 import Coll exposing (Coll, Id)
 import Fraction as Fract exposing (Fraction)

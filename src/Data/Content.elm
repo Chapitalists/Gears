@@ -1,7 +1,7 @@
-module Content exposing (..)
+module Data.Content exposing (..)
 
 import Coll exposing (Coll, Id)
-import Gear exposing (Gear)
+import Data.Gear as Gear exposing (Gear)
 import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Decode.Pipeline exposing (required)

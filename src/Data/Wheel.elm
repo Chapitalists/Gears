@@ -1,7 +1,7 @@
-module Wheel exposing (..)
+module Data.Wheel exposing (..)
 
 import Color exposing (Color)
-import Content exposing (Content, Mobile)
+import Data.Content as Content exposing (Content, Mobile)
 import Html.Attributes
 import Interact
 import Json.Decode as D

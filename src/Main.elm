@@ -4,8 +4,10 @@ import Browser
 import Browser.Events as BE
 import Browser.Navigation as Nav
 import Coll exposing (Coll, Id)
-import Collar
-import Content
+import Data.Collar as Collar
+import Data.Content as Content
+import Data.Mobile as Mobile exposing (Mobeel)
+import Data.Wheel as Wheel
 import Dict exposing (Dict)
 import Doc exposing (Doc)
 import Editor.Common as Editors
@@ -18,12 +20,10 @@ import Element.Input as Input
 import Http
 import Json.Decode as D
 import Keys
-import Mobile exposing (Mobeel)
 import Result exposing (Result)
 import Set exposing (Set)
 import Sound exposing (Sound)
 import Url exposing (Url)
-import Wheel
 
 
 port loadSound : String -> Cmd msg

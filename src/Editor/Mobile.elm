@@ -1,9 +1,12 @@
 module Editor.Mobile exposing (..)
 
 import Coll exposing (Coll, Id)
-import Collar
 import Color
-import Content exposing (Content)
+import Data.Collar as Collar
+import Data.Content as Content exposing (Content)
+import Data.Gear as Gear
+import Data.Mobile as Mobile exposing (Geer, Mobeel)
+import Data.Wheel as Wheel exposing (Wheel)
 import Editor.Common exposing (..)
 import Element exposing (..)
 import Element.Background as Bg
@@ -11,21 +14,18 @@ import Element.Font as Font
 import Element.Input as Input
 import Engine exposing (Engine)
 import Fraction as Fract exposing (Fraction)
-import Gear
 import Harmony as Harmo
 import Html.Attributes
 import Interact exposing (Interact)
 import Json.Encode as E
 import Link exposing (Link)
 import Math.Vector2 as Vec exposing (Vec2, vec2)
-import Mobile exposing (Geer, Mobeel)
 import Motor
 import PanSvg
 import Random
 import Sound exposing (Sound)
 import TypedSvg as S
 import TypedSvg.Core as Svg exposing (Svg)
-import Wheel exposing (Wheel)
 
 
 type alias Model =
