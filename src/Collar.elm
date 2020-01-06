@@ -96,6 +96,20 @@ add i b c =
         { c | beads = List.concat [ List.take (i - 1) c.beads, [ b ], List.drop (i - 1) c.beads ] }
 
 
+rm : Int -> Colleer -> Colleer
+rm i c =
+    if i < 0 || i > List.length c.beads then
+        c
+
+    else
+        case ( i, c.beads ) of
+            ( 0, head :: beads ) ->
+                { c | head = head, beads = beads }
+
+            ( j, beads ) ->
+                { c | beads = List.concat [ List.take (j - 1) beads, List.drop j beads ] }
+
+
 updateBead : Int -> (Beed -> Beed) -> Colleer -> Colleer
 updateBead i f c =
     if i <= 0 then
