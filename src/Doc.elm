@@ -192,6 +192,17 @@ update msg doc =
                         _ ->
                             ( doc, Cmd.none )
 
+                ( Tool i, C _ ) ->
+                    case i of
+                        1 ->
+                            update (CollarMsg <| CEditor.ChangedTool <| CEditor.Play False) doc
+
+                        3 ->
+                            update (CollarMsg <| CEditor.ChangedTool <| CEditor.Edit) doc
+
+                        _ ->
+                            ( doc, Cmd.none )
+
                 ( Play, M _ ) ->
                     update (MobileMsg <| MEditor.ToggleEngine) doc
 
