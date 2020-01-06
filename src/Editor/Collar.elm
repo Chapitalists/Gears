@@ -203,6 +203,24 @@ leftmostPoint =
 
 viewContent : ( Model, Colleer ) -> Element Msg
 viewContent ( model, collar ) =
+    let
+        getMod : Int -> Wheel.Mod
+        getMod i =
+            if model.tool == Edit && model.edit == Just i then
+                Wheel.Selected
+
+            else
+                case Interact.getInteract model.interact of
+                    Just ( IBead j, Interact.Hover ) ->
+                        if i == j then
+                            Wheel.Selectable
+
+                        else
+                            Wheel.None
+
+                    _ ->
+                        Wheel.None
+    in
     Element.html <|
         S.svg
             (List.map (Html.Attributes.map SvgMsg) (PanSvg.svgAttributes model.svg)
@@ -215,7 +233,7 @@ viewContent ( model, collar ) =
                         ( Wheel.view b.wheel
                             (vec2 (p + b.length / 2) <| Vec.getY leftmostPoint)
                             b.length
-                            { mod = Wheel.None, motor = False, dashed = False }
+                            { mod = getMod i, motor = False, dashed = False }
                             i
                             (Collar.toUID i)
                             :: l
