@@ -271,29 +271,34 @@ update msg model =
 
         KeysMsg subMsg ->
             let
-                ( state, event ) =
+                ( state, events ) =
                     Keys.update subMsg model.keys
             in
-            case event of
-                Keys.Hold hold ->
-                    case List.filterMap (\code -> Dict.get code keyCodeToMode) <| Set.toList hold of
-                        [ only ] ->
-                            update (ChangedMode only) { model | keys = state }
+            List.foldl
+                (\event ( m, c ) ->
+                    case event of
+                        Keys.Hold hold ->
+                            case List.filterMap (\code -> Dict.get code keyCodeToMode) <| Set.toList hold of
+                                [ only ] ->
+                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, c ]) <| update (ChangedMode only) m
 
-                        _ ->
-                            update (ChangedMode NoMode) { model | keys = state }
+                                _ ->
+                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, c ]) <| update (ChangedMode NoMode) m
 
-                Keys.Press code ->
-                    case Dict.get code keyCodeToShortcut of
-                        Just press ->
-                            let
-                                ( doc, cmd ) =
-                                    Doc.update (Doc.KeyPressed press) model.doc
-                            in
-                            ( { model | keys = state, doc = doc }, Cmd.map DocMsg cmd )
+                        Keys.Press code ->
+                            case Dict.get code keyCodeToShortcut of
+                                Just press ->
+                                    let
+                                        ( doc, cmd ) =
+                                            Doc.update (Doc.KeyPressed press) m.doc
+                                    in
+                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
 
-                        Nothing ->
-                            ( { model | keys = state }, Cmd.none )
+                                Nothing ->
+                                    ( m, c )
+                )
+                ( { model | keys = state }, Cmd.none )
+                events
 
         NOOP ->
             ( model, Cmd.none )
