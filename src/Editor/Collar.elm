@@ -4,7 +4,8 @@ import Collar exposing (Colleer)
 import Color
 import Content exposing (Content)
 import Editor.Common exposing (..)
-import Element exposing (Element, text)
+import Element exposing (..)
+import Element.Input as Input
 import Engine
 import Html.Attributes
 import Interact
@@ -22,6 +23,7 @@ import Wheel exposing (Wheel)
 
 type alias Model =
     { tool : Tool
+    , edit : Maybe Int
     , cursor : Int
     , mode : Mode
     , interact : Interact.State Interactable
@@ -31,6 +33,7 @@ type alias Model =
 
 type Tool
     = Play Bool
+    | Edit
 
 
 type Mode
@@ -61,6 +64,7 @@ fromWheelInteractable i =
 init : Colleer -> PanSvg.Model -> Model
 init c svg =
     { tool = Play False
+    , edit = Nothing
     , cursor = 0
     , mode = CommonMode Normal
     , interact = Interact.init
@@ -82,8 +86,10 @@ type Msg
     | ToggleEngine
     | SoundClicked Sound
     | NewBead (Content Wheel)
+    | DeleteBead Int
     | WheelMsg ( Int, Wheel.Msg )
     | SvgMsg PanSvg.Msg
+    | OutMsg DocMsg
     | InteractMsg (Interact.Msg Interactable)
 
 
@@ -144,11 +150,29 @@ update msg ( model, collar ) =
                 , cmd = Random.generate (\color -> WheelMsg ( model.cursor, Wheel.ChangeColor color )) colorGen
             }
 
+        DeleteBead i ->
+            { return
+                | collar = Collar.rm i collar
+                , toUndo = Do
+                , model =
+                    { model
+                        | cursor =
+                            if model.cursor > i then
+                                model.cursor - 1
+
+                            else
+                                model.cursor
+                    }
+            }
+
         WheelMsg ( i, subMsg ) ->
             { return | collar = Collar.updateBead i (Wheel.update subMsg) collar, toUndo = Do }
 
         SvgMsg subMsg ->
             { return | model = { model | svg = PanSvg.update subMsg model.svg } }
+
+        OutMsg subMsg ->
+            { return | outMsg = Just subMsg }
 
         InteractMsg subMsg ->
             let
@@ -230,9 +254,37 @@ viewCursor { cursor } c =
     ]
 
 
-viewTools : Model -> Element msg
+viewTools : Model -> Element Msg
 viewTools model =
-    text "TOOLS"
+    Input.radioRow [ spacing 30 ]
+        { onChange = ChangedTool
+        , options =
+            [ Input.option (Play False) <| text "Jeu (W)"
+            , Input.option Edit <| text "Édition (C)"
+            ]
+        , selected = Just model.tool
+        , label = Input.labelHidden "Outils"
+        }
+
+
+viewDetails : Model -> Colleer -> List (Element Msg)
+viewDetails model c =
+    case model.edit of
+        Just i ->
+            let
+                b =
+                    Collar.get i c
+            in
+            [ viewDetailsColumn
+                [ viewNameInput b (Collar.toUID i) <| \str -> WheelMsg ( i, Wheel.Named str )
+                , viewContentButton b <| OutMsg <| Inside i
+                , viewVolumeSlider b <| \f -> WheelMsg ( i, Wheel.ChangeVolume f )
+                , viewDeleteButton <| DeleteBead i
+                ]
+            ]
+
+        Nothing ->
+            []
 
 
 manageInteractEvent : Interact.Event Interactable -> Model -> Colleer -> Return
@@ -262,4 +314,33 @@ manageInteractEvent event model collar =
                     return
 
         CommonMode Normal ->
-            return
+            case model.tool of
+                Play on ->
+                    let
+                        scale =
+                            PanSvg.getScale model.svg
+                    in
+                    case ( event.item, event.action ) of
+                        -- MUTE
+                        ( IBead i, Interact.Clicked _ ) ->
+                            let
+                                w =
+                                    (Collar.get i collar).wheel
+
+                                newMute =
+                                    not w.mute
+                            in
+                            return
+
+                        -- TODO
+                        _ ->
+                            return
+
+                Edit ->
+                    case ( event.item, event.action ) of
+                        -- DETAIL
+                        ( IBead i, Interact.Clicked _ ) ->
+                            { return | model = { model | edit = Just i } }
+
+                        _ ->
+                            return

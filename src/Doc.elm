@@ -337,10 +337,10 @@ viewTop doc =
         , row [ width fill, padding 10, spacing 20, Font.size 14 ]
             ((case doc.editor of
                 M editor ->
-                    Element.map MobileMsg (MEditor.viewTools editor)
+                    Element.map MobileMsg <| MEditor.viewTools editor
 
                 C editor ->
-                    CEditor.viewTools editor
+                    Element.map CollarMsg <| CEditor.viewTools editor
              )
                 :: [ Input.text [ width (fill |> maximum 500), centerX ]
                         { label = Input.labelHidden "Nom du fichier"
@@ -420,6 +420,9 @@ viewSide doc =
     case ( doc.editor, getViewing doc ) of
         ( M editor, Content.M m ) ->
             List.map (Element.map MobileMsg) <| MEditor.viewDetails editor m
+
+        ( C editor, Content.C c ) ->
+            List.map (Element.map CollarMsg) <| CEditor.viewDetails editor c
 
         _ ->
             []
