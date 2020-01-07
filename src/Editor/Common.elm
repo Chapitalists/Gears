@@ -1,6 +1,7 @@
 module Editor.Common exposing (..)
 
 import Coll exposing (Id)
+import Data.Collar as Collar
 import Data.Content as Content exposing (Content)
 import Data.Mobile exposing (Geer)
 import Data.Wheel as Wheel exposing (Wheel, Wheeled)
@@ -8,7 +9,12 @@ import Element exposing (..)
 import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
+import Interact
 import Sound
+
+
+type alias CommonModel =
+    { edit : Maybe Identifier }
 
 
 type Identifier
@@ -16,10 +22,48 @@ type Identifier
     | B Int
 
 
+getWheelFromContent : Identifier -> Content Wheel -> Maybe Wheel
+getWheelFromContent id c =
+    case ( id, c ) of
+        ( B i, Content.C collar ) ->
+            Just (Collar.get i collar).wheel
+
+        ( G i, Content.M mobile ) ->
+            Just (Coll.get i mobile.gears).wheel
+
+        _ ->
+            Debug.log "IMPOSSIBLE Wrong Identifier to get from Content" Nothing
+
+
+type Interactable
+    = ISurface
+    | IWheel Identifier
+    | IResizeHandle Identifier Bool
+
+
+fromWheelInteractable : Wheel.Interactable Identifier -> Interactable
+fromWheelInteractable i =
+    case i of
+        Wheel.IWheel id ->
+            IWheel <| id
+
+        Wheel.IResizeHandle id bool ->
+            IResizeHandle id bool
+
+
+commonInit : CommonModel
+commonInit =
+    { edit = Nothing }
+
+
 type ToUndo
     = Do
     | Group
     | NOOP
+
+
+type DocMsg
+    = Inside Identifier
 
 
 type CommonMode
@@ -30,6 +74,21 @@ type CommonMode
 keyCodeToMode : List ( String, CommonMode )
 keyCodeToMode =
     [ ( "KeyV", Nav ) ]
+
+
+type CommonMsg
+    = Delete Identifier
+
+
+commonUpdate : CommonMsg -> CommonModel -> CommonModel
+commonUpdate msg model =
+    case msg of
+        Delete id ->
+            if model.edit == Just id then
+                { model | edit = Nothing }
+
+            else
+                model
 
 
 viewDetailsColumn : List (Element msg) -> Element msg
@@ -100,3 +159,31 @@ viewDeleteButton msg =
         { onPress = Just msg
         , label = text "Supprimer"
         }
+
+
+interactNav : Interact.Event Interactable -> Content Wheel -> Maybe DocMsg
+interactNav event content =
+    case ( event.item, event.action ) of
+        ( IWheel id, Interact.Clicked _ ) ->
+            case Maybe.map Wheel.getWheelContent <| getWheelFromContent id content of
+                Just (Content.M _) ->
+                    Just <| Inside id
+
+                Just (Content.C _) ->
+                    Just <| Inside id
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
+interactSelectEdit : Interact.Event Interactable -> CommonModel -> CommonModel
+interactSelectEdit event model =
+    case ( event.item, event.action ) of
+        ( IWheel id, Interact.Clicked _ ) ->
+            { model | edit = Just id }
+
+        _ ->
+            model

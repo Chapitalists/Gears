@@ -11,7 +11,7 @@ import Data.Wheel as Wheel
 import Dict exposing (Dict)
 import Doc exposing (Doc)
 import Editor.Common as Editors
-import Editor.Mobile as MEditor exposing (Interactable(..))
+import Editor.Mobile as MEditor
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Events exposing (..)

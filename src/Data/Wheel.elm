@@ -40,6 +40,13 @@ getContent { wheel } =
             c
 
 
+getWheelContent : Wheel -> Content Wheel
+getWheelContent { content } =
+    case content of
+        C c ->
+            c
+
+
 setContent : Content Wheel -> Wheeled g -> Wheeled g
 setContent c g =
     let

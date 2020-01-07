@@ -23,10 +23,10 @@ import TypedSvg.Types exposing (Fill(..), Length(..))
 
 type alias Model =
     { tool : Tool
-    , edit : Maybe Int
     , cursor : Int
     , mode : Mode
     , interact : Interact.State Interactable
+    , common : CommonModel
     , svg : PanSvg.Model
     }
 
@@ -45,29 +45,13 @@ keyCodeToMode =
     []
 
 
-type Interactable
-    = Ignore
-    | IBead Int
-    | IResizeHandle Int Bool
-
-
-fromWheelInteractable : Wheel.Interactable Int -> Interactable
-fromWheelInteractable i =
-    case i of
-        Wheel.IWheel id ->
-            IBead id
-
-        Wheel.IResizeHandle id bool ->
-            IResizeHandle id bool
-
-
 init : Colleer -> PanSvg.Model -> Model
 init c svg =
     { tool = Play False
-    , edit = Nothing
     , cursor = 0
     , mode = CommonMode Normal
     , interact = Interact.init
+    , common = commonInit
     , svg =
         { svg
             | viewPos =
@@ -91,10 +75,6 @@ type Msg
     | SvgMsg PanSvg.Msg
     | OutMsg DocMsg
     | InteractMsg (Interact.Msg Interactable)
-
-
-type DocMsg
-    = Inside Int
 
 
 type alias Return =
@@ -162,6 +142,7 @@ update msg ( model, collar ) =
 
                             else
                                 model.cursor
+                        , common = commonUpdate (Delete <| B i) model.common
                     }
             }
 
@@ -206,13 +187,13 @@ viewContent ( model, collar ) =
     let
         getMod : Int -> Wheel.Mod
         getMod i =
-            if model.tool == Edit && model.edit == Just i then
+            if model.tool == Edit && model.common.edit == Just (B i) then
                 Wheel.Selected
 
             else
                 case Interact.getInteract model.interact of
-                    Just ( IBead j, Interact.Hover ) ->
-                        if i == j then
+                    Just ( IWheel j, Interact.Hover ) ->
+                        if B i == j then
                             Wheel.Selectable
 
                         else
@@ -234,7 +215,7 @@ viewContent ( model, collar ) =
                             (vec2 (p + b.length / 2) <| Vec.getY leftmostPoint)
                             b.length
                             { mod = getMod i, motor = False, dashed = False }
-                            i
+                            (B i)
                             (Collar.toUID i)
                             :: l
                         , ( p + b.length
@@ -287,15 +268,15 @@ viewTools model =
 
 viewDetails : Model -> Colleer -> List (Element Msg)
 viewDetails model c =
-    case ( model.tool, model.edit ) of
-        ( Edit, Just i ) ->
+    case ( model.tool, model.common.edit ) of
+        ( Edit, Just (B i) ) ->
             let
                 b =
                     Collar.get i c
             in
             [ viewDetailsColumn
                 [ viewNameInput b (Collar.toUID i) <| \str -> WheelMsg ( i, Wheel.Named str )
-                , viewContentButton b <| OutMsg <| Inside i
+                , viewContentButton b <| OutMsg <| Inside <| B i
                 , viewVolumeSlider b <| \f -> WheelMsg ( i, Wheel.ChangeVolume f )
                 , viewDeleteButton <| DeleteBead i
                 ]
@@ -319,28 +300,19 @@ manageInteractEvent event model collar =
     in
     case model.mode of
         CommonMode Nav ->
-            case ( event.item, event.action ) of
-                ( IBead i, Interact.Clicked _ ) ->
-                    case Wheel.getContent <| Collar.get i collar of
-                        Content.S _ ->
-                            return
-
-                        _ ->
-                            { return | outMsg = Just <| Inside i }
-
-                _ ->
-                    return
+            { return | outMsg = interactNav event <| Content.C collar }
 
         CommonMode Normal ->
             case model.tool of
                 Play on ->
+                    {--TODO Factorize}
                     let
                         scale =
                             PanSvg.getScale model.svg
                     in
                     case ( event.item, event.action ) of
                         -- MUTE
-                        ( IBead i, Interact.Clicked _ ) ->
+                        ( IWheel i, Interact.Clicked _ ) ->
                             let
                                 w =
                                     (Collar.get i collar).wheel
@@ -352,13 +324,8 @@ manageInteractEvent event model collar =
 
                         -- TODO
                         _ ->
-                            return
+-}
+                    return
 
                 Edit ->
-                    case ( event.item, event.action ) of
-                        -- DETAIL
-                        ( IBead i, Interact.Clicked _ ) ->
-                            { return | model = { model | edit = Just i } }
-
-                        _ ->
-                            return
+                    { return | model = { model | common = interactSelectEdit event model.common } }

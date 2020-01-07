@@ -228,25 +228,31 @@ update msg doc =
 
                         newDoc =
                             { doc | data = data, editor = M res.model }
-                    in
-                    ( Maybe.withDefault newDoc
-                        (res.outMsg
-                            |> Maybe.map
-                                (\outMsg ->
-                                    Tuple.first <|
-                                        case outMsg of
-                                            MEditor.Inside id ->
-                                                update
-                                                    (View <|
-                                                        doc.viewing
-                                                            ++ [ ( Mobile.gearName id mobile.gears, G id ) ]
-                                                    )
-                                                    newDoc
+
+                        ( finalDoc, cmd ) =
+                            Maybe.withDefault ( newDoc, Cmd.none )
+                                (res.outMsg
+                                    |> Maybe.map
+                                        (\outMsg ->
+                                            case outMsg of
+                                                Editors.Inside (G id) ->
+                                                    update
+                                                        (View <|
+                                                            doc.viewing
+                                                                ++ [ ( Mobile.gearName id mobile.gears, G id ) ]
+                                                        )
+                                                        newDoc
+
+                                                _ ->
+                                                    ( newDoc, Cmd.none )
+                                        )
                                 )
-                        )
+                    in
+                    ( finalDoc
                     , Cmd.batch
                         [ Cmd.map MobileMsg res.cmd
                         , Maybe.withDefault Cmd.none <| Maybe.map toEngine res.toEngine
+                        , cmd
                         ]
                     )
 
@@ -268,25 +274,31 @@ update msg doc =
 
                         newDoc =
                             { doc | data = data, editor = C res.model }
-                    in
-                    ( Maybe.withDefault newDoc
-                        (res.outMsg
-                            |> Maybe.map
-                                (\outMsg ->
-                                    Tuple.first <|
-                                        case outMsg of
-                                            CEditor.Inside id ->
-                                                update
-                                                    (View <|
-                                                        doc.viewing
-                                                            ++ [ ( Collar.beadName id collar, B id ) ]
-                                                    )
-                                                    newDoc
+
+                        ( finalDoc, cmd ) =
+                            Maybe.withDefault ( newDoc, Cmd.none )
+                                (res.outMsg
+                                    |> Maybe.map
+                                        (\outMsg ->
+                                            case outMsg of
+                                                Editors.Inside (B id) ->
+                                                    update
+                                                        (View <|
+                                                            doc.viewing
+                                                                ++ [ ( Collar.beadName id collar, B id ) ]
+                                                        )
+                                                        newDoc
+
+                                                _ ->
+                                                    ( newDoc, Cmd.none )
+                                        )
                                 )
-                        )
+                    in
+                    ( finalDoc
                     , Cmd.batch
                         [ Cmd.map CollarMsg res.cmd
                         , Maybe.withDefault Cmd.none <| Maybe.map toEngine res.toEngine
+                        , cmd
                         ]
                     )
 
