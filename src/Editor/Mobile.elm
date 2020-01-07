@@ -82,21 +82,22 @@ type Dragging
     | Moving
 
 
-init : Maybe Mobeel -> Maybe PanSvg.Model -> Model
-init may svg =
+init : Maybe Mobeel -> Maybe ( CommonModel, PanSvg.Model ) -> Model
+init mayMobile mayShared =
     { dragging = NoDrag
     , tool = Play False
     , mode = CommonMode Normal
     , link = Nothing
     , engine = Engine.init
     , interact = Interact.init
-    , common = commonInit
+    , common = commonInit <| Maybe.map Tuple.first mayShared
     , svg =
         let
             base =
-                Maybe.withDefault PanSvg.init svg
+                Maybe.withDefault PanSvg.init <| Maybe.map Tuple.second mayShared
         in
-        Maybe.withDefault base <| Maybe.map (\m -> PanSvg.centerZoom (Mobile.gearPosSize m.motor m.gears) base) may
+        Maybe.withDefault base <|
+            Maybe.map (\m -> PanSvg.centerZoom (Mobile.gearPosSize m.motor m.gears) base) mayMobile
     }
 
 
@@ -112,6 +113,8 @@ type Msg
     | CopyGear (Id Geer)
     | NewGear (Content Wheel)
     | DeleteGear (Id Geer)
+    | PackGear
+    | UnpackGear (Maybe ( Wheel, Float ))
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract (Link Geer) Fraction
     | SimplifyFractView
@@ -275,6 +278,33 @@ update msg ( model, mobile ) =
                                                 |> Coll.remove id
                                     }
                     }
+
+        PackGear ->
+            { return | model = { model | common = commonUpdate (Pack <| Content.M mobile) model.common } }
+
+        UnpackGear add ->
+            let
+                newModel =
+                    { model | common = commonUpdate EmptyPack model.common }
+            in
+            case add of
+                Just ( w, l ) ->
+                    let
+                        newGear =
+                            { pos = defaultAddPos
+                            , motor = []
+                            , harmony = Harmo.newSelf l
+                            , wheel = w
+                            }
+                    in
+                    { return
+                        | model = newModel
+                        , mobile = { mobile | gears = Coll.insert newGear mobile.gears }
+                        , toUndo = Do
+                    }
+
+                Nothing ->
+                    { return | model = newModel }
 
         EnteredFract isNumerator str ->
             Maybe.map2 Tuple.pair model.link (String.toInt str)
@@ -625,7 +655,7 @@ viewEditDetails model mobile =
                 g =
                     Coll.get id mobile.gears
             in
-            [ viewDetailsColumn
+            [ viewDetailsColumn <|
                 [ viewNameInput g (Gear.toUID id) <| \str -> WheelMsg ( id, Wheel.Named str )
                 , viewContentButton g <| OutMsg <| Inside <| G id
                 , Input.button []
@@ -679,6 +709,7 @@ viewEditDetails model mobile =
                   else
                     viewDeleteButton <| DeleteGear id
                 ]
+                    ++ viewPack model.common PackGear UnpackGear
             ]
 
         _ ->

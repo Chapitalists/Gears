@@ -107,7 +107,7 @@ update msg doc =
         Loaded m name ->
             ( { data = Data.load m name doc.data
               , viewing = []
-              , editor = M <| MEditor.init (Just m) <| Just <| getSvg doc
+              , editor = M <| MEditor.init (Just m) <| Just <| getShared doc
               }
             , toEngine Engine.stop
             )
@@ -128,10 +128,10 @@ update msg doc =
             in
             case getViewingHelper v mobileContent of
                 Content.C c ->
-                    ( { doc | viewing = v, editor = C <| CEditor.init c <| getSvg doc }, toEngine Engine.stop )
+                    ( { doc | viewing = v, editor = C <| CEditor.init c <| getShared doc }, toEngine Engine.stop )
 
                 Content.M m ->
-                    ( { doc | viewing = l, editor = M <| MEditor.init (Just m) <| Just <| getSvg doc }
+                    ( { doc | viewing = l, editor = M <| MEditor.init (Just m) <| Just <| getShared doc }
                     , toEngine Engine.stop
                     )
 
@@ -459,14 +459,14 @@ viewContent doc =
             text "Cannot edit Sound currently"
 
 
-getSvg : Doc -> PanSvg.Model
-getSvg doc =
+getShared : Doc -> ( Editors.CommonModel, PanSvg.Model )
+getShared doc =
     case doc.editor of
         M e ->
-            e.svg
+            ( e.common, e.svg )
 
         C e ->
-            e.svg
+            ( e.common, e.svg )
 
 
 getViewing : Doc -> WContent

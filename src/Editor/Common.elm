@@ -9,12 +9,15 @@ import Element exposing (..)
 import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
+import Harmony as Harmo
 import Interact
 import Sound
 
 
 type alias CommonModel =
-    { edit : Maybe Identifier }
+    { edit : Maybe Identifier
+    , pack : Maybe ( Wheel, Float )
+    }
 
 
 type Identifier
@@ -35,6 +38,19 @@ getWheelFromContent id c =
             Debug.log "IMPOSSIBLE Wrong Identifier to get from Content" Nothing
 
 
+getLengthFromContent : Identifier -> Content Wheel -> Maybe Float
+getLengthFromContent id c =
+    case ( id, c ) of
+        ( B i, Content.C collar ) ->
+            Just (Collar.get i collar).length
+
+        ( G i, Content.M mobile ) ->
+            Just <| Harmo.getLengthId i mobile.gears
+
+        _ ->
+            Debug.log "IMPOSSIBLE Wrong Identifier to get length from Content" Nothing
+
+
 type Interactable
     = ISurface
     | IWheel Identifier
@@ -51,9 +67,11 @@ fromWheelInteractable i =
             IResizeHandle id bool
 
 
-commonInit : CommonModel
-commonInit =
-    { edit = Nothing }
+commonInit : Maybe CommonModel -> CommonModel
+commonInit may =
+    { edit = Nothing
+    , pack = Maybe.withDefault Nothing <| Maybe.map .pack may
+    }
 
 
 type ToUndo
@@ -78,6 +96,8 @@ keyCodeToMode =
 
 type CommonMsg
     = Delete Identifier
+    | Pack (Content Wheel)
+    | EmptyPack
 
 
 commonUpdate : CommonMsg -> CommonModel -> CommonModel
@@ -89,6 +109,22 @@ commonUpdate msg model =
 
             else
                 model
+
+        Pack content ->
+            { model
+                | pack =
+                    model.edit
+                        |> Maybe.andThen
+                            (\id ->
+                                Maybe.map2 Tuple.pair
+                                    (getWheelFromContent id content)
+                                <|
+                                    Debug.log "length" (getLengthFromContent (Debug.log "id" id) <| Debug.log "contont" content)
+                            )
+            }
+
+        EmptyPack ->
+            { model | pack = Nothing }
 
 
 viewDetailsColumn : List (Element msg) -> Element msg
@@ -159,6 +195,29 @@ viewDeleteButton msg =
         { onPress = Just msg
         , label = text "Supprimer"
         }
+
+
+viewPack : CommonModel -> msg -> (Maybe ( Wheel, Float ) -> msg) -> List (Element msg)
+viewPack model packMsg unpackMsg =
+    case model.pack of
+        Nothing ->
+            [ Input.button []
+                { onPress = Just packMsg
+                , label = text "Emporter"
+                }
+            ]
+
+        Just ( w, _ ) ->
+            [ text <| "Roue : " ++ w.name
+            , Input.button []
+                { label = text "Déposer"
+                , onPress = Just <| unpackMsg model.pack
+                }
+            , Input.button []
+                { label = text "Vider"
+                , onPress = Just <| unpackMsg Nothing
+                }
+            ]
 
 
 interactNav : Interact.Event Interactable -> Content Wheel -> Maybe DocMsg

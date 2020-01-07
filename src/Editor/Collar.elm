@@ -45,13 +45,13 @@ keyCodeToMode =
     []
 
 
-init : Colleer -> PanSvg.Model -> Model
-init c svg =
+init : Colleer -> ( CommonModel, PanSvg.Model ) -> Model
+init c ( common, svg ) =
     { tool = Play False
     , cursor = 0
     , mode = CommonMode Normal
     , interact = Interact.init
-    , common = commonInit
+    , common = commonInit <| Just common
     , svg =
         { svg
             | viewPos =
@@ -71,6 +71,8 @@ type Msg
     | SoundClicked Sound
     | NewBead (Content Wheel)
     | DeleteBead Int
+    | PackBead
+    | UnpackBead (Maybe ( Wheel, Float ))
     | WheelMsg ( Int, Wheel.Msg )
     | SvgMsg PanSvg.Msg
     | OutMsg DocMsg
@@ -145,6 +147,25 @@ update msg ( model, collar ) =
                         , common = commonUpdate (Delete <| B i) model.common
                     }
             }
+
+        PackBead ->
+            { return | model = { model | common = commonUpdate (Pack <| Content.C collar) model.common } }
+
+        UnpackBead add ->
+            let
+                newModel =
+                    { model | common = commonUpdate EmptyPack model.common }
+            in
+            case add of
+                Just ( w, l ) ->
+                    { return
+                        | model = { newModel | cursor = newModel.cursor + 1 }
+                        , collar = Collar.add newModel.cursor { wheel = w, length = l } collar
+                        , toUndo = Do
+                    }
+
+                Nothing ->
+                    { return | model = newModel }
 
         WheelMsg ( i, subMsg ) ->
             { return | collar = Collar.updateBead i (Wheel.update subMsg) collar, toUndo = Do }
@@ -243,7 +264,7 @@ viewCursor { cursor } c =
             medLength * 2
     in
     [ S.rect
-        [ SA.x <| Num <| Collar.getLengthAt cursor c - cursorW / 2
+        [ SA.x <| Num <| Collar.getCumulLengthAt cursor c - cursorW / 2
         , SA.y <| Num <| -cursorH / 2
         , SA.width <| Num cursorW
         , SA.height <| Num cursorH
@@ -274,12 +295,13 @@ viewDetails model c =
                 b =
                     Collar.get i c
             in
-            [ viewDetailsColumn
+            [ viewDetailsColumn <|
                 [ viewNameInput b (Collar.toUID i) <| \str -> WheelMsg ( i, Wheel.Named str )
                 , viewContentButton b <| OutMsg <| Inside <| B i
                 , viewVolumeSlider b <| \f -> WheelMsg ( i, Wheel.ChangeVolume f )
                 , viewDeleteButton <| DeleteBead i
                 ]
+                    ++ viewPack model.common PackBead UnpackBead
             ]
 
         _ ->
