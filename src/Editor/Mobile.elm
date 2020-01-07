@@ -40,6 +40,11 @@ type alias Model =
     }
 
 
+defaultAddPos : Vec2
+defaultAddPos =
+    vec2 50 50
+
+
 
 -- TODO Mix Dragging inside Tool to make impossible states impossible ?
 
@@ -218,11 +223,8 @@ update msg ( model, mobile ) =
 
         NewGear content ->
             let
-                pos =
-                    vec2 50 50
-
                 ( id, gears ) =
-                    Coll.insertTellId (Mobile.gearFromContent content pos) mobile.gears
+                    Coll.insertTellId (Mobile.gearFromContent content defaultAddPos) mobile.gears
 
                 colorGen =
                     Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
