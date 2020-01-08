@@ -17,6 +17,8 @@ import Element.Background as Bg
 import Element.Events exposing (..)
 import Element.Font as Font
 import Element.Input as Input
+import File exposing (File)
+import File.Select as Select
 import Http
 import Json.Decode as D
 import Keys
@@ -111,6 +113,8 @@ type Msg
     | GotSavesList (Result Http.Error String)
     | GotLoadedFile String (Result Http.Error Mobeel)
     | SoundLoaded (Result D.Error Sound)
+    | ClickedUpload
+    | UploadSounds File (List File)
     | ChangedExplorerTab ExTab
     | ChangedMode Mode
     | GotScreenSize ScreenSize
@@ -232,6 +236,26 @@ update msg model =
 
                 Result.Ok s ->
                     ( { model | loadedSoundList = s :: model.loadedSoundList }, Cmd.none )
+
+        ClickedUpload ->
+            ( model, Select.files [ "audio/x-wav" ] UploadSounds )
+
+        UploadSounds f lf ->
+            ( model
+            , Cmd.batch <|
+                List.map
+                    (\file ->
+                        Http.post
+                            { url = Url.toString model.currentUrl ++ "upSound"
+                            , body =
+                                Http.multipartBody
+                                    [ Http.filePart "file" file
+                                    ]
+                            , expect = Http.expectWhatever <| always RequestSoundList
+                            }
+                    )
+                    (f :: lf)
+            )
 
         ChangedExplorerTab tab ->
             ( { model | fileExplorerTab = tab }, Cmd.none )
@@ -427,7 +451,11 @@ viewFileExplorer model =
 viewSounds : Model -> List (Element Msg)
 viewSounds model =
     [ column [ width fill, height <| fillPortion 2, spacing 20, scrollbarY ]
-        [ Input.button
+        [ Input.button []
+            { label = text "Ouvrir"
+            , onPress = Just ClickedUpload
+            }
+        , Input.button
             [ Font.color <|
                 if model.connected then
                     rgb 0 0 0
