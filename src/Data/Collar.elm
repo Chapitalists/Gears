@@ -40,7 +40,7 @@ beadName i collar =
 
 fromWheel : Wheel -> Float -> Colleer
 fromWheel w l =
-    { matrice = l
+    { matrice = 1
     , loop = l
     , head = { length = l, wheel = w }
     , beads = []
@@ -73,8 +73,8 @@ getMaxLength =
 
 
 getCumulLengthAt : Int -> Colleer -> Float
-getCumulLengthAt i c =
-    List.foldl (\b sum -> sum + b.length) 0 <| List.take i <| getBeads c
+getCumulLengthAt =
+    Content.getCumulLengthAt
 
 
 get : Int -> Colleer -> Beed
@@ -90,10 +90,17 @@ get i c =
 add : Int -> Beed -> Colleer -> Colleer
 add i b c =
     if i <= 0 then
-        { c | head = b, beads = c.head :: c.beads }
+        { c
+            | head = b
+            , beads = c.head :: c.beads
+            , matrice = c.matrice + 1
+        }
 
     else
-        { c | beads = List.concat [ List.take (i - 1) c.beads, [ b ], List.drop (i - 1) c.beads ] }
+        { c
+            | beads = List.concat [ List.take (i - 1) c.beads, [ b ], List.drop (i - 1) c.beads ]
+            , matrice = c.matrice + 1
+        }
 
 
 rm : Int -> Colleer -> Colleer
@@ -104,10 +111,22 @@ rm i c =
     else
         case ( i, c.beads ) of
             ( 0, head :: beads ) ->
-                { c | head = head, beads = beads }
+                { c
+                    | head = head
+                    , beads = beads
+                    , matrice = c.matrice - 1
+                }
 
             ( j, beads ) ->
-                { c | beads = List.concat [ List.take (j - 1) beads, List.drop j beads ] }
+                { c
+                    | beads = List.concat [ List.take (j - 1) beads, List.drop j beads ]
+                    , matrice =
+                        if c.matrice > j then
+                            c.matrice - 1
+
+                        else
+                            c.matrice
+                }
 
 
 updateBead : Int -> (Beed -> Beed) -> Colleer -> Colleer

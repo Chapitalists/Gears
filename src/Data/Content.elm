@@ -85,7 +85,7 @@ beadDecoder wheelDecoder =
 
 
 type alias Collar item =
-    { matrice : Float, loop : Float, head : Bead item, beads : List (Bead item) }
+    { matrice : Int, loop : Float, head : Bead item, beads : List (Bead item) }
 
 
 getBeads : Collar item -> List (Bead item)
@@ -93,10 +93,15 @@ getBeads c =
     c.head :: c.beads
 
 
+getCumulLengthAt : Int -> Collar item -> Float
+getCumulLengthAt i c =
+    List.foldl (\b sum -> sum + b.length) 0 <| List.take i <| getBeads c
+
+
 collarEncoder : (item -> List ( String, E.Value )) -> Collar item -> E.Value
 collarEncoder wheelEncoder c =
     E.object
-        [ ( "matriceLength", E.float c.matrice )
+        [ ( "matriceSize", E.int c.matrice )
         , ( "loopStart", E.float c.loop )
         , ( "beads"
           , E.list (beadEncoder wheelEncoder) <| getBeads c
@@ -106,12 +111,16 @@ collarEncoder wheelEncoder c =
 
 collarDecoder : D.Decoder item -> D.Decoder (Collar item)
 collarDecoder wheelDecoder =
-    Field.require "matriceLength" D.float <|
-        \matrice ->
+    Field.attempt "matriceSize" D.int <|
+        \mayMatrice ->
             Field.require "loopStart" D.float <|
                 \loop ->
                     Field.require "beads" (D.list <| beadDecoder wheelDecoder) <|
                         \beads ->
+                            let
+                                matrice =
+                                    Maybe.withDefault (List.length beads) mayMatrice
+                            in
                             case beads of
                                 head :: list ->
                                     D.succeed { matrice = matrice, loop = loop, head = head, beads = list }

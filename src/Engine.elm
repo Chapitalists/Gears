@@ -186,7 +186,7 @@ encodeMobile { motor, gears } =
 encodeCollar : Colleer -> E.Value
 encodeCollar c =
     E.object
-        [ ( "length", E.float c.matrice )
+        [ ( "length", E.float <| Collar.getCumulLengthAt c.matrice c )
         , ( "loopStart", E.float c.loop )
         , ( "beads", E.list encodeBead <| Collar.getBeads c )
         ]

@@ -16,4 +16,4 @@ getContentLength c =
             Harmo.getLengthId m.motor m.gears
 
         Content.C col ->
-            col.matrice
+            Content.getCumulLengthAt col.matrice col
