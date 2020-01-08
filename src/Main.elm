@@ -18,6 +18,7 @@ import Element.Events exposing (..)
 import Element.Font as Font
 import Element.Input as Input
 import File exposing (File)
+import File.Download as DL
 import File.Select as Select
 import Http
 import Json.Decode as D
@@ -108,6 +109,7 @@ type Msg
     = GotSoundList (Result Http.Error String)
     | RequestSoundList
     | RequestSoundLoad String
+    | RequestSoundDownload String
     | RequestSavesList
     | RequestSaveLoad String
     | GotSavesList (Result Http.Error String)
@@ -216,6 +218,15 @@ update msg model =
                 Cmd.none
             )
 
+        RequestSoundDownload n ->
+            ( model
+            , if Set.member n model.soundList then
+                DL.url <| Url.toString model.currentUrl ++ "sons/" ++ n
+
+              else
+                Cmd.none
+            )
+
         RequestSavesList ->
             ( model, fetchSavesList model.currentUrl )
 
@@ -274,6 +285,9 @@ update msg model =
                     case mode of
                         Capsuling ->
                             ( { newModel | mode = Capsuling, fileExplorerTab = Saves }, cmds )
+
+                        Downloading ->
+                            ( { newModel | mode = Downloading, fileExplorerTab = Sounds }, cmds )
 
                         _ ->
                             ( { newModel | mode = mode }, cmds )
@@ -345,14 +359,17 @@ subs { doc } =
 type Mode
     = DocMode Doc.Mode -- FIXME Second source of truth, not reliable
     | Capsuling
+    | Downloading
     | NoMode
 
 
 keyCodeToMode : Dict String Mode
 keyCodeToMode =
     Dict.fromList <|
-        ( "KeyE", Capsuling )
-            :: List.map (Tuple.mapSecond DocMode) Doc.keyCodeToMode
+        [ ( "KeyE", Capsuling )
+        , ( "KeyR", Downloading )
+        ]
+            ++ List.map (Tuple.mapSecond DocMode) Doc.keyCodeToMode
 
 
 keyCodeToShortcut : Dict String Doc.Shortcut
@@ -395,11 +412,15 @@ viewFileExplorer : Model -> Element Msg
 viewFileExplorer model =
     let
         bgColor =
-            if model.mode == Capsuling then
-                rgb 0.2 0.2 0.8
+            case model.mode of
+                Capsuling ->
+                    rgb 0.2 0.2 0.8
 
-            else
-                rgb 0.5 0.5 0.5
+                Downloading ->
+                    rgb 0.8 0.8 0.2
+
+                _ ->
+                    rgb 0.5 0.5 0.5
     in
     column [ height fill, Bg.color bgColor, Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ] <|
         ([ row [ Font.size 14, spacing 20 ]
@@ -470,7 +491,12 @@ viewSounds model =
             (List.map
                 (\s ->
                     el
-                        [ onClick (RequestSoundLoad s)
+                        [ onClick <|
+                            if model.mode == Downloading then
+                                RequestSoundDownload s
+
+                            else
+                                RequestSoundLoad s
                         , Font.color <|
                             if List.any ((==) s) <| List.map Sound.toString model.loadedSoundList then
                                 rgb 0.2 0.8 0.2
