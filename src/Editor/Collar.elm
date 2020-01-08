@@ -103,7 +103,7 @@ update msg ( model, collar ) =
     in
     case msg of
         ChangedTool tool ->
-            { return | model = { model | tool = tool } }
+            { return | model = { model | tool = tool }, toEngine = Just Engine.stop }
 
         ChangedMode mode ->
             { return | model = { model | mode = mode } }

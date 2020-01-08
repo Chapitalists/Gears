@@ -39,7 +39,7 @@ function engine(o) {
   let model = null
   switch ( o.action ) {
     case "stopReset" :
-        if (playing.clocks) stop(playing) // UNUSED CURRENTLY
+        if (playing.clocks) stop(playing)
         else for ( id in playing) {
             stop(playing[id])
             playing[id].view.animate().play().finish()
