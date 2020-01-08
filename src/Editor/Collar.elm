@@ -327,14 +327,14 @@ manageInteractEvent event model collar =
         CommonMode Normal ->
             case model.tool of
                 Play on ->
-                    {--TODO Factorize}
+                    --TODO Factorize
                     let
                         scale =
                             PanSvg.getScale model.svg
                     in
                     case ( event.item, event.action ) of
                         -- MUTE
-                        ( IWheel i, Interact.Clicked _ ) ->
+                        ( IWheel (B i), Interact.Clicked _ ) ->
                             let
                                 w =
                                     (Collar.get i collar).wheel
@@ -342,12 +342,14 @@ manageInteractEvent event model collar =
                                 newMute =
                                     not w.mute
                             in
-                            return
+                            { return
+                                | collar = Collar.updateBead i (\b -> { b | wheel = { w | mute = newMute } }) collar
+                                , toUndo = Do
+                                , toEngine = Just <| Engine.mutedBead i newMute
+                            }
 
-                        -- TODO
                         _ ->
--}
-                    return
+                            return
 
                 Edit ->
                     { return | model = { model | common = interactSelectEdit event model.common } }
