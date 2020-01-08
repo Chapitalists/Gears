@@ -4,10 +4,12 @@ module Engine exposing
     , init
     , isPlaying
     , muted
+    , mutedBead
     , playCollar
     , playingIds
     , setPlaying
     , stop
+    , volumeBead
     , volumeChanged
     )
 
@@ -83,6 +85,24 @@ playCollar collar =
         [ ( "action", E.string "playCollar" )
         , ( "baseId", E.string <| String.dropRight 1 <| Collar.toUID 0 )
         , ( "collar", encodeCollar collar )
+        ]
+
+
+mutedBead : Int -> Bool -> E.Value
+mutedBead i mute =
+    E.object
+        [ ( "action", E.string "muteBead" )
+        , ( "index", E.int i )
+        , ( "value", E.bool mute )
+        ]
+
+
+volumeBead : Int -> Float -> E.Value
+volumeBead i volume =
+    E.object
+        [ ( "action", E.string "volumeBead" )
+        , ( "index", E.int i )
+        , ( "value", E.float <| clamp 0 1 volume )
         ]
 
 

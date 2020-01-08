@@ -55,6 +55,21 @@ function engine(o) {
         if (playing.paused) play(playing, Tone.now()+0.1, o)
         else pause(playing, Tone.now()+0.1)
         break;
+    case "muteBead" :
+        if (!playing.rate) break;
+        model = playing.players[o.index]
+        if (model) {
+            model.mute = o.value
+            setVolume(model)
+        }
+        break;
+    case "volumeBead" :
+        if (!playing.rate) break;
+        model = playing.players[o.index]
+        if (model) {
+            model.volume = o.value
+            setVolume(model)
+        }
     case "mute" :
         model = playing[o.gearId]
         if (model) {
@@ -68,6 +83,7 @@ function engine(o) {
             model.volume = o.value
             setVolume(model)
         }
+        break;
     }
 }
 
