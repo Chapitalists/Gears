@@ -2,6 +2,7 @@ module Editor.Collar exposing (..)
 
 import Color
 import Data.Collar as Collar exposing (Colleer)
+import Data.Common as CommonData
 import Data.Content as Content exposing (Content)
 import Data.Wheel as Wheel exposing (Wheel)
 import Editor.Common exposing (..)
@@ -73,6 +74,7 @@ type Msg
     | DeleteBead Int
     | PackBead
     | UnpackBead (Maybe ( Wheel, Float ))
+    | ResizeToContent Int
     | WheelMsg ( Int, Wheel.Msg )
     | SvgMsg PanSvg.Msg
     | OutMsg DocMsg
@@ -166,6 +168,15 @@ update msg ( model, collar ) =
 
                 Nothing ->
                     { return | model = newModel }
+
+        ResizeToContent i ->
+            { return
+                | collar =
+                    Collar.updateBead i
+                        (\b -> { b | length = CommonData.getContentLength <| Wheel.getContent <| Collar.get i collar })
+                        collar
+                , toUndo = Do
+            }
 
         WheelMsg ( i, subMsg ) ->
             { return | collar = Collar.updateBead i (Wheel.update subMsg) collar, toUndo = Do }
@@ -299,6 +310,7 @@ viewDetails model c =
                 [ viewNameInput b (Collar.toUID i) <| \str -> WheelMsg ( i, Wheel.Named str )
                 , viewContentButton b <| OutMsg <| Inside <| B i
                 , viewVolumeSlider b <| \f -> WheelMsg ( i, Wheel.ChangeVolume f )
+                , viewResizeToInsideLength <| ResizeToContent i
                 , viewDeleteButton <| DeleteBead i
                 ]
                     ++ viewPack model.common PackBead UnpackBead

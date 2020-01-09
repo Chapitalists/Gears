@@ -3,6 +3,7 @@ module Editor.Mobile exposing (..)
 import Coll exposing (Coll, Id)
 import Color
 import Data.Collar as Collar
+import Data.Common as CommonData
 import Data.Content as Content exposing (Content)
 import Data.Gear as Gear
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
@@ -119,6 +120,7 @@ type Msg
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract (Link Geer) Fraction
     | SimplifyFractView
+    | ResizeToContent (Id Geer)
     | Capsuled (Id Geer)
     | Collared (Id Geer)
     | InteractMsg (Interact.Msg Interactable)
@@ -355,6 +357,18 @@ update msg ( model, mobile ) =
                                 )
                     )
                 |> Maybe.withDefault return
+
+        ResizeToContent id ->
+            { return
+                | mobile =
+                    { mobile
+                        | gears =
+                            Harmo.changeSelf id
+                                (CommonData.getContentLength <| Wheel.getContent <| Coll.get id mobile.gears)
+                                mobile.gears
+                    }
+                , toUndo = Do
+            }
 
         Capsuled id ->
             let
@@ -709,6 +723,7 @@ viewEditDetails model mobile =
                                     }
                             )
                             [ 2, 3, 5, 7 ]
+                , viewResizeToInsideLength <| ResizeToContent id
                 , viewChangeContent <| ChangedMode <| ChangeSound id
                 , Input.button []
                     { label = text "Encapsuler"

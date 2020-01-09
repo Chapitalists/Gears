@@ -88,6 +88,25 @@ clean id coll =
             Debug.todo "Clean Base"
 
 
+changeSelf : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
+changeSelf id length coll =
+    let
+        g =
+            Coll.get id coll
+
+        harmo =
+            g.harmony
+    in
+    case harmo.ref of
+        Self r ->
+            Coll.update id (always { g | harmony = { harmo | ref = Self { r | unit = length } } }) coll
+
+        Other rId ->
+            coll
+                |> Coll.update id (always { g | harmony = newSelf length })
+                |> Coll.update (Coll.idMap rId) (remove id)
+
+
 resizeFree : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
 resizeFree id length coll =
     let

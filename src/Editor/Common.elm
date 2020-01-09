@@ -189,6 +189,14 @@ viewChangeContent msg =
         }
 
 
+viewResizeToInsideLength : msg -> Element msg
+viewResizeToInsideLength msg =
+    Input.button []
+        { label = text "Taille Originale"
+        , onPress = Just msg
+        }
+
+
 viewDeleteButton : msg -> Element msg
 viewDeleteButton msg =
     Input.button []
