@@ -115,7 +115,7 @@ type Msg
     | NewGear (Content Wheel)
     | DeleteGear (Id Geer)
     | PackGear
-    | UnpackGear (Maybe ( Wheel, Float ))
+    | UnpackGear ( Wheel, Float )
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract (Link Geer) Fraction
     | SimplifyFractView
@@ -284,29 +284,19 @@ update msg ( model, mobile ) =
         PackGear ->
             { return | model = { model | common = commonUpdate (Pack <| Content.M mobile) model.common } }
 
-        UnpackGear add ->
+        UnpackGear ( w, l ) ->
             let
-                newModel =
-                    { model | common = commonUpdate EmptyPack model.common }
-            in
-            case add of
-                Just ( w, l ) ->
-                    let
-                        newGear =
-                            { pos = defaultAddPos
-                            , motor = []
-                            , harmony = Harmo.newSelf l
-                            , wheel = w
-                            }
-                    in
-                    { return
-                        | model = newModel
-                        , mobile = { mobile | gears = Coll.insert newGear mobile.gears }
-                        , toUndo = Do
+                newGear =
+                    { pos = defaultAddPos
+                    , motor = []
+                    , harmony = Harmo.newSelf l
+                    , wheel = w
                     }
-
-                Nothing ->
-                    { return | model = newModel }
+            in
+            { return
+                | mobile = { mobile | gears = Coll.insert newGear mobile.gears }
+                , toUndo = Do
+            }
 
         EnteredFract isNumerator str ->
             Maybe.map2 Tuple.pair model.link (String.toInt str)

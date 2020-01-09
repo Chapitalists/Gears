@@ -239,27 +239,23 @@ viewDeleteButton msg =
         }
 
 
-viewPack : CommonModel -> msg -> (Maybe ( Wheel, Float ) -> msg) -> List (Element msg)
+viewPack : CommonModel -> msg -> (( Wheel, Float ) -> msg) -> List (Element msg)
 viewPack model packMsg unpackMsg =
-    case model.pack of
-        Nothing ->
-            [ Input.button []
-                { onPress = Just packMsg
-                , label = text "Emporter"
-                }
-            ]
+    Input.button []
+        { onPress = Just packMsg
+        , label = text "Copier"
+        }
+        :: (case model.pack of
+                Nothing ->
+                    []
 
-        Just ( w, _ ) ->
-            [ text <| "Roue : " ++ w.name
-            , Input.button []
-                { label = text "Déposer"
-                , onPress = Just <| unpackMsg model.pack
-                }
-            , Input.button []
-                { label = text "Vider"
-                , onPress = Just <| unpackMsg Nothing
-                }
-            ]
+                Just ( w, l ) ->
+                    [ Input.button []
+                        { label = text <| "Coller " ++ w.name
+                        , onPress = Just <| unpackMsg ( w, l )
+                        }
+                    ]
+           )
 
 
 interactNav : Interact.Event Interactable -> Content Wheel -> Maybe DocMsg

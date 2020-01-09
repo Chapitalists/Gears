@@ -73,7 +73,7 @@ type Msg
     | NewBead (Content Wheel)
     | DeleteBead Int
     | PackBead
-    | UnpackBead (Maybe ( Wheel, Float ))
+    | UnpackBead ( Wheel, Float )
     | ResizeToContent Int
     | WheelMsg ( Int, Wheel.Msg )
     | SvgMsg PanSvg.Msg
@@ -159,21 +159,12 @@ update msg ( model, collar ) =
         PackBead ->
             { return | model = { model | common = commonUpdate (Pack <| Content.C collar) model.common } }
 
-        UnpackBead add ->
-            let
-                newModel =
-                    { model | common = commonUpdate EmptyPack model.common }
-            in
-            case add of
-                Just ( w, l ) ->
-                    { return
-                        | model = { newModel | cursor = newModel.cursor + 1 }
-                        , collar = Collar.add newModel.cursor { wheel = w, length = l } collar
-                        , toUndo = Do
-                    }
-
-                Nothing ->
-                    { return | model = newModel }
+        UnpackBead ( w, l ) ->
+            { return
+                | collar = Collar.add model.cursor { wheel = w, length = l } collar
+                , toUndo = Do
+                , model = { model | cursor = model.cursor + 1 }
+            }
 
         ResizeToContent i ->
             { return
