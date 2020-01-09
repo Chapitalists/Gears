@@ -529,7 +529,7 @@ soundView s =
 
 viewSaveFiles : Model -> List (Element Msg)
 viewSaveFiles model =
-    [ column [ height <| fillPortion 1, width fill, spacing 20 ]
+    [ column [ height <| fillPortion 1, width fill, spacing 20, scrollbarY ]
         [ Input.button
             [ Font.color <|
                 if model.connected then
