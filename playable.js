@@ -44,7 +44,7 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
     model.volume = newModel.volume || 1 // TODO cf first TODO
     model.mute = newModel.mute || false // TODO cf first TODO
     model.startTime = t - model.pauseOffset / model.rate
-    if (model.soundName) {
+    if (model.soundName && model.player.output) {
         if (mute || model.mute) model.player.mute = true
         else model.player.volume.value = ((model.volume * volume) - 1) * 60
         model.player.start(t, model.pauseOffset)
@@ -75,11 +75,11 @@ function pause(model, t, force = false) {
     if (model.paused && !force) return;
     model.paused = true
     model.pauseOffset = ((t - model.startTime) * model.rate)
-    if (model.soundName) {
+    if (model.soundName && model.player.output) {
         model.player.stop(t)
     }
     if (model.mobile) {
-        model.gears.map(pause)
+        model.gears.map(v => pause(v, t))
     }
     if (model.collar) {
         model.progPause = t
@@ -94,7 +94,7 @@ function pause(model, t, force = false) {
 }
 
 function stop(model) {
-    if (model.soundName) model.player.stop()
+    if (model.soundName) model.player.stop().dispose()
     if (model.mobile) model.gears.map(stop)
     if (model.collar) {
         model.clocks.map(v => v.stop())
