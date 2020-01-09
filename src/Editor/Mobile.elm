@@ -677,15 +677,7 @@ viewEditDetails model mobile =
                         ++ Harmo.view id
                             mobile.gears
                             (\rId ->
-                                let
-                                    w =
-                                        (Coll.get rId mobile.gears).wheel
-                                in
-                                if String.isEmpty w.name then
-                                    Gear.toUID rId
-
-                                else
-                                    w.name
+                                getNameFromContent (G rId) <| Content.M mobile
                             )
                 , text <| "( " ++ (Round.round 2 <| Harmo.getLengthId id mobile.gears) ++ " )"
                 , text <| "Contenu : " ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)

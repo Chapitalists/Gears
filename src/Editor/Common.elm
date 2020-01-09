@@ -3,6 +3,7 @@ module Editor.Common exposing (..)
 import Coll exposing (Id)
 import Data.Collar as Collar
 import Data.Content as Content exposing (Content)
+import Data.Gear as Gear
 import Data.Mobile exposing (Geer)
 import Data.Wheel as Wheel exposing (Wheel, Wheeled)
 import Element exposing (..)
@@ -23,6 +24,26 @@ type alias CommonModel =
 type Identifier
     = G (Id Geer)
     | B Int
+
+
+getNameFromContent : Identifier -> Content Wheel -> String
+getNameFromContent id c =
+    Maybe.withDefault "PROBLEM" <|
+        Maybe.map
+            (\w ->
+                if String.isEmpty w.name then
+                    case id of
+                        B i ->
+                            Collar.toUID i
+
+                        G i ->
+                            Gear.toUID i
+
+                else
+                    w.name
+            )
+        <|
+            getWheelFromContent id c
 
 
 getWheelFromContent : Identifier -> Content Wheel -> Maybe Wheel
