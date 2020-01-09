@@ -23,6 +23,7 @@ import File.Select as Select
 import Http
 import Json.Decode as D
 import Keys
+import NaturalOrdering as Natural
 import Result exposing (Result)
 import Set exposing (Set)
 import Sound exposing (Sound)
@@ -507,7 +508,8 @@ viewSounds model =
                         (text s)
                 )
              <|
-                Set.toList model.soundList
+                List.sortWith Natural.compare <|
+                    Set.toList model.soundList
             )
         ]
     ]
@@ -516,7 +518,10 @@ viewSounds model =
 viewLoaded : Model -> List (Element Msg)
 viewLoaded model =
     [ column [ width fill, height <| fillPortion 3, spacing 10, padding 2, scrollbarY ] <|
-        List.map soundView model.loadedSoundList
+        List.map soundView <|
+            List.sortWith
+                (\s t -> Natural.compare (Sound.toString s) (Sound.toString t))
+                model.loadedSoundList
     ]
 
 
@@ -543,7 +548,8 @@ viewSaveFiles model =
             }
         , column [ width fill, spacing 5, padding 2, scrollbarY ] <|
             (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutGearsExtension s)) <|
-                Set.toList model.savesList
+                List.sortWith Natural.compare <|
+                    Set.toList model.savesList
             )
         ]
     ]
