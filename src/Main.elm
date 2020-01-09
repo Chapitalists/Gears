@@ -98,7 +98,7 @@ init screen url _ =
         Sounds
         NoMode
         Keys.init
-    , fetchSoundList url
+    , Cmd.batch [ fetchSoundList url, fetchSavesList url ]
     )
 
 
