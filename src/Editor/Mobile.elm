@@ -70,7 +70,12 @@ keyCodeToMode =
 
 
 type alias LinkInfo =
-    { link : Link Geer, fract : Maybe Fraction }
+    { link : Link Geer, fractInput : FractInput }
+
+
+type FractInput
+    = FractionInput Fraction
+    | TextInput String
 
 
 type Dragging
@@ -118,6 +123,8 @@ type Msg
     | UnpackGear ( Wheel, Float )
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract (Link Geer) Fraction
+    | EnteredTextFract String
+    | ForcedFract (Link Geer) Fraction
     | SimplifyFractView
     | ResizeToContent (Id Geer)
     | Capsuled (Id Geer)
@@ -300,28 +307,28 @@ update msg ( model, mobile ) =
 
         EnteredFract isNumerator str ->
             Maybe.map2 Tuple.pair model.link (String.toInt str)
-                |> Maybe.andThen
+                |> Maybe.map
                     (\( link, i ) ->
-                        link.fract
-                            |> Maybe.map
-                                (\fract ->
-                                    { return
-                                        | model =
-                                            { model
-                                                | link =
-                                                    Just
-                                                        { link
-                                                            | fract =
-                                                                Just <|
-                                                                    if isNumerator then
-                                                                        { fract | num = i }
+                        { return
+                            | model =
+                                { model
+                                    | link =
+                                        Just
+                                            { link
+                                                | fractInput =
+                                                    case link.fractInput of
+                                                        FractionInput fract ->
+                                                            if isNumerator then
+                                                                FractionInput { fract | num = i }
 
-                                                                    else
-                                                                        { fract | den = i }
-                                                        }
+                                                            else
+                                                                FractionInput { fract | den = i }
+
+                                                        TextInput s ->
+                                                            TextInput s
                                             }
-                                    }
-                                )
+                                }
+                        }
                     )
                 |> Maybe.withDefault return
 
@@ -335,15 +342,136 @@ update msg ( model, mobile ) =
                 , toUndo = Do
             }
 
+        EnteredTextFract str ->
+            case model.link of
+                Nothing ->
+                    return
+
+                Just link ->
+                    case link.fractInput of
+                        FractionInput _ ->
+                            return
+
+                        TextInput _ ->
+                            { return | model = { model | link = Just { link | fractInput = TextInput str } } }
+
+        ForcedFract l fract ->
+            -- TODO FIXME URGENTLY Abuses Harmo internals, as Gear.copy
+            let
+                harmoFrom =
+                    (Coll.get (Tuple.first l) mobile.gears).harmony
+
+                newBase =
+                    Maybe.withDefault (Tuple.first l) <| Harmo.getBaseId harmoFrom
+
+                newOther =
+                    Harmo.Other <| Coll.idMap newBase
+
+                newFract =
+                    Fract.multiplication harmoFrom.fract fract
+
+                harmoTo =
+                    (Coll.get (Tuple.second l) mobile.gears).harmony
+
+                harmonics =
+                    case harmoTo.ref of
+                        Harmo.Self r ->
+                            r.group
+
+                        Harmo.Other _ ->
+                            []
+
+                links =
+                    case harmoTo.ref of
+                        Harmo.Self r ->
+                            r.links
+
+                        Harmo.Other _ ->
+                            []
+            in
+            { return
+                | mobile =
+                    { mobile
+                        | gears =
+                            List.foldl
+                                (\harmonic ->
+                                    Coll.update harmonic <|
+                                        \g ->
+                                            { g
+                                                | harmony =
+                                                    { ref = newOther
+                                                    , fract =
+                                                        Fract.division
+                                                            (Fract.multiplication g.harmony.fract newFract)
+                                                            harmoTo.fract
+                                                    }
+                                            }
+                                )
+                                (mobile.gears
+                                    |> Coll.update (Tuple.second l)
+                                        (\g -> { g | harmony = { ref = newOther, fract = newFract } })
+                                    |> Coll.update newBase
+                                        (\g ->
+                                            let
+                                                harmony =
+                                                    g.harmony
+                                            in
+                                            case harmony.ref of
+                                                Harmo.Self r ->
+                                                    { g
+                                                        | harmony =
+                                                            { harmony
+                                                                | ref =
+                                                                    Harmo.Self
+                                                                        { r
+                                                                            | group =
+                                                                                Coll.idMap (Tuple.second l)
+                                                                                    :: r.group
+                                                                                    ++ harmonics
+                                                                            , links =
+                                                                                Tuple.mapBoth Coll.idMap Coll.idMap l
+                                                                                    :: links
+                                                                                    ++ r.links
+                                                                        }
+                                                            }
+                                                    }
+
+                                                Harmo.Other _ ->
+                                                    Debug.log "IMPOSSIBLE newBase isn’t Self" g
+                                        )
+                                )
+                            <|
+                                List.map Coll.idMap harmonics
+                    }
+                , toUndo = Do
+                , model =
+                    case model.link of
+                        Just link ->
+                            { model | link = Just { link | fractInput = FractionInput fract } }
+
+                        Nothing ->
+                            model
+            }
+
         SimplifyFractView ->
             model.link
-                |> Maybe.andThen
+                |> Maybe.map
                     (\link ->
-                        link.fract
-                            |> Maybe.map
-                                (\fract ->
-                                    { return | model = { model | link = Just { link | fract = Just <| Fract.simplify fract } } }
-                                )
+                        case link.fractInput of
+                            FractionInput fract ->
+                                { return
+                                    | model =
+                                        { model
+                                            | link =
+                                                Just
+                                                    { link
+                                                        | fractInput = FractionInput <| Fract.simplify fract
+                                                    }
+                                        }
+                                }
+
+                            TextInput _ ->
+                                return
                     )
                 |> Maybe.withDefault return
 
@@ -716,38 +844,73 @@ viewEditDetails model mobile =
 viewHarmonizeDetails : Model -> Mobeel -> List (Element Msg)
 viewHarmonizeDetails model mobile =
     case model.link of
-        Just { link, fract } ->
+        Just { link, fractInput } ->
             [ viewDetailsColumn
                 ([ text <| (Gear.toUID <| Tuple.first link) ++ (Gear.toUID <| Tuple.second link) ]
-                    ++ (case fract of
-                            Nothing ->
-                                [ text <|
-                                    String.fromFloat <|
-                                        Harmo.getLengthId (Tuple.second link) mobile.gears
-                                            / Harmo.getLengthId (Tuple.first link) mobile.gears
-                                ]
-
-                            Just f ->
+                    ++ (case fractInput of
+                            FractionInput fract ->
                                 [ Input.text [ Font.color (rgb 0 0 0) ]
-                                    { text = String.fromInt f.num
+                                    { text = String.fromInt fract.num
                                     , onChange = EnteredFract True
                                     , label = Input.labelHidden "Numerator"
                                     , placeholder = Nothing
                                     }
                                 , text "/"
                                 , Input.text [ Font.color (rgb 0 0 0) ]
-                                    { text = String.fromInt f.den
+                                    { text = String.fromInt fract.den
                                     , onChange = EnteredFract False
                                     , label = Input.labelHidden "Denominator"
                                     , placeholder = Nothing
                                     }
                                 , Input.button []
                                     { label = text "Change"
-                                    , onPress = Just <| AppliedFract link f
+                                    , onPress = Just <| AppliedFract link fract
                                     }
                                 , Input.button []
                                     { label = text "Simplifier"
                                     , onPress = Just SimplifyFractView
+                                    }
+                                ]
+
+                            TextInput str ->
+                                let
+                                    mayFract =
+                                        case String.toInt <| String.trim str of
+                                            Just num ->
+                                                Just <| Fract.integer num
+
+                                            Nothing ->
+                                                case List.map (String.toInt << String.trim) <| String.split "/" str of
+                                                    [ Just num, Just den ] ->
+                                                        Just { num = num, den = den }
+
+                                                    _ ->
+                                                        Nothing
+                                in
+                                [ Input.text [ Font.color (rgb 0 0 0) ]
+                                    { placeholder =
+                                        Just <|
+                                            Input.placeholder [] <|
+                                                text <|
+                                                    Round.round
+                                                        5
+                                                    <|
+                                                        Harmo.getLengthId (Tuple.second link) mobile.gears
+                                                            / Harmo.getLengthId (Tuple.first link) mobile.gears
+                                    , text = str
+                                    , label = Input.labelHidden "Fraction"
+                                    , onChange = EnteredTextFract
+                                    }
+                                , Input.button
+                                    (case mayFract of
+                                        Just _ ->
+                                            []
+
+                                        Nothing ->
+                                            [ Font.color <| rgb 1 0 0 ]
+                                    )
+                                    { label = text "Forcer"
+                                    , onPress = Maybe.map (ForcedFract link) mayFract
                                     }
                                 ]
                        )
@@ -1102,7 +1265,11 @@ interactHarmonize event model mobile =
                 | model =
                     { model
                         | dragging = NoDrag
-                        , link = Just { link = l, fract = mayFract }
+                        , link =
+                            Just
+                                { link = l
+                                , fractInput = Maybe.withDefault (TextInput "") <| Maybe.map FractionInput mayFract
+                                }
                     }
                 , mobile = { mobile | gears = newGears }
                 , toUndo = Do

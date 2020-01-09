@@ -65,7 +65,12 @@ view id coll getName =
                     Round.round 2 r.unit
 
                 Other rId ->
-                    getName <| Coll.idMap rId
+                    case (Coll.get (Coll.idMap rId) coll).harmony.ref of
+                        Self r ->
+                            Round.round 2 r.unit ++ " ( " ++ (getName <| Coll.idMap rId) ++ " )"
+
+                        Other _ ->
+                            Debug.log "IMPOSSIBLE Other refer to another Other" "BUG Harmo.view"
            )
 
 
