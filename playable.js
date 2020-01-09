@@ -29,9 +29,9 @@ function prepare(model, rate = 1) {
                 model.current = i
                 let prec = (i + a.length - 1) % a.length
                 play(subModel, t, subModel, model.volume, model.mute)
-                pause(a[prec], t, model.paused) // hence force
+                pause(a[prec], t, model.paused) // hence force recalculation
                 if (model.paused) pause(subModel, model.progPause) // and pause next
-                console.log(i, Math.min(model.players[i].duration - model.players[i].pauseOffset, model.players[i].pauseOffset)) // TODO Small drift…
+                // console.log(i, Math.min(model.players[i].duration - model.players[i].pauseOffset, model.players[i].pauseOffset)) // TODO Small drift…
             }, 1/totalDur)
         })
     }
