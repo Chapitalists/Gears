@@ -6,6 +6,7 @@ import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Encode as E
 import Link exposing (Link)
+import Round
 
 
 
@@ -49,6 +50,23 @@ type Ref
         , group : List (Id Harmony)
         , links : List (Link Harmony)
         }
+
+
+view : Id (Harmonized g) -> Coll (Harmonized g) -> (Id (Harmonized g) -> String) -> String
+view id coll getName =
+    let
+        harmo =
+            (Coll.get id coll).harmony
+    in
+    Fract.toString harmo.fract
+        ++ " de "
+        ++ (case harmo.ref of
+                Self r ->
+                    Round.round 2 r.unit
+
+                Other rId ->
+                    getName <| Coll.idMap rId
+           )
 
 
 defaultRef : Ref

@@ -23,6 +23,7 @@ import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Motor
 import PanSvg
 import Random
+import Round
 import Sound exposing (Sound)
 import TypedSvg as S
 import TypedSvg.Core as Svg exposing (Svg)
@@ -657,6 +658,23 @@ viewEditDetails model mobile =
             in
             [ viewDetailsColumn <|
                 [ viewNameInput g (Gear.toUID id) <| \str -> WheelMsg ( id, Wheel.Named str )
+                , text <|
+                    "Durée : "
+                        ++ Harmo.view id
+                            mobile.gears
+                            (\rId ->
+                                let
+                                    w =
+                                        (Coll.get rId mobile.gears).wheel
+                                in
+                                if String.isEmpty w.name then
+                                    Gear.toUID rId
+
+                                else
+                                    w.name
+                            )
+                , text <| "( " ++ (Round.round 2 <| Harmo.getLengthId id mobile.gears) ++ " )"
+                , text <| "Contenu : " ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)
                 , viewContentButton g <| OutMsg <| Inside <| G id
                 , Input.button []
                     { label = text "PlayPause"
