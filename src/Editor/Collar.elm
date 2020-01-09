@@ -120,7 +120,13 @@ update msg ( model, collar ) =
             { return | toEngine = Just <| Engine.playCollar collar }
 
         SoundClicked s ->
-            update (NewBead <| Content.S s) ( model, collar )
+            case model.mode of
+                CommonMode (ChangeSound (B i)) ->
+                    update (WheelMsg ( i, Wheel.ChangeContent <| Content.S s ))
+                        ( { model | mode = CommonMode Normal }, collar )
+
+                _ ->
+                    update (NewBead <| Content.S s) ( model, collar )
 
         NewBead c ->
             let
@@ -300,24 +306,30 @@ viewTools model =
 
 viewDetails : Model -> Colleer -> List (Element Msg)
 viewDetails model c =
-    case ( model.tool, model.common.edit ) of
-        ( Edit, Just (B i) ) ->
-            let
-                b =
-                    Collar.get i c
-            in
-            [ viewDetailsColumn <|
-                [ viewNameInput b (Collar.toUID i) <| \str -> WheelMsg ( i, Wheel.Named str )
-                , viewContentButton b <| OutMsg <| Inside <| B i
-                , viewVolumeSlider b <| \f -> WheelMsg ( i, Wheel.ChangeVolume f )
-                , viewResizeToInsideLength <| ResizeToContent i
-                , viewDeleteButton <| DeleteBead i
-                ]
-                    ++ viewPack model.common PackBead UnpackBead
-            ]
+    case model.mode of
+        CommonMode (ChangeSound id) ->
+            viewDetailChangingSound id (Content.C c) <| ChangedMode <| CommonMode Normal
 
         _ ->
-            []
+            case ( model.tool, model.common.edit ) of
+                ( Edit, Just (B i) ) ->
+                    let
+                        b =
+                            Collar.get i c
+                    in
+                    [ viewDetailsColumn <|
+                        [ viewNameInput b (Collar.toUID i) <| \str -> WheelMsg ( i, Wheel.Named str )
+                        , viewContentButton b <| OutMsg <| Inside <| B i
+                        , viewVolumeSlider b <| \f -> WheelMsg ( i, Wheel.ChangeVolume f )
+                        , viewResizeToInsideLength <| ResizeToContent i
+                        , viewChangeContent <| ChangedMode <| CommonMode <| ChangeSound <| B i
+                        , viewDeleteButton <| DeleteBead i
+                        ]
+                            ++ viewPack model.common PackBead UnpackBead
+                    ]
+
+                _ ->
+                    []
 
 
 manageInteractEvent : Interact.Event Interactable -> Model -> Colleer -> Return
@@ -335,6 +347,9 @@ manageInteractEvent event model collar =
     case model.mode of
         CommonMode Nav ->
             { return | outMsg = interactNav event <| Content.C collar }
+
+        CommonMode (ChangeSound _) ->
+            return
 
         CommonMode Normal ->
             case model.tool of

@@ -10,6 +10,7 @@ import Data.Mobile as Mobile exposing (Mobeel)
 import Data.Wheel as Wheel
 import Dict exposing (Dict)
 import Doc exposing (Doc)
+import Editor.Collar as CEditor
 import Editor.Common as Editors
 import Editor.Mobile as MEditor
 import Element exposing (..)
@@ -302,7 +303,11 @@ update msg model =
                     Doc.update subMsg model.doc
             in
             case subMsg of
-                Doc.MobileMsg (MEditor.ChangedMode (MEditor.ChangeSound _)) ->
+                -- FIXME Absurd... Should be a commonMsg and common ChangedMode
+                Doc.MobileMsg (MEditor.ChangedMode (MEditor.CommonMode (Editors.ChangeSound _))) ->
+                    ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
+
+                Doc.CollarMsg (CEditor.ChangedMode (CEditor.CommonMode (Editors.ChangeSound _))) ->
                     ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
 
                 _ ->

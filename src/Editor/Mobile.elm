@@ -61,7 +61,6 @@ type Mode
     = CommonMode CommonMode
     | Move
     | SelectMotor
-    | ChangeSound (Id Geer)
 
 
 keyCodeToMode : List ( String, Mode )
@@ -207,7 +206,7 @@ update msg ( model, mobile ) =
 
         SoundClicked s ->
             case model.mode of
-                ChangeSound id ->
+                CommonMode (ChangeSound (G id)) ->
                     let
                         group =
                             Harmo.getHarmonicGroup (Coll.idMap id) mobile.gears
@@ -629,16 +628,8 @@ viewContent ( model, mobile ) =
 viewDetails : Model -> Mobeel -> List (Element Msg)
 viewDetails model mobile =
     case model.mode of
-        ChangeSound id ->
-            [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ] <|
-                [ text <| Gear.toUID id
-                , text "Choisir un son chargé"
-                , Input.button []
-                    { label = text "Annuler"
-                    , onPress = Just <| ChangedMode <| CommonMode Normal
-                    }
-                ]
-            ]
+        CommonMode (ChangeSound id) ->
+            viewDetailChangingSound id (Content.M mobile) <| ChangedMode <| CommonMode Normal
 
         SelectMotor ->
             [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ] <|
@@ -716,7 +707,7 @@ viewEditDetails model mobile =
                             )
                             [ 2, 3, 5, 7 ]
                 , viewResizeToInsideLength <| ResizeToContent id
-                , viewChangeContent <| ChangedMode <| ChangeSound id
+                , viewChangeContent <| ChangedMode <| CommonMode <| ChangeSound <| G id
                 , Input.button []
                     { label = text "Encapsuler"
                     , onPress = Just <| Capsuled id
@@ -914,7 +905,7 @@ manageInteractEvent event model mobile =
                 _ ->
                     return
 
-        ChangeSound _ ->
+        CommonMode (ChangeSound _) ->
             return
 
         CommonMode Normal ->
