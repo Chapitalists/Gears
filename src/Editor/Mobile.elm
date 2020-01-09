@@ -653,69 +653,60 @@ viewEditDetails model mobile =
             in
             [ viewDetailsColumn <|
                 [ viewNameInput g (Gear.toUID id) <| \str -> WheelMsg ( id, Wheel.Named str )
-                , text <|
-                    "Durée : "
-                        ++ Harmo.view id
-                            mobile.gears
-                            (\rId ->
-                                getNameFromContent (G rId) <| Content.M mobile
-                            )
-                , text <| "( " ++ (Round.round 2 <| Harmo.getLengthId id mobile.gears) ++ " )"
-                , text <| "Contenu : " ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)
                 , viewContentButton g <| OutMsg <| Inside <| G id
-                , Input.button []
-                    { label = text "PlayPause"
-                    , onPress = Just <| PlayGear id
-                    }
-                , Input.button []
-                    { label = text "Stop"
-                    , onPress = Just <| StopGear id
-                    }
-                , viewVolumeSlider g <| \f -> WheelMsg ( id, Wheel.ChangeVolume f )
-                , Input.button []
-                    { label = text "Copie"
-                    , onPress = Just <| CopyGear id
-                    }
-                , row [ spacing 16 ] <|
-                    text "x"
-                        :: List.map
-                            (\i ->
-                                Input.button []
-                                    { label = text <| String.fromInt i
-                                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer i )
-                                    }
-                            )
-                            [ 2, 3, 5, 7 ]
-                , row [ spacing 16 ] <|
-                    text "/"
-                        :: List.map
-                            (\i ->
-                                Input.button []
-                                    { label = text <| String.fromInt i
-                                    , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit i )
-                                    }
-                            )
-                            [ 2, 3, 5, 7 ]
-                , viewResizeToInsideLength <| ResizeToContent id
-                , viewChangeContent <| ChangedMode <| CommonMode <| ChangeSound <| G id
-                , Input.button []
-                    { label = text "Encapsuler"
-                    , onPress = Just <| Capsuled id
-                    }
-                , Input.button []
-                    { label = text "Collier"
-                    , onPress = Just <| Collared id
-                    }
-                , if id == mobile.motor then
-                    Input.button []
-                        { onPress = Just <| ChangedMode SelectMotor
-                        , label = text "Changer Motrice"
+                , column [ width fill, scrollbarY, spacing 20, padding 10 ] <|
+                    [ viewVolumeSlider g <| \f -> WheelMsg ( id, Wheel.ChangeVolume f )
+                    , row [ spacing 16 ] <|
+                        text "x"
+                            :: List.map
+                                (\i ->
+                                    Input.button []
+                                        { label = text <| String.fromInt i
+                                        , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.integer i )
+                                        }
+                                )
+                                [ 2, 3, 5, 7 ]
+                    , row [ spacing 16 ] <|
+                        text "/"
+                            :: List.map
+                                (\i ->
+                                    Input.button []
+                                        { label = text <| String.fromInt i
+                                        , onPress = Just <| GearMsg ( id, Gear.ResizeFract <| Fract.unit i )
+                                        }
+                                )
+                                [ 2, 3, 5, 7 ]
+                    , viewResizeToInsideLength <| ResizeToContent id
+                    , viewChangeContent <| ChangedMode <| CommonMode <| ChangeSound <| G id
+                    , Input.button []
+                        { label = text "Encapsuler"
+                        , onPress = Just <| Capsuled id
                         }
+                    , Input.button []
+                        { label = text "Collier"
+                        , onPress = Just <| Collared id
+                        }
+                    , if id == mobile.motor then
+                        Input.button []
+                            { onPress = Just <| ChangedMode SelectMotor
+                            , label = text "Changer Motrice"
+                            }
 
-                  else
-                    viewDeleteButton <| DeleteGear id
+                      else
+                        viewDeleteButton <| DeleteGear id
+                    ]
+                        ++ viewPack model.common PackGear UnpackGear
+                        ++ [ text <|
+                                "Durée : "
+                                    ++ Harmo.view id
+                                        mobile.gears
+                                        (\rId ->
+                                            getNameFromContent (G rId) <| Content.M mobile
+                                        )
+                           , text <| "( " ++ (Round.round 2 <| Harmo.getLengthId id mobile.gears) ++ " )"
+                           , text <| "Contenu : " ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)
+                           ]
                 ]
-                    ++ viewPack model.common PackGear UnpackGear
             ]
 
         _ ->
