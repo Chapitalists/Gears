@@ -60,7 +60,8 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
           acc += model.durs[current]
           current = (current + 1) % model.durs.length
         }
-        play(model.players[(current + model.durs.length - 1) % model.durs.length], t, {}, model.volume, model.mute)
+        let modelToPlay = model.players[(current + model.durs.length - 1) % model.durs.length]
+        play(modelToPlay, t, modelToPlay, model.volume, model.mute)
         acc = t + acc - ratedOffset
         for (let i = 0 ; i < model.clocks.length ; i++) {
           let j = (i + current) % model.clocks.length
