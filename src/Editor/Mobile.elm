@@ -186,7 +186,10 @@ update msg ( model, mobile ) =
         ToggleEngine ->
             case model.tool of
                 Play True ->
-                    { return | model = { model | tool = Play False, engine = Engine.init }, toEngine = Just Engine.stop }
+                    { return
+                        | model = { model | tool = Play False, engine = Engine.init }
+                        , toEngine = Just Engine.stop
+                    }
 
                 Play False ->
                     let
@@ -832,7 +835,9 @@ viewEditDetails model mobile =
                                             getNameFromContent (G rId) <| Content.M mobile
                                         )
                            , text <| "( " ++ (Round.round 2 <| Harmo.getLengthId id mobile.gears) ++ " )"
-                           , text <| "Contenu : " ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)
+                           , text <|
+                                "Contenu : "
+                                    ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)
                            ]
                 ]
             ]
@@ -950,7 +955,14 @@ doLinked l gears =
     )
 
 
-doVolumeChange : Id Geer -> Vec2 -> Vec2 -> Float -> Mobeel -> Engine -> { mobile : Mobeel, toUndo : ToUndo, toEngine : Maybe E.Value }
+doVolumeChange :
+    Id Geer
+    -> Vec2
+    -> Vec2
+    -> Float
+    -> Mobeel
+    -> Engine
+    -> { mobile : Mobeel, toUndo : ToUndo, toEngine : Maybe E.Value }
 doVolumeChange id oldPos newPos scale mobile engine =
     let
         gears =
