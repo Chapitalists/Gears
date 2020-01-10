@@ -105,7 +105,7 @@ add i b c =
 
 rm : Int -> Colleer -> Colleer
 rm i c =
-    if i < 0 || i >= List.length c.beads then
+    if i < 0 || i > List.length c.beads then
         c
 
     else
