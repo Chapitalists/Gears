@@ -239,7 +239,7 @@ viewDeleteButton msg =
         }
 
 
-viewPack : CommonModel -> msg -> (( Wheel, Float ) -> msg) -> List (Element msg)
+viewPack : CommonModel -> msg -> (( Wheel, Float ) -> Bool -> msg) -> List (Element msg)
 viewPack model packMsg unpackMsg =
     Input.button []
         { onPress = Just packMsg
@@ -252,7 +252,11 @@ viewPack model packMsg unpackMsg =
                 Just ( w, l ) ->
                     [ Input.button []
                         { label = text <| "Coller " ++ w.name
-                        , onPress = Just <| unpackMsg ( w, l )
+                        , onPress = Just <| unpackMsg ( w, l ) True
+                        }
+                    , Input.button []
+                        { label = text <| "Coller Contenu " ++ w.name
+                        , onPress = Just <| unpackMsg ( w, l ) False
                         }
                     ]
            )
