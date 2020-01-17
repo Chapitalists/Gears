@@ -1,5 +1,5 @@
 elm-live src/Main.elm -s ports.html -- --debug --output=elmApp.js
-pkg -c pkgConfig.json --out-path dist index.js
+pkg -c pkgConfig.json --targets linux,macos,win,linux-x86,win-x86 --out-path dist index.js
 
 Type Data avec tout ce qui doit être sauvegardé et undo/redo (est-ce bien les mêmes choses ?)
 Cummule UndoList et Saved, et fonctionnalité ajoutée de UndoGroup
