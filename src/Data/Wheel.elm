@@ -1,8 +1,7 @@
-module Wheel exposing (..)
+module Data.Wheel exposing (..)
 
-import Coll exposing (Id)
 import Color exposing (Color)
-import Content exposing (Content, Mobile)
+import Data.Content as Content exposing (Content, Mobile)
 import Html.Attributes
 import Interact
 import Json.Decode as D
@@ -37,6 +36,13 @@ type WheelContent
 getContent : Wheeled g -> Content Wheel
 getContent { wheel } =
     case wheel.content of
+        C c ->
+            c
+
+
+getWheelContent : Wheel -> Content Wheel
+getWheelContent { content } =
+    case content of
         C c ->
             c
 
@@ -78,8 +84,8 @@ type alias Style =
 
 
 type Interactable x
-    = IWheel (Id x)
-    | IResizeHandle (Id x) Bool -- True = Right
+    = IWheel x
+    | IResizeHandle x Bool -- True = Right
 
 
 type Msg
@@ -113,7 +119,7 @@ update msg g =
             { g | wheel = { wheel | color = c } }
 
 
-view : Wheel -> Vec2 -> Float -> Style -> Id x -> String -> Svg (Interact.Msg (Interactable x))
+view : Wheel -> Vec2 -> Float -> Style -> id -> String -> Svg (Interact.Msg (Interactable id))
 view w pos length style id uid =
     let
         tickH =

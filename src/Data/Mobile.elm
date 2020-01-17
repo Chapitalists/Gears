@@ -1,18 +1,20 @@
-module Mobile exposing (..)
+module Data.Mobile exposing (..)
 
 import Coll exposing (Coll, Id)
-import Content exposing (Content, Mobile)
-import Gear exposing (Gear)
+import Data.Common exposing (..)
+import Data.Content as Content exposing (Content, Mobile)
+import Data.Gear as Gear exposing (Gear)
+import Data.Wheel as Wheel exposing (Wheel)
 import Harmony as Harmo exposing (Harmony)
 import Json.Decode as D
 import Json.Encode as E
 import Math.Vector2 exposing (Vec2)
-import Sound exposing (Sound)
-import Wheel exposing (Wheel)
 
 
 
 --TODO Put here half Editor.Mobile, let there only interaction and tools view
+--TODO Would lead to separate View and Controller, anti Elm Architecture
+--TODO Should find another way to split these two files?
 
 
 type alias Mobeel =
@@ -44,20 +46,8 @@ defaultGear =
 
 gearFromContent : Content Wheel -> Vec2 -> Geer
 gearFromContent c pos =
-    let
-        length =
-            case c of
-                Content.S s ->
-                    Sound.length s
-
-                Content.M m ->
-                    Harmo.getLengthId m.motor m.gears
-
-                Content.C col ->
-                    col.matrice
-    in
     { pos = pos
-    , harmony = Harmo.newSelf length
+    , harmony = Harmo.newSelf <| getContentLength c
     , motor = []
     , wheel = Wheel.fromContent c
     }
@@ -74,6 +64,15 @@ gearName id coll =
 
     else
         name
+
+
+gearPosSize : Id Geer -> Coll Geer -> ( Vec2, Float )
+gearPosSize id coll =
+    let
+        g =
+            Coll.get id coll
+    in
+    ( g.pos, Harmo.getLength g.harmony coll )
 
 
 encoder : Mobeel -> E.Value

@@ -4,23 +4,25 @@ module Engine exposing
     , init
     , isPlaying
     , muted
+    , mutedBead
     , playCollar
     , playingIds
     , setPlaying
     , stop
+    , volumeBead
     , volumeChanged
     )
 
 import Coll exposing (Coll, Id)
-import Collar exposing (Beed, Colleer)
-import Content
-import Gear exposing (Gear)
+import Data.Collar as Collar exposing (Beed, Colleer)
+import Data.Content as Content
+import Data.Gear as Gear exposing (Gear)
+import Data.Mobile exposing (Geer, Mobeel)
+import Data.Wheel as Wheel exposing (Wheel)
 import Harmony as Harmo
 import Json.Encode as E
-import Mobile exposing (Geer, Mobeel)
 import Motor
 import Sound
-import Wheel exposing (Wheel)
 
 
 type Engine
@@ -83,6 +85,24 @@ playCollar collar =
         [ ( "action", E.string "playCollar" )
         , ( "baseId", E.string <| String.dropRight 1 <| Collar.toUID 0 )
         , ( "collar", encodeCollar collar )
+        ]
+
+
+mutedBead : Int -> Bool -> E.Value
+mutedBead i mute =
+    E.object
+        [ ( "action", E.string "muteBead" )
+        , ( "index", E.int i )
+        , ( "value", E.bool mute )
+        ]
+
+
+volumeBead : Int -> Float -> E.Value
+volumeBead i volume =
+    E.object
+        [ ( "action", E.string "volumeBead" )
+        , ( "index", E.int i )
+        , ( "value", E.float <| clamp 0 1 volume )
         ]
 
 
@@ -166,7 +186,7 @@ encodeMobile { motor, gears } =
 encodeCollar : Colleer -> E.Value
 encodeCollar c =
     E.object
-        [ ( "length", E.float c.matrice )
+        [ ( "length", E.float <| Collar.getCumulLengthAt c.matrice c )
         , ( "loopStart", E.float c.loop )
         , ( "beads", E.list encodeBead <| Collar.getBeads c )
         ]

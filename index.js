@@ -5,6 +5,7 @@ Copyright ou © ou Copr. Clément Bossut, (2018)
 
 const fs = require('fs')
     , staticRoute = require('static-route')
+    , formidable = require('formidable')
     , port = 12345
     , soundPath = process.argv[2] || './sons/'
     , soundExtensions = ['.wav']
@@ -59,6 +60,38 @@ const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
 
                 req.on('end', () => {
                     if (writeFile(JSON.parse(data))) res.statusCode = 201
+                    res.end()
+                })
+            } else {
+                res.statusCode = 404
+                res.end()
+            }
+        }
+
+        , upSound : (req, res) => {
+            if (req.method == 'POST') {
+                let form = new formidable.IncomingForm()
+                form.uploadDir = backupPath
+                form.parse(req, (err, fields, files) => {
+                    if (err) {
+                        console.log(err)
+                        res.statusCode = 500
+                        res.end()
+                        return;
+                    }
+                    if (files.file.type != 'audio/wav') {
+                        console.log("Wrong type " + files.file.type)
+                        res.statusCode = 501
+                        res.end()
+                        return;
+                    }
+                    if (fs.existsSync(soundPath + files.file.name)) {
+                        console.log("Sound already exists " + files.file.name)
+                        res.statusCode = 403
+                        res.end()
+                        return;
+                    }
+                    fs.renameSync(files.file.path, soundPath + files.file.name)
                     res.end()
                 })
             } else {

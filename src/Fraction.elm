@@ -23,6 +23,11 @@ toFloat { num, den } =
     Basics.toFloat num / Basics.toFloat den
 
 
+toString : Fraction -> String
+toString { num, den } =
+    String.fromInt num ++ " / " ++ String.fromInt den
+
+
 multiplication : Fraction -> Fraction -> Fraction
 multiplication f1 f2 =
     { num = f1.num * f2.num, den = f1.den * f2.den }

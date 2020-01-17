@@ -51,7 +51,10 @@ type alias ClickState item =
 
 init : State item
 init =
-    S { hover = Nothing, click = Nothing }
+    S
+        { hover = Nothing
+        , click = Nothing
+        }
 
 
 type Msg item

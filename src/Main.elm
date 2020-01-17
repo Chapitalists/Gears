@@ -4,42 +4,37 @@ import Browser
 import Browser.Events as BE
 import Browser.Navigation as Nav
 import Coll exposing (Coll, Id)
-import Collar
-import Content
+import Data.Collar as Collar
+import Data.Content as Content
+import Data.Mobile as Mobile exposing (Mobeel)
+import Data.Wheel as Wheel
+import Dict exposing (Dict)
 import Doc exposing (Doc)
-import Editor.Mobile as MEditor exposing (Interactable(..))
+import Editor.Collar as CEditor
+import Editor.Common as Editors
+import Editor.Mobile as MEditor
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Events exposing (..)
 import Element.Font as Font
 import Element.Input as Input
-import Engine
-import Harmony as Harmo
-import Html.Attributes
-import Html.Events.Extra.Wheel as Wheel
+import File exposing (File)
+import File.Download as DL
+import File.Select as Select
 import Http
-import Interact
 import Json.Decode as D
-import Math.Vector2 as Vec exposing (Vec2, vec2)
-import Mobile exposing (Mobeel)
+import Keys
+import NaturalOrdering as Natural
 import Result exposing (Result)
 import Set exposing (Set)
 import Sound exposing (Sound)
-import TypedSvg as S
-import TypedSvg.Attributes as SA
-import TypedSvg.Core as SS
-import TypedSvg.Types exposing (Length(..), Transform(..))
 import Url exposing (Url)
-import Wheel
 
 
 port loadSound : String -> Cmd msg
 
 
 port soundLoaded : (D.Value -> msg) -> Sub msg
-
-
-port newSVGSize : (D.Value -> msg) -> Sub msg
 
 
 
@@ -74,13 +69,15 @@ type alias Model =
     , loadedSoundList : List Sound
     , savesList : Set String
     , doc : Doc
-    , viewPos : ViewPos
-    , svgSize : Size Float
-    , screenSize : Size Int
+    , screenSize : ScreenSize
     , fileExplorerTab : ExTab
-    , capsuling : Bool
-    , interact : Interact.State MEditor.Interactable
+    , mode : Mode
+    , keys : Keys.State
     }
+
+
+type alias ScreenSize =
+    { width : Int, height : Int }
 
 
 type ExTab
@@ -89,45 +86,7 @@ type ExTab
     | Saves
 
 
-svgId : String
-svgId =
-    "svg"
-
-
-type alias ViewPos =
-    { c : Vec2, smallestSize : Float }
-
-
-getScale : Model -> Float
-getScale { viewPos, svgSize } =
-    viewPos.smallestSize / min svgSize.height svgSize.width
-
-
-posToSvg : Vec2 -> Model -> Vec2
-posToSvg pos { viewPos, svgSize } =
-    Vec.add
-        viewPos.c
-    <|
-        Vec.scale
-            (viewPos.smallestSize / min svgSize.height svgSize.width)
-        <|
-            Vec.sub
-                pos
-                (vec2 (svgSize.width / 2) (svgSize.height / 2))
-
-
-type alias Size number =
-    { width : number
-    , height : number
-    }
-
-
-sizeDecoder : D.Value -> Result D.Error (Size Float)
-sizeDecoder =
-    D.decodeValue <| D.map2 Size (D.field "width" D.float) (D.field "height" D.float)
-
-
-init : Size Int -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
+init : ScreenSize -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init screen url _ =
     ( Model
         False
@@ -136,13 +95,11 @@ init screen url _ =
         []
         Set.empty
         (Doc.init <| Just url)
-        (ViewPos (vec2 0 0) 10)
-        (Size 0 0)
         screen
         Sounds
-        False
-        Interact.init
-    , fetchSoundList url
+        NoMode
+        Keys.init
+    , Cmd.batch [ fetchSoundList url, fetchSavesList url ]
     )
 
 
@@ -154,21 +111,19 @@ type Msg
     = GotSoundList (Result Http.Error String)
     | RequestSoundList
     | RequestSoundLoad String
+    | RequestSoundDownload String
     | RequestSavesList
     | RequestSaveLoad String
     | GotSavesList (Result Http.Error String)
     | GotLoadedFile String (Result Http.Error Mobeel)
     | SoundLoaded (Result D.Error Sound)
-    | SoundClicked Sound
+    | ClickedUpload
+    | UploadSounds File (List File)
     | ChangedExplorerTab ExTab
-    | Capsuling Bool
-    | UpdateViewPos ViewPos
-    | Zoom Float ( Float, Float )
-    | ReleasedMode
-    | GotSVGSize (Result D.Error (Size Float))
-    | GotScreenSize (Size Int)
+    | ChangedMode Mode
+    | GotScreenSize ScreenSize
     | DocMsg Doc.Msg
-    | InteractMsg (Interact.Msg MEditor.Interactable)
+    | KeysMsg Keys.Msg
     | NOOP
 
 
@@ -229,31 +184,22 @@ update msg model =
                                             loadList <| List.map .wheel <| Collar.getBeads col
                                 )
                                 l
-                    in
-                    if model.capsuling then
-                        let
-                            ( newDoc, pos, cmd ) =
-                                Doc.addGearToMobile (Content.M m) model.doc
-                        in
-                        ( { model
-                            | connected = True
-                            , doc = newDoc
-                            , viewPos = { c = pos, smallestSize = Harmo.getLengthId m.motor m.gears * 2 * 4 }
-                          }
-                        , Cmd.batch <| Cmd.map DocMsg cmd :: (loadList <| List.map .wheel <| Coll.values m.gears)
-                        )
 
-                    else
-                        ( { model
-                            | connected = True
-                            , doc = Doc.changeMobile m name model.doc
-                            , viewPos =
-                                { c = (Coll.get m.motor m.gears).pos
-                                , smallestSize = Harmo.getLengthId m.motor m.gears * 2 * 4
-                                }
-                          }
-                        , Cmd.batch <| Doc.toEngine Engine.stop :: (loadList <| List.map .wheel <| Coll.values m.gears)
-                        )
+                        newModel =
+                            { model | connected = True }
+
+                        subMsg =
+                            case newModel.mode of
+                                Capsuling ->
+                                    Doc.AddContent <| Content.M m
+
+                                _ ->
+                                    Doc.Loaded m name
+
+                        ( mod, cmd ) =
+                            update (DocMsg subMsg) newModel
+                    in
+                    ( mod, Cmd.batch <| cmd :: (loadList <| List.map .wheel <| Coll.values m.gears) )
 
                 Err (Http.BadBody err) ->
                     Debug.log err ( model, Cmd.none )
@@ -269,6 +215,15 @@ update msg model =
             ( model
             , if Set.member n model.soundList then
                 loadSound n
+
+              else
+                Cmd.none
+            )
+
+        RequestSoundDownload n ->
+            ( model
+            , if Set.member n model.soundList then
+                DL.url <| Url.toString model.currentUrl ++ "sons/" ++ n
 
               else
                 Cmd.none
@@ -295,69 +250,49 @@ update msg model =
                 Result.Ok s ->
                     ( { model | loadedSoundList = s :: model.loadedSoundList }, Cmd.none )
 
-        SoundClicked sound ->
-            let
-                ( newDoc, newGearPos, cmd ) =
-                    Doc.soundClicked sound model.doc
-            in
-            ( { model
-                | doc = newDoc
-                , viewPos =
-                    case newGearPos of
-                        Just newPos ->
-                            { c = newPos, smallestSize = Sound.length sound * 2 * 4 }
+        ClickedUpload ->
+            ( model, Select.files [ "audio/x-wav" ] UploadSounds )
 
-                        Nothing ->
-                            model.viewPos
-              }
-            , Cmd.map DocMsg cmd
+        UploadSounds f lf ->
+            ( model
+            , Cmd.batch <|
+                List.map
+                    (\file ->
+                        Http.post
+                            { url = Url.toString model.currentUrl ++ "upSound"
+                            , body =
+                                Http.multipartBody
+                                    [ Http.filePart "file" file
+                                    ]
+                            , expect = Http.expectWhatever <| always RequestSoundList
+                            }
+                    )
+                    (f :: lf)
             )
 
         ChangedExplorerTab tab ->
             ( { model | fileExplorerTab = tab }, Cmd.none )
 
-        Capsuling on ->
-            if on then
-                ( { model | capsuling = on, fileExplorerTab = Saves }, Cmd.none )
+        -- FIXME Code smell?
+        ChangedMode mode ->
+            case mode of
+                DocMode subMode ->
+                    update (DocMsg <| Doc.ChangedMode subMode) { model | mode = mode }
 
-            else
-                ( { model | capsuling = on }, Cmd.none )
+                _ ->
+                    let
+                        ( newModel, cmds ) =
+                            update (DocMsg <| Doc.ChangedMode <| Doc.CommonMode Editors.Normal) model
+                    in
+                    case mode of
+                        Capsuling ->
+                            ( { newModel | mode = Capsuling, fileExplorerTab = Saves }, cmds )
 
-        UpdateViewPos vp ->
-            ( { model | viewPos = vp }, Cmd.none )
+                        Downloading ->
+                            ( { newModel | mode = Downloading, fileExplorerTab = Sounds }, cmds )
 
-        Zoom f ( x, y ) ->
-            let
-                vp =
-                    model.viewPos
-
-                factor =
-                    1 + f / 1000
-
-                p =
-                    Vec.sub (posToSvg (vec2 x y) model) vp.c
-
-                nS =
-                    vp.smallestSize * factor
-
-                scale =
-                    nS / vp.smallestSize - 1
-
-                nC =
-                    Vec.sub vp.c <| Vec.scale scale p
-            in
-            ( { model | viewPos = { c = nC, smallestSize = nS } }, Cmd.none )
-
-        ReleasedMode ->
-            update (DocMsg <| Doc.KeyPressed Doc.Normal) { model | capsuling = False }
-
-        GotSVGSize res ->
-            case res of
-                Result.Err e ->
-                    Debug.log (D.errorToString e) ( model, Cmd.none )
-
-                Result.Ok s ->
-                    ( { model | svgSize = s }, Cmd.none )
+                        _ ->
+                            ( { newModel | mode = mode }, cmds )
 
         GotScreenSize size ->
             ( { model | screenSize = size }, Cmd.none )
@@ -365,38 +300,49 @@ update msg model =
         DocMsg subMsg ->
             let
                 ( doc, cmd ) =
-                    Doc.update subMsg (getScale model) model.doc
+                    Doc.update subMsg model.doc
             in
             case subMsg of
-                Doc.MobileMsg (MEditor.ChangedMode (MEditor.ChangeSound _)) ->
+                -- FIXME Absurd... Should be a commonMsg and common ChangedMode
+                Doc.MobileMsg (MEditor.ChangedMode (MEditor.CommonMode (Editors.ChangeSound _))) ->
+                    ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
+
+                Doc.CollarMsg (CEditor.ChangedMode (CEditor.CommonMode (Editors.ChangeSound _))) ->
                     ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
 
                 _ ->
                     ( { model | doc = doc }, Cmd.map DocMsg cmd )
 
-        InteractMsg subMsg ->
+        KeysMsg subMsg ->
             let
-                ( interact, event ) =
-                    Interact.update subMsg model.interact
+                ( state, events ) =
+                    Keys.update subMsg model.keys
             in
-            case event of
-                Just e ->
-                    let
-                        svgEvent =
-                            case e.action of
-                                Interact.Dragged pos1 pos2 k ->
-                                    { e | action = Interact.Dragged (posToSvg pos1 model) (posToSvg pos2 model) k }
+            List.foldl
+                (\event ( m, c ) ->
+                    case event of
+                        Keys.Hold hold ->
+                            case List.filterMap (\code -> Dict.get code keyCodeToMode) <| Set.toList hold of
+                                [ only ] ->
+                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, c ]) <| update (ChangedMode only) m
 
                                 _ ->
-                                    e
+                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, c ]) <| update (ChangedMode NoMode) m
 
-                        ( doc, cmd ) =
-                            Doc.update (Doc.InteractEvent svgEvent) (getScale model) model.doc
-                    in
-                    ( { model | interact = interact, doc = doc }, Cmd.map DocMsg cmd )
+                        Keys.Press code ->
+                            case Dict.get code keyCodeToShortcut of
+                                Just press ->
+                                    let
+                                        ( doc, cmd ) =
+                                            Doc.update (Doc.KeyPressed press) m.doc
+                                    in
+                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
 
-                Nothing ->
-                    ( { model | interact = interact }, Cmd.none )
+                                Nothing ->
+                                    ( m, c )
+                )
+                ( { model | keys = state }, Cmd.none )
+                events
 
         NOOP ->
             ( model, Cmd.none )
@@ -406,61 +352,42 @@ update msg model =
 -- SUBS
 
 
-subs { interact } =
+subs : Model -> Sub Msg
+subs { doc } =
     Sub.batch <|
         [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
-        , newSVGSize (sizeDecoder >> GotSVGSize)
-        , BE.onKeyPress shortcutDecoder
-        , BE.onKeyDown modeDecoder
-        , BE.onKeyUp <| D.succeed <| ReleasedMode
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
         ]
-            ++ List.map (Sub.map InteractMsg) (Interact.subs interact)
+            ++ List.map (Sub.map DocMsg) (Doc.subs doc)
+            ++ List.map (Sub.map KeysMsg) Keys.subs
 
 
-shortcutDecoder : D.Decoder Msg
-shortcutDecoder =
-    D.map keyCodeToMsg <| D.field "code" D.string
+type Mode
+    = DocMode Doc.Mode -- FIXME Second source of truth, not reliable
+    | Capsuling
+    | Downloading
+    | NoMode
 
 
-modeDecoder : D.Decoder Msg
-modeDecoder =
-    D.field "code" D.string
-        |> D.andThen
-            (\str ->
-                D.succeed <|
-                    case str of
-                        "KeyV" ->
-                            DocMsg <| Doc.KeyPressed Doc.Nav
-
-                        "KeyE" ->
-                            Capsuling True
-
-                        "KeyD" ->
-                            DocMsg <| Doc.KeyPressed Doc.Move
-
-                        _ ->
-                            NOOP
-            )
+keyCodeToMode : Dict String Mode
+keyCodeToMode =
+    Dict.fromList <|
+        [ ( "KeyE", Capsuling )
+        , ( "KeyR", Downloading )
+        ]
+            ++ List.map (Tuple.mapSecond DocMode) Doc.keyCodeToMode
 
 
-keyCodeToMsg : String -> Msg
-keyCodeToMsg str =
-    case str of
-        "KeyZ" ->
-            DocMsg <| Doc.KeyPressed <| Doc.Tool 1
-
-        "KeyX" ->
-            DocMsg <| Doc.KeyPressed <| Doc.Tool 2
-
-        "KeyC" ->
-            DocMsg <| Doc.KeyPressed <| Doc.Tool 3
-
-        "Space" ->
-            DocMsg <| Doc.KeyPressed Doc.Play
-
-        _ ->
-            NOOP
+keyCodeToShortcut : Dict String Doc.Shortcut
+keyCodeToShortcut =
+    Dict.fromList
+        [ ( "KeyZ", Doc.Tool 1 )
+        , ( "KeyX", Doc.Tool 2 )
+        , ( "KeyC", Doc.Tool 3 )
+        , ( "Space", Doc.Play )
+        , ( "ArrowLeft", Doc.Left )
+        , ( "ArrowRight", Doc.Right )
+        ]
 
 
 
@@ -481,40 +408,7 @@ view model =
         [ layout [] <|
             row [ height <| px model.screenSize.height, width <| px model.screenSize.width ]
                 [ viewFileExplorer model
-                , row [ height fill, width fill ] <|
-                    [ column [ width fill, height fill ]
-                        ([ Element.map DocMsg <| Doc.viewTop model.doc
-                         , el
-                            [ width fill
-                            , height fill
-                            , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
-                            ]
-                           <|
-                            Element.html <|
-                                S.svg
-                                    ([ Html.Attributes.id svgId
-                                     , SS.attribute "width" "100%"
-                                     , SS.attribute "height" "100%"
-                                     , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet
-                                     , computeViewBox model
-                                     , Wheel.onWheel (\e -> Zoom e.deltaY e.mouseEvent.offsetPos)
-                                     ]
-                                        ++ List.map (Html.Attributes.map InteractMsg)
-                                            (Interact.dragSpaceEvents model.interact)
-                                        ++ List.map (Html.Attributes.map InteractMsg)
-                                            (Interact.draggableEvents ISurface)
-                                    )
-                                <|
-                                    (Doc.viewContent model.doc (Interact.getInteract model.interact) (getScale model)
-                                        |> List.map (SS.map forwardGearOutMsg)
-                                    )
-                         ]
-                            ++ (Doc.viewBottom model.doc
-                                    |> List.map (Element.map DocMsg)
-                               )
-                        )
-                    ]
-                        ++ (List.map (Element.map DocMsg) <| Doc.viewSide model.doc)
+                , Element.map DocMsg <| Doc.view model.doc
                 ]
         ]
     }
@@ -524,11 +418,15 @@ viewFileExplorer : Model -> Element Msg
 viewFileExplorer model =
     let
         bgColor =
-            if model.capsuling then
-                rgb 0.2 0.2 0.8
+            case model.mode of
+                Capsuling ->
+                    rgb 0.2 0.2 0.8
 
-            else
-                rgb 0.5 0.5 0.5
+                Downloading ->
+                    rgb 0.8 0.8 0.2
+
+                _ ->
+                    rgb 0.5 0.5 0.5
     in
     column [ height fill, Bg.color bgColor, Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ] <|
         ([ row [ Font.size 14, spacing 20 ]
@@ -580,7 +478,11 @@ viewFileExplorer model =
 viewSounds : Model -> List (Element Msg)
 viewSounds model =
     [ column [ width fill, height <| fillPortion 2, spacing 20, scrollbarY ]
-        [ Input.button
+        [ Input.button []
+            { label = text "Ouvrir"
+            , onPress = Just ClickedUpload
+            }
+        , Input.button
             [ Font.color <|
                 if model.connected then
                     rgb 0 0 0
@@ -595,7 +497,12 @@ viewSounds model =
             (List.map
                 (\s ->
                     el
-                        [ onClick (RequestSoundLoad s)
+                        [ onClick <|
+                            if model.mode == Downloading then
+                                RequestSoundDownload s
+
+                            else
+                                RequestSoundLoad s
                         , Font.color <|
                             if List.any ((==) s) <| List.map Sound.toString model.loadedSoundList then
                                 rgb 0.2 0.8 0.2
@@ -606,7 +513,8 @@ viewSounds model =
                         (text s)
                 )
              <|
-                Set.toList model.soundList
+                List.sortWith Natural.compare <|
+                    Set.toList model.soundList
             )
         ]
     ]
@@ -615,20 +523,23 @@ viewSounds model =
 viewLoaded : Model -> List (Element Msg)
 viewLoaded model =
     [ column [ width fill, height <| fillPortion 3, spacing 10, padding 2, scrollbarY ] <|
-        List.map soundView model.loadedSoundList
+        List.map soundView <|
+            List.sortWith
+                (\s t -> Natural.compare (Sound.toString s) (Sound.toString t))
+                model.loadedSoundList
     ]
 
 
 soundView : Sound -> Element Msg
 soundView s =
     el
-        [ onClick <| SoundClicked s ]
+        [ onClick <| DocMsg <| Doc.SoundClicked s ]
         (text (Sound.toString s))
 
 
 viewSaveFiles : Model -> List (Element Msg)
 viewSaveFiles model =
-    [ column [ height <| fillPortion 1, width fill, spacing 20 ]
+    [ column [ height <| fillPortion 1, width fill, spacing 20, scrollbarY ]
         [ Input.button
             [ Font.color <|
                 if model.connected then
@@ -642,51 +553,11 @@ viewSaveFiles model =
             }
         , column [ width fill, spacing 5, padding 2, scrollbarY ] <|
             (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutGearsExtension s)) <|
-                Set.toList model.savesList
+                List.sortWith Natural.compare <|
+                    Set.toList model.savesList
             )
         ]
     ]
-
-
-computeViewBox : Model -> SS.Attribute Msg
-computeViewBox { viewPos, svgSize } =
-    if svgSize.height == 0 || svgSize.width == 0 then
-        SA.viewBox 0 0 100 100
-
-    else
-        let
-            landscapeOrientation =
-                svgSize.height < svgSize.width
-
-            ratio =
-                if landscapeOrientation then
-                    svgSize.width / svgSize.height
-
-                else
-                    svgSize.height / svgSize.width
-
-            h =
-                viewPos.smallestSize
-
-            w =
-                h * ratio
-
-            x =
-                Vec.getX viewPos.c - w / 2
-
-            y =
-                Vec.getY viewPos.c - h / 2
-        in
-        if landscapeOrientation then
-            SA.viewBox x y w h
-
-        else
-            SA.viewBox x y h w
-
-
-forwardGearOutMsg : Interact.Msg (Wheel.Interactable x) -> Msg
-forwardGearOutMsg msg =
-    InteractMsg <| Interact.map MEditor.fromGearInteractable msg
 
 
 

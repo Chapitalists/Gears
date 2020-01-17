@@ -6,6 +6,7 @@ import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Encode as E
 import Link exposing (Link)
+import Round
 
 
 
@@ -51,6 +52,28 @@ type Ref
         }
 
 
+view : Id (Harmonized g) -> Coll (Harmonized g) -> (Id (Harmonized g) -> String) -> String
+view id coll getName =
+    let
+        harmo =
+            (Coll.get id coll).harmony
+    in
+    Fract.toString harmo.fract
+        ++ " de "
+        ++ (case harmo.ref of
+                Self r ->
+                    Round.round 2 r.unit
+
+                Other rId ->
+                    case (Coll.get (Coll.idMap rId) coll).harmony.ref of
+                        Self r ->
+                            Round.round 2 r.unit ++ " ( " ++ (getName <| Coll.idMap rId) ++ " )"
+
+                        Other _ ->
+                            Debug.log "IMPOSSIBLE Other refer to another Other" "BUG Harmo.view"
+           )
+
+
 defaultRef : Ref
 defaultRef =
     Self { unit = 0, group = [], links = [] }
@@ -68,6 +91,25 @@ clean id coll =
 
         Self r ->
             Debug.todo "Clean Base"
+
+
+changeSelf : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
+changeSelf id length coll =
+    let
+        g =
+            Coll.get id coll
+
+        harmo =
+            g.harmony
+    in
+    case harmo.ref of
+        Self r ->
+            Coll.update id (always { g | harmony = { harmo | ref = Self { r | unit = length } } }) coll
+
+        Other rId ->
+            coll
+                |> Coll.update id (always { g | harmony = newSelf length })
+                |> Coll.update (Coll.idMap rId) (remove id)
 
 
 resizeFree : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
