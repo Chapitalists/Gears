@@ -42,7 +42,6 @@ function engine(o) {
         if (playing.clocks) stop(playing)
         else for ( id in playing) {
             stop(playing[id])
-            playing[id].view.animate().play().finish()
         }
         playing = {}
         break;
@@ -87,40 +86,14 @@ function engine(o) {
     }
 }
 
-function playTopCollar(beads, baseId) {
-    let model = playing
-      , part = []
-      , t = 0
-    for (let i in beads) {
-        part.push([t, i])
-        t += beads[i].length
-        beads[i].id = baseId + i
-    }
-    model.beads = beads.map(v => prepare(v))
-    model.player = new Tone.Part( ((t, i) => {model.beads[i].once(t)}), part )
-    model.player.loopEnd = t
-    model.player.loop = true
-    model.player.start()
-    Tone.Transport.start()
-}
-
-function playPauseTopCollar(beads) {
-    Tone.Transport.pause()
-    Tone.Transport.start()
-}
-
 function playPause(model,t) {
     if (!playing[model.id]) {
         playing[model.id] = prepare(model)
-        playing[model.id].view = SVG.adopt(document.getElementById(model.id))
-        playing[model.id].view.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).loop()
     }
     if (playing[model.id].paused) {
         play(playing[model.id], t, model)
-        playing[model.id].view.animate().play()
     }
     else {
         pause(playing[model.id], t)
-        playing[model.id].view.animate().pause()
     }
 }
