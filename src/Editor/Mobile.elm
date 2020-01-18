@@ -25,9 +25,11 @@ import Motor
 import PanSvg
 import Random
 import Round
-import Sound exposing (Sound)
+import Sound
 import TypedSvg as S
+import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
+import TypedSvg.Types exposing (Length(..), Opacity(..))
 
 
 type alias Model =
@@ -35,6 +37,7 @@ type alias Model =
     , tool : Tool
     , mode : Mode
     , link : Maybe LinkInfo
+    , shallow : Maybe ( Vec2, Float )
     , engine : Engine
     , interact : Interact.State Interactable
     , common : CommonModel
@@ -94,6 +97,7 @@ init mayMobile mayShared =
     , tool = Play False
     , mode = CommonMode Normal
     , link = Nothing
+    , shallow = Nothing
     , engine = Engine.init
     , interact = Interact.init
     , common = commonInit <| Maybe.map Tuple.first mayShared
@@ -115,9 +119,8 @@ type Msg
     | PlayGear (Id Geer)
     | StopGear (Id Geer)
       --
-    | SoundClicked Sound
     | CopyGear (Id Geer)
-    | NewGear (Content Wheel)
+    | NewGear Vec2 (Content Wheel)
     | DeleteGear (Id Geer)
     | PackGear
     | UnpackGear ( Wheel, Float ) Bool -- True for new, False for Content
@@ -214,32 +217,13 @@ update msg ( model, mobile ) =
         StopGear id ->
             { return | model = { model | engine = Engine.init }, toEngine = Just Engine.stop }
 
-        SoundClicked s ->
-            case model.mode of
-                CommonMode (ChangeSound (G id)) ->
-                    let
-                        group =
-                            Harmo.getHarmonicGroup (Coll.idMap id) mobile.gears
-
-                        chSound =
-                            Wheel.update <| Wheel.ChangeContent <| Content.S s
-                    in
-                    { return
-                        | mobile = { mobile | gears = List.foldl (\el -> Coll.update el chSound) mobile.gears group }
-                        , toUndo = Do
-                        , model = { model | mode = CommonMode Normal }
-                    }
-
-                _ ->
-                    update (NewGear <| Content.S s) ( model, mobile )
-
         CopyGear id ->
             { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
-        NewGear content ->
+        NewGear p content ->
             let
                 ( id, gears ) =
-                    Coll.insertTellId (Mobile.gearFromContent content defaultAddPos) mobile.gears
+                    Coll.insertTellId (Mobile.gearFromContent content p) mobile.gears
 
                 colorGen =
                     Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
@@ -753,6 +737,23 @@ viewContent ( model, mobile ) =
                             _ ->
                                 []
                        )
+                    ++ (case model.shallow of
+                            Just ( p, l ) ->
+                                [ S.circle
+                                    [ SA.cx <| Num <| Vec.getX p
+                                    , SA.cy <| Num <| Vec.getY p
+                                    , SA.r <| Num (l / 2)
+                                    , SA.strokeWidth <| Num <| l / 30
+                                    , SA.stroke Color.black
+                                    , SA.strokeOpacity <| Opacity 0.5
+                                    , SA.fillOpacity <| Opacity 0
+                                    ]
+                                    []
+                                ]
+
+                            Nothing ->
+                                []
+                       )
 
 
 viewDetails : Model -> Mobeel -> List (Element Msg)
@@ -1057,27 +1058,64 @@ manageInteractEvent event model mobile =
                 _ ->
                     return
 
-        CommonMode (ChangeSound _) ->
-            return
+        CommonMode (ChangeSound (G id)) ->
+            case ( event.item, event.action ) of
+                ( ISound s, Interact.Clicked _ ) ->
+                    let
+                        group =
+                            Harmo.getHarmonicGroup (Coll.idMap id) mobile.gears
+
+                        chSound =
+                            Wheel.update <| Wheel.ChangeContent <| Content.S s
+                    in
+                    { return
+                        | mobile = { mobile | gears = List.foldl (\el -> Coll.update el chSound) mobile.gears group }
+                        , toUndo = Do
+                        , model = { model | mode = CommonMode Normal }
+                    }
+
+                _ ->
+                    return
 
         CommonMode Normal ->
-            case model.tool of
-                -- PLAY --------
-                Play on ->
-                    interactPlay on event model mobile
+            case ( event.item, event.action ) of
+                ( ISound s, Interact.Clicked _ ) ->
+                    update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
 
-                -- LINK --------
-                Harmonize ->
-                    interactHarmonize event model mobile
+                ( ISound s, Interact.Dragged _ p _ ) ->
+                    { return
+                        | model = { model | shallow = Just ( p, Sound.length s ) }
+                    }
 
-                -- EDIT --------
-                Edit ->
-                    case interactMove event model mobile of
-                        Just ret ->
-                            { return | model = ret.model, mobile = ret.mobile, toUndo = ret.toUndo }
+                ( ISound s, Interact.DragEnded True ) ->
+                    case model.shallow of
+                        Just ( p, _ ) ->
+                            update (NewGear p <| Content.S s) ( { model | shallow = Nothing }, mobile )
 
-                        _ ->
-                            { return | model = { model | common = interactSelectEdit event model.common } }
+                        Nothing ->
+                            return
+
+                _ ->
+                    case model.tool of
+                        -- PLAY --------
+                        Play on ->
+                            interactPlay on event model mobile
+
+                        -- LINK --------
+                        Harmonize ->
+                            interactHarmonize event model mobile
+
+                        -- EDIT --------
+                        Edit ->
+                            case interactMove event model mobile of
+                                Just ret ->
+                                    { return | model = ret.model, mobile = ret.mobile, toUndo = ret.toUndo }
+
+                                _ ->
+                                    { return | model = { model | common = interactSelectEdit event model.common } }
+
+        _ ->
+            return
 
 
 interactPlay : Bool -> Interact.Event Interactable -> Model -> Mobeel -> Return

@@ -14,6 +14,7 @@ import Element.Font as Font
 import Element.Input as Input
 import Engine
 import Html.Attributes
+import Interact
 import Json.Encode as E
 import PanSvg
 import Sound exposing (Sound)
@@ -68,11 +69,11 @@ type Msg
     | Redo
     | View (List ( String, Identifier ))
     | ChangedMode Mode
-    | SoundClicked Sound
     | AddContent WContent
     | KeyPressed Shortcut
     | MobileMsg MEditor.Msg
     | CollarMsg CEditor.Msg
+    | InteractMsg (Interact.Msg Editors.Interactable)
 
 
 update : Msg -> Doc -> ( Doc, Cmd Msg )
@@ -155,18 +156,10 @@ update msg doc =
                 _ ->
                     Debug.log "IMPOSSIBLE Mode for wrong editor" ( doc, Cmd.none )
 
-        SoundClicked sound ->
-            case doc.editor of
-                M _ ->
-                    update (MobileMsg <| MEditor.SoundClicked sound) doc
-
-                C _ ->
-                    update (CollarMsg <| CEditor.SoundClicked sound) doc
-
         AddContent content ->
             case doc.editor of
                 M _ ->
-                    update (MobileMsg <| MEditor.NewGear content) doc
+                    update (MobileMsg <| MEditor.NewGear MEditor.defaultAddPos content) doc
 
                 C _ ->
                     update (CollarMsg <| CEditor.NewBead content) doc
@@ -304,6 +297,14 @@ update msg doc =
 
                 _ ->
                     Debug.log "IMPOSSIBLE CollarMsg while viewing no collar" ( doc, Cmd.none )
+
+        InteractMsg subMsg ->
+            case doc.editor of
+                M e ->
+                    update (MobileMsg <| MEditor.InteractMsg <| subMsg) doc
+
+                C e ->
+                    update (CollarMsg <| CEditor.InteractMsg <| subMsg) doc
 
 
 subs : Doc -> List (Sub Msg)

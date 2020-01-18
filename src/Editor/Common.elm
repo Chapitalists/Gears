@@ -12,7 +12,7 @@ import Element.Font as Font
 import Element.Input as Input
 import Harmony as Harmo
 import Interact
-import Sound
+import Sound exposing (Sound)
 
 
 type alias CommonModel =
@@ -76,6 +76,7 @@ type Interactable
     = ISurface
     | IWheel Identifier
     | IResizeHandle Identifier Bool
+    | ISound Sound
 
 
 fromWheelInteractable : Wheel.Interactable Identifier -> Interactable

@@ -22,6 +22,7 @@ import File exposing (File)
 import File.Download as DL
 import File.Select as Select
 import Http
+import Interact
 import Json.Decode as D
 import Keys
 import NaturalOrdering as Natural
@@ -533,7 +534,13 @@ viewLoaded model =
 soundView : Sound -> Element Msg
 soundView s =
     el
-        [ onClick <| DocMsg <| Doc.SoundClicked s ]
+        (List.map
+            (Element.htmlAttribute
+                >> (Element.mapAttribute <| DocMsg << Doc.InteractMsg)
+            )
+         <|
+            Interact.draggableEvents (Editors.ISound s)
+        )
         (text (Sound.toString s))
 
 

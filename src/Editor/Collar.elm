@@ -69,7 +69,6 @@ type Msg
     | CursorRight
     | CursorLeft
     | ToggleEngine
-    | SoundClicked Sound
     | NewBead (Content Wheel)
     | DeleteBead Int
     | PackBead
@@ -118,15 +117,6 @@ update msg ( model, collar ) =
 
         ToggleEngine ->
             { return | toEngine = Just <| Engine.playCollar collar }
-
-        SoundClicked s ->
-            case model.mode of
-                CommonMode (ChangeSound (B i)) ->
-                    update (WheelMsg ( i, Wheel.ChangeContent <| Content.S s ))
-                        ( { model | mode = CommonMode Normal }, collar )
-
-                _ ->
-                    update (NewBead <| Content.S s) ( model, collar )
 
         NewBead c ->
             let
@@ -348,35 +338,49 @@ manageInteractEvent event model collar =
         CommonMode Nav ->
             { return | outMsg = interactNav event <| Content.C collar }
 
-        CommonMode (ChangeSound _) ->
-            return
+        CommonMode (ChangeSound (B i)) ->
+            case ( event.item, event.action ) of
+                ( ISound s, Interact.Clicked _ ) ->
+                    update (WheelMsg ( i, Wheel.ChangeContent <| Content.S s ))
+                        ( { model | mode = CommonMode Normal }, collar )
+
+                _ ->
+                    return
 
         CommonMode Normal ->
-            case model.tool of
-                Play on ->
-                    --TODO Factorize
-                    let
-                        scale =
-                            PanSvg.getScale model.svg
-                    in
-                    case ( event.item, event.action ) of
-                        -- MUTE
-                        ( IWheel (B i), Interact.Clicked _ ) ->
+            case ( event.item, event.action ) of
+                ( ISound s, Interact.Clicked _ ) ->
+                    update (NewBead <| Content.S s) ( model, collar )
+
+                _ ->
+                    case model.tool of
+                        Play on ->
+                            --TODO Factorize
                             let
-                                w =
-                                    (Collar.get i collar).wheel
-
-                                newMute =
-                                    not w.mute
+                                scale =
+                                    PanSvg.getScale model.svg
                             in
-                            { return
-                                | collar = Collar.updateBead i (\b -> { b | wheel = { w | mute = newMute } }) collar
-                                , toUndo = Do
-                                , toEngine = Just <| Engine.mutedBead i newMute
-                            }
+                            case ( event.item, event.action ) of
+                                -- MUTE
+                                ( IWheel (B i), Interact.Clicked _ ) ->
+                                    let
+                                        w =
+                                            (Collar.get i collar).wheel
 
-                        _ ->
-                            return
+                                        newMute =
+                                            not w.mute
+                                    in
+                                    { return
+                                        | collar = Collar.updateBead i (\b -> { b | wheel = { w | mute = newMute } }) collar
+                                        , toUndo = Do
+                                        , toEngine = Just <| Engine.mutedBead i newMute
+                                    }
 
-                Edit ->
-                    { return | model = { model | common = interactSelectEdit event model.common } }
+                                _ ->
+                                    return
+
+                        Edit ->
+                            { return | model = { model | common = interactSelectEdit event model.common } }
+
+        _ ->
+            return
