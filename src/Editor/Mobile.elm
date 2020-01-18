@@ -1038,22 +1038,9 @@ manageInteractEvent event model mobile =
             { return | outMsg = interactNav event <| Content.M mobile }
 
         Move ->
-            -- FIXME copy of edit move
-            case ( event.item, event.action, model.dragging ) of
-                -- MOVE
-                ( IWheel (G id), Interact.Dragged oldPos newPos _, _ ) ->
-                    let
-                        gearUp =
-                            Gear.update <| Gear.Move <| Vec.sub newPos oldPos
-                    in
-                    { return
-                        | model = { model | dragging = Moving }
-                        , mobile = { mobile | gears = Coll.update id gearUp mobile.gears }
-                        , toUndo = Group
-                    }
-
-                ( _, Interact.DragEnded _, Moving ) ->
-                    { return | model = { model | dragging = NoDrag }, toUndo = Do }
+            case interactMove event model mobile of
+                Just ret ->
+                    { return | model = ret.model, mobile = ret.mobile, toUndo = ret.toUndo }
 
                 _ ->
                     return
@@ -1085,21 +1072,9 @@ manageInteractEvent event model mobile =
 
                 -- EDIT --------
                 Edit ->
-                    case ( event.item, event.action, model.dragging ) of
-                        -- MOVE
-                        ( IWheel (G id), Interact.Dragged oldPos newPos _, _ ) ->
-                            let
-                                gearUp =
-                                    Gear.update <| Gear.Move <| Vec.sub newPos oldPos
-                            in
-                            { return
-                                | model = { model | dragging = Moving }
-                                , mobile = { mobile | gears = Coll.update id gearUp mobile.gears }
-                                , toUndo = Group
-                            }
-
-                        ( _, Interact.DragEnded _, Moving ) ->
-                            { return | model = { model | dragging = NoDrag }, toUndo = Do }
+                    case interactMove event model mobile of
+                        Just ret ->
+                            { return | model = ret.model, mobile = ret.mobile, toUndo = ret.toUndo }
 
                         _ ->
                             { return | model = { model | common = interactSelectEdit event model.common } }
@@ -1303,3 +1278,24 @@ interactHarmonize event model mobile =
 
         _ ->
             return
+
+
+interactMove : Interact.Event Interactable -> Model -> Mobeel -> Maybe { model : Model, mobile : Mobeel, toUndo : ToUndo }
+interactMove event model mobile =
+    case ( event.item, event.action, model.dragging ) of
+        ( IWheel (G id), Interact.Dragged oldPos newPos _, _ ) ->
+            let
+                gearUp =
+                    Gear.update <| Gear.Move <| Vec.sub newPos oldPos
+            in
+            Just
+                { model = { model | dragging = Moving }
+                , mobile = { mobile | gears = Coll.update id gearUp mobile.gears }
+                , toUndo = Group
+                }
+
+        ( _, Interact.DragEnded _, Moving ) ->
+            Just { model = { model | dragging = NoDrag }, mobile = mobile, toUndo = Do }
+
+        _ ->
+            Nothing
