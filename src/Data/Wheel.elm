@@ -135,25 +135,25 @@ view w pos length style id uid =
         ([ SA.transform [ Translate (getX pos) (getY pos) ] ]
             ++ Interact.hoverEvents (IWheel id)
         )
-        ([ S.g [ Html.Attributes.id uid ]
+        ([ S.g (Html.Attributes.id uid :: Interact.draggableEvents (IWheel id))
             ([ S.circle
-                ([ SA.cx <| Num 0
-                 , SA.cy <| Num 0
-                 , SA.r <| Num (length / 2)
-                 , SA.stroke <|
+                [ SA.cx <| Num 0
+                , SA.cy <| Num 0
+                , SA.r <| Num (length / 2)
+                , SA.stroke <|
                     if style.motor then
                         Color.red
 
                     else
                         Color.black
-                 , SA.strokeWidth <|
+                , SA.strokeWidth <|
                     Num <|
                         if style.mod == Selectable then
                             tickW * 2
 
                         else
                             tickW
-                 , SA.strokeDasharray <|
+                , SA.strokeDasharray <|
                     if style.dashed then
                         String.fromFloat (circum / 40 * 3 / 4)
                             ++ ","
@@ -161,7 +161,7 @@ view w pos length style id uid =
 
                     else
                         ""
-                 , SA.fill <|
+                , SA.fill <|
                     if w.mute then
                         Fill Color.white
 
@@ -170,10 +170,8 @@ view w pos length style id uid =
 
                     else
                         Fill w.color
-                 , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
-                 ]
-                    ++ Interact.draggableEvents (IWheel id)
-                )
+                , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
+                ]
                 []
              , S.rect
                 [ SA.width <| Num tickW
