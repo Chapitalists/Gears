@@ -230,7 +230,7 @@ update msg ( model, mobile ) =
             in
             { return
                 | mobile = { mobile | gears = gears }
-                , toUndo = Do
+                , toUndo = Group
                 , model = { model | svg = PanSvg.centerZoom (Mobile.gearPosSize id gears) model.svg }
                 , cmd = Random.generate (\color -> WheelMsg ( id, Wheel.ChangeColor color )) colorGen
             }

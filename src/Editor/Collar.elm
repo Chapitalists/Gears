@@ -125,7 +125,7 @@ update msg ( model, collar ) =
             in
             { return
                 | collar = Collar.add model.cursor (Collar.beadFromContent c) collar
-                , toUndo = Do
+                , toUndo = Group
                 , model = { model | cursor = model.cursor + 1 }
                 , cmd = Random.generate (\color -> WheelMsg ( model.cursor, Wheel.ChangeColor color )) colorGen
             }
