@@ -141,8 +141,7 @@ commonUpdate msg model =
                             (\id ->
                                 Maybe.map2 Tuple.pair
                                     (getWheelFromContent id content)
-                                <|
-                                    Debug.log "length" (getLengthFromContent (Debug.log "id" id) <| Debug.log "contont" content)
+                                    (getLengthFromContent id content)
                             )
             }
 
