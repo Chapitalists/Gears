@@ -1,4 +1,4 @@
-module Editor.Mobile exposing (..)
+port module Editor.Mobile exposing (..)
 
 import Coll exposing (Coll, Id)
 import Color
@@ -14,10 +14,12 @@ import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
 import Engine exposing (Engine)
+import File.Download as DL
 import Fraction as Fract exposing (Fraction)
 import Harmony as Harmo
 import Html.Attributes
 import Interact exposing (Interact)
+import Json.Decode as D
 import Json.Encode as E
 import Link exposing (Link)
 import Math.Vector2 as Vec exposing (Vec2, vec2)
@@ -30,6 +32,12 @@ import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
 import TypedSvg.Types exposing (Length(..), Opacity(..))
+
+
+port toggleRecord : Bool -> Cmd msg
+
+
+port gotRecord : (D.Value -> msg) -> Sub msg
 
 
 type alias Model =
@@ -56,7 +64,7 @@ defaultAddPos =
 
 type Tool
     = Edit
-    | Play Bool
+    | Play Bool Bool -- Playing, Recording
     | Harmonize
 
 
@@ -94,7 +102,7 @@ type Dragging
 init : Maybe Mobeel -> Maybe ( CommonModel, PanSvg.Model ) -> Model
 init mayMobile mayShared =
     { dragging = NoDrag
-    , tool = Play False
+    , tool = Play False False
     , mode = CommonMode Normal
     , link = Nothing
     , shallow = Nothing
@@ -118,6 +126,8 @@ type Msg
     | ToggleEngine
     | PlayGear (Id Geer)
     | StopGear (Id Geer)
+    | ToggleRecord Bool
+    | GotRecord (Result D.Error String)
       --
     | CopyGear (Id Geer)
     | NewGear Vec2 (Content Wheel)
@@ -188,13 +198,13 @@ update msg ( model, mobile ) =
 
         ToggleEngine ->
             case model.tool of
-                Play True ->
+                Play True r ->
                     { return
-                        | model = { model | tool = Play False, engine = Engine.init }
+                        | model = { model | tool = Play False r, engine = Engine.init }
                         , toEngine = Just Engine.stop
                     }
 
-                Play False ->
+                Play False r ->
                     let
                         ( engine, v ) =
                             Engine.addPlaying
@@ -202,10 +212,26 @@ update msg ( model, mobile ) =
                                 mobile.gears
                                 model.engine
                     in
-                    { return | model = { model | tool = Play True, engine = engine }, toEngine = v }
+                    { return | model = { model | tool = Play True r, engine = engine }, toEngine = v }
 
                 _ ->
                     return
+
+        ToggleRecord rec ->
+            case model.tool of
+                Play on _ ->
+                    { return | model = { model | tool = Play on rec }, cmd = toggleRecord rec }
+
+                _ ->
+                    return
+
+        GotRecord res ->
+            case res of
+                Ok url ->
+                    { return | cmd = DL.url url }
+
+                Err err ->
+                    Debug.log (D.errorToString err) return
 
         PlayGear id ->
             let
@@ -562,6 +588,7 @@ update msg ( model, mobile ) =
 subs : Model -> List (Sub Msg)
 subs { interact } =
     (Sub.map SvgMsg <| PanSvg.sub)
+        :: (gotRecord <| (GotRecord << D.decodeValue D.string))
         :: (List.map (Sub.map InteractMsg) <| Interact.subs interact)
 
 
@@ -570,7 +597,7 @@ viewTools model =
     Input.radioRow [ spacing 30 ]
         { onChange = ChangedTool
         , options =
-            [ Input.option (Play False) <| text "Jeu (W)"
+            [ Input.option (Play False False) <| text "Jeu (W)"
             , Input.option Harmonize <| text "Harmonie (X)"
             , Input.option Edit <| text "Édition (C)"
             ]
@@ -581,9 +608,9 @@ viewTools model =
 
 viewExtraTools : Model -> Element Msg
 viewExtraTools model =
-    row [ width fill, padding 20 ]
+    row [ width fill, padding 20, spacing 20 ]
         (case model.tool of
-            Play on ->
+            Play on rec ->
                 [ Input.button [ centerX ]
                     { label =
                         if on then
@@ -592,6 +619,23 @@ viewExtraTools model =
                         else
                             text "Jouer"
                     , onPress = Just ToggleEngine
+                    }
+                , Input.button
+                    ([ centerX ]
+                        ++ (if rec then
+                                [ Bg.color (rgb 1 0 0) ]
+
+                            else
+                                []
+                           )
+                    )
+                    { label =
+                        if rec then
+                            text "Cut"
+
+                        else
+                            text "Rec"
+                    , onPress = Just <| ToggleRecord <| not rec
                     }
                 ]
 
@@ -669,7 +713,7 @@ viewContent ( model, mobile ) =
                                         Coll.get id mobile.gears
                                 in
                                 case model.tool of
-                                    Play _ ->
+                                    Play _ _ ->
                                         let
                                             length =
                                                 Harmo.getLength g.harmony mobile.gears
@@ -687,7 +731,7 @@ viewContent ( model, mobile ) =
 
                             CompleteLink l ->
                                 case model.tool of
-                                    Play _ ->
+                                    Play _ _ ->
                                         Link.viewMotorLink False <| Gear.toDrawLink mobile.gears l
 
                                     Harmonize ->
@@ -703,7 +747,7 @@ viewContent ( model, mobile ) =
                                 []
                        )
                     ++ (case model.tool of
-                            Play _ ->
+                            Play _ _ ->
                                 let
                                     cuts =
                                         case model.dragging of
@@ -1098,7 +1142,7 @@ manageInteractEvent event model mobile =
                 _ ->
                     case model.tool of
                         -- PLAY --------
-                        Play on ->
+                        Play on _ ->
                             interactPlay on event model mobile
 
                         -- LINK --------

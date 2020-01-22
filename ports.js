@@ -2,9 +2,13 @@ const app = Elm.Main.init({flags : {width : window.innerWidth, height : window.i
 
 if (app.ports.loadSound) app.ports.loadSound.subscribe(createBuffer)
 if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
+if (app.ports.toggleRecord) app.ports.toggleRecord.subscribe(toggleRecord)
 
 const buffers = {}
     , ro = new ResizeObserver(sendSize)
+    , nodeToRecord = Tone.context.createGain()
+    , recorder = new Recorder(nodeToRecord)
+Tone.Master.connect(nodeToRecord)
 ro.observe(document.getElementById('svgResizeObserver'))
 
 let playing = {}
@@ -33,6 +37,15 @@ function loadOk(soundName) {
 function loadErr(err, soundName) {
   console.log(err)
   app.ports.soundLoaded.send(soundName + ' got ' + err)
+}
+
+function toggleRecord(bool) {
+    if (bool) recorder.record()
+    else {
+        recorder.stop()
+        recorder.exportWAV(bl => app.ports.gotRecord.send(URL.createObjectURL(bl)))
+        recorder.clear()
+    }
 }
 
 function engine(o) {

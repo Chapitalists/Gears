@@ -169,7 +169,7 @@ update msg doc =
                 ( Tool i, M _ ) ->
                     case i of
                         1 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False) doc
+                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False False) doc
 
                         2 ->
                             update (MobileMsg <| MEditor.ChangedTool <| MEditor.Harmonize) doc
