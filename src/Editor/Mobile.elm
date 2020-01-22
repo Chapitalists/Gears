@@ -140,7 +140,7 @@ type Msg
     | ForcedFract (Link Geer) Fraction
     | SimplifyFractView
     | ResizeToContent (Id Geer)
-    | Capsuled (Id Geer)
+    | Capsuled (List (Id Geer))
     | Collared (Id Geer)
     | InteractMsg (Interact.Msg Interactable)
     | SvgMsg PanSvg.Msg
@@ -325,7 +325,7 @@ update msg ( model, mobile ) =
 
             else
                 case model.common.edit of
-                    Just (G id) ->
+                    [ G id ] ->
                         update (WheelMsg ( id, Wheel.ChangeContent <| Wheel.getContent { wheel = w } )) ( model, mobile )
 
                     _ ->
@@ -513,20 +513,41 @@ update msg ( model, mobile ) =
                 , toUndo = Do
             }
 
-        Capsuled id ->
+        Capsuled [] ->
+            return
+
+        Capsuled (id :: ids) ->
             let
-                g =
+                m =
                     Coll.get id mobile.gears
 
-                newG =
-                    { g | motor = Motor.default, harmony = Harmo.newSelf <| Harmo.getLength g.harmony mobile.gears }
+                newMotor =
+                    { m | motor = Motor.default, harmony = Harmo.newSelf <| Harmo.getLength m.harmony mobile.gears }
+
+                subMobile =
+                    List.foldl
+                        (\i acc ->
+                            let
+                                g =
+                                    Coll.get i mobile.gears
+
+                                newG =
+                                    { g
+                                        | motor = Motor.default
+                                        , harmony = Harmo.newSelf <| Harmo.getLength g.harmony mobile.gears
+                                    }
+                            in
+                            { acc | gears = Coll.insert newG acc.gears }
+                        )
+                        (Mobile.fromGear newMotor)
+                        ids
             in
             { return
                 | mobile =
                     { mobile
                         | gears =
                             Coll.update id
-                                (Wheel.setContent <| Content.M <| Mobile.fromGear newG)
+                                (Wheel.setContent <| Content.M <| subMobile)
                                 mobile.gears
                     }
                 , toUndo = Do
@@ -657,8 +678,10 @@ viewContent ( model, mobile ) =
     let
         getMod : Id Geer -> Wheel.Mod
         getMod id =
-            if model.tool == Edit && model.common.edit == Just (G id) then
-                Wheel.Selected
+            if model.tool == Edit && List.member (G id) model.common.edit then
+                Wheel.Selected <|
+                    (List.length model.common.edit > 1)
+                        && ((List.head <| List.reverse model.common.edit) == Just (G id))
 
             else
                 case Interact.getInteract model.interact of
@@ -835,7 +858,7 @@ viewDetails model mobile =
 viewEditDetails : Model -> Mobeel -> List (Element Msg)
 viewEditDetails model mobile =
     case model.common.edit of
-        Just (G id) ->
+        [ G id ] ->
             let
                 g =
                     Coll.get id mobile.gears
@@ -869,7 +892,7 @@ viewEditDetails model mobile =
                     , viewChangeContent <| ChangedMode <| CommonMode <| ChangeSound <| G id
                     , Input.button []
                         { label = text "Encapsuler"
-                        , onPress = Just <| Capsuled id
+                        , onPress = Just <| Capsuled [ id ]
                         }
                     , Input.button []
                         { label = text "Collier"
@@ -898,6 +921,30 @@ viewEditDetails model mobile =
                                     ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)
                            ]
                 ]
+            ]
+
+        _ :: _ ->
+            [ viewDetailsColumn <|
+                (List.map (\id -> text <| getNameFromContent id <| Content.M mobile) <| List.reverse model.common.edit)
+                    ++ [ Input.button []
+                            { label = text "Encapsuler"
+                            , onPress =
+                                Just <|
+                                    Capsuled <|
+                                        List.filterMap
+                                            (\id ->
+                                                case id of
+                                                    G i ->
+                                                        Just i
+
+                                                    _ ->
+                                                        Nothing
+                                            )
+                                        <|
+                                            List.reverse
+                                                model.common.edit
+                            }
+                       ]
             ]
 
         _ ->

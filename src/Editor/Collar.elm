@@ -158,7 +158,7 @@ update msg ( model, collar ) =
 
             else
                 case model.common.edit of
-                    Just (B i) ->
+                    [ B i ] ->
                         update (WheelMsg ( i, Wheel.ChangeContent <| Wheel.getContent { wheel = w } )) ( model, collar )
 
                     _ ->
@@ -214,8 +214,8 @@ viewContent ( model, collar ) =
     let
         getMod : Int -> Wheel.Mod
         getMod i =
-            if model.tool == Edit && model.common.edit == Just (B i) then
-                Wheel.Selected
+            if model.tool == Edit && model.common.edit == [ B i ] then
+                Wheel.Selected False
 
             else
                 case Interact.getInteract model.interact of
@@ -301,7 +301,7 @@ viewDetails model c =
 
         _ ->
             case ( model.tool, model.common.edit ) of
-                ( Edit, Just (B i) ) ->
+                ( Edit, [ B i ] ) ->
                     let
                         b =
                             Collar.get i c

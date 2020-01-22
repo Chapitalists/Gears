@@ -75,7 +75,7 @@ fromContent c =
 type Mod
     = None
     | Selectable
-    | Selected
+    | Selected Bool
     | Resizing
 
 
@@ -233,48 +233,51 @@ view w pos length style id uid =
                    )
             )
          ]
-            ++ (if style.mod == Selected then
-                    [ S.circle
-                        [ SA.cx <| Num 0
-                        , SA.cy <| Num 0
-                        , SA.r <| Num (length / 2 + tickW * 2)
-                        , SA.strokeWidth <| Num (tickW / 2)
-                        , SA.stroke Color.black
-                        , SA.fill FillNone
-                        ]
-                        []
-                    ]
+            ++ (case style.mod of
+                    Selected first ->
+                        [ S.circle
+                            [ SA.cx <| Num 0
+                            , SA.cy <| Num 0
+                            , SA.r <| Num (length / 2 + tickW * 2)
+                            , SA.strokeWidth <| Num (tickW / 2)
+                            , SA.stroke <|
+                                if first then
+                                    Color.red
 
-                else
-                    []
-               )
-            ++ (if style.mod == Resizing then
-                    [ S.polyline
-                        [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
-                        , SA.stroke Color.red
-                        , SA.strokeWidth <| Num tickW
+                                else
+                                    Color.black
+                            , SA.fill FillNone
+                            ]
+                            []
                         ]
-                        []
-                    , S.circle
-                        ([ SA.cx <| Num (-length / 2)
-                         , SA.cy <| Num 0
-                         , SA.r <| Num (tickW * 2)
-                         ]
-                            ++ Interact.draggableEvents (IResizeHandle id False)
-                        )
-                        []
-                    , S.circle
-                        ([ SA.cx <| Num (length / 2)
-                         , SA.cy <| Num 0
-                         , SA.r <| Num (tickW * 2)
-                         ]
-                            ++ Interact.draggableEvents (IResizeHandle id True)
-                        )
-                        []
-                    ]
 
-                else
-                    []
+                    Resizing ->
+                        [ S.polyline
+                            [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
+                            , SA.stroke Color.red
+                            , SA.strokeWidth <| Num tickW
+                            ]
+                            []
+                        , S.circle
+                            ([ SA.cx <| Num (-length / 2)
+                             , SA.cy <| Num 0
+                             , SA.r <| Num (tickW * 2)
+                             ]
+                                ++ Interact.draggableEvents (IResizeHandle id False)
+                            )
+                            []
+                        , S.circle
+                            ([ SA.cx <| Num (length / 2)
+                             , SA.cy <| Num 0
+                             , SA.r <| Num (tickW * 2)
+                             ]
+                                ++ Interact.draggableEvents (IResizeHandle id True)
+                            )
+                            []
+                        ]
+
+                    _ ->
+                        []
                )
         )
 

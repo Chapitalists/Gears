@@ -16,7 +16,7 @@ import Sound exposing (Sound)
 
 
 type alias CommonModel =
-    { edit : Maybe Identifier
+    { edit : List Identifier
     , pack : Maybe ( Wheel, Float )
     }
 
@@ -91,7 +91,7 @@ fromWheelInteractable i =
 
 commonInit : Maybe CommonModel -> CommonModel
 commonInit may =
-    { edit = Nothing
+    { edit = []
     , pack = Maybe.withDefault Nothing <| Maybe.map .pack may
     }
 
@@ -127,22 +127,19 @@ commonUpdate : CommonMsg -> CommonModel -> CommonModel
 commonUpdate msg model =
     case msg of
         Delete id ->
-            if model.edit == Just id then
-                { model | edit = Nothing }
-
-            else
-                model
+            { model | edit = List.filter ((/=) id) model.edit }
 
         Pack content ->
             { model
                 | pack =
-                    model.edit
-                        |> Maybe.andThen
-                            (\id ->
-                                Maybe.map2 Tuple.pair
-                                    (getWheelFromContent id content)
-                                    (getLengthFromContent id content)
-                            )
+                    case model.edit of
+                        [ id ] ->
+                            Maybe.map2 Tuple.pair
+                                (getWheelFromContent id content)
+                                (getLengthFromContent id content)
+
+                        _ ->
+                            Nothing
             }
 
         EmptyPack ->
@@ -284,8 +281,11 @@ interactNav event content =
 interactSelectEdit : Interact.Event Interactable -> CommonModel -> CommonModel
 interactSelectEdit event model =
     case ( event.item, event.action ) of
+        ( IWheel id, Interact.Clicked ( _, False, False ) ) ->
+            { model | edit = [ id ] }
+
         ( IWheel id, Interact.Clicked _ ) ->
-            { model | edit = Just id }
+            { model | edit = id :: model.edit }
 
         _ ->
             model

@@ -206,7 +206,7 @@ update msg doc =
 
                 ( Suppr, C e ) ->
                     case e.common.edit of
-                        Just (B i) ->
+                        [ B i ] ->
                             update (CollarMsg <| CEditor.DeleteBead i) doc
 
                         _ ->
@@ -214,7 +214,7 @@ update msg doc =
 
                 ( Suppr, M e ) ->
                     case e.common.edit of
-                        Just (G id) ->
+                        [ G id ] ->
                             update (MobileMsg <| MEditor.DeleteGear id) doc
 
                         _ ->
