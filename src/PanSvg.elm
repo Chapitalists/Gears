@@ -73,6 +73,14 @@ init =
 type Msg
     = SVGSize (Result D.Error Size)
     | Zoom Float ( Float, Float )
+    | Pan Direction
+
+
+type Direction
+    = Left
+    | Right
+    | Up
+    | Down
 
 
 update : Msg -> Model -> Model
@@ -107,6 +115,34 @@ update msg model =
                     Vec.sub vp.c <| Vec.scale scale p
             in
             { model | viewPos = { c = nC, smallestSize = nS } }
+
+        Pan dir ->
+            let
+                viewPos =
+                    model.viewPos
+
+                d =
+                    viewPos.smallestSize / 50
+            in
+            { model
+                | viewPos =
+                    { viewPos
+                        | c =
+                            Vec.add model.viewPos.c <|
+                                case dir of
+                                    Left ->
+                                        vec2 -d 0
+
+                                    Right ->
+                                        vec2 d 0
+
+                                    Up ->
+                                        vec2 0 -d
+
+                                    Down ->
+                                        vec2 0 d
+                    }
+            }
 
 
 sub : Sub Msg

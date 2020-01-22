@@ -29,6 +29,7 @@ import Interact
 import Json.Decode as D
 import Keys
 import NaturalOrdering as Natural
+import PanSvg
 import Result exposing (Result)
 import Set exposing (Set)
 import Sound exposing (Sound)
@@ -353,6 +354,18 @@ update msg model =
 
                                 Nothing ->
                                     ( m, c )
+
+                        Keys.Repeat code ->
+                            case Dict.get code keyCodeToDirection of
+                                Just dir ->
+                                    let
+                                        ( doc, cmd ) =
+                                            Doc.update (Doc.DirectionRepeat dir) m.doc
+                                    in
+                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
+
+                                Nothing ->
+                                    ( m, c )
                 )
                 ( { model | keys = state }, Cmd.none )
                 events
@@ -400,6 +413,16 @@ keyCodeToShortcut =
         , ( "Space", Doc.Play )
         , ( "ArrowLeft", Doc.Left )
         , ( "ArrowRight", Doc.Right )
+        ]
+
+
+keyCodeToDirection : Dict String PanSvg.Direction
+keyCodeToDirection =
+    Dict.fromList
+        [ ( "KeyO", PanSvg.Up )
+        , ( "KeyK", PanSvg.Left )
+        , ( "KeyL", PanSvg.Down )
+        , ( "Semicolon", PanSvg.Right )
         ]
 
 

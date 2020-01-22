@@ -70,6 +70,7 @@ type Msg
     | ChangedMode Mode
     | AddContent WContent
     | KeyPressed Shortcut
+    | DirectionRepeat PanSvg.Direction
     | MobileMsg MEditor.Msg
     | CollarMsg CEditor.Msg
     | InteractMsg (Interact.Msg Editors.Interactable)
@@ -201,6 +202,14 @@ update msg doc =
 
                 ( Right, C _ ) ->
                     update (CollarMsg <| CEditor.CursorRight) doc
+
+                _ ->
+                    ( doc, Cmd.none )
+
+        DirectionRepeat dir ->
+            case doc.editor of
+                M editor ->
+                    update (MobileMsg <| MEditor.SvgMsg <| PanSvg.Pan dir) doc
 
                 _ ->
                     ( doc, Cmd.none )

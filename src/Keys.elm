@@ -17,6 +17,7 @@ init =
 type Event
     = Press String
     | Hold (Set String)
+    | Repeat String
 
 
 type Msg
@@ -32,7 +33,7 @@ update msg state =
                 hold =
                     Set.insert code state
             in
-            ( hold, [ Hold hold ] )
+            ( hold, [ Hold hold, Repeat code ] )
 
         HoldUp code ->
             let
