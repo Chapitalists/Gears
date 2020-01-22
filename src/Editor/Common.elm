@@ -162,6 +162,7 @@ viewDetailsColumn =
         ]
 
 
+viewDetailChangingSound : Identifier -> Content Wheel -> msg -> List (Element msg)
 viewDetailChangingSound id c msg =
     [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ] <|
         [ text <| getNameFromContent id c

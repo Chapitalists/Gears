@@ -15,7 +15,6 @@ import Json.Encode as E
 import Math.Vector2 as Vec exposing (vec2)
 import PanSvg
 import Random
-import Sound exposing (Sound)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)

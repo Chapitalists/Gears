@@ -17,7 +17,6 @@ import Html.Attributes
 import Interact
 import Json.Encode as E
 import PanSvg
-import Sound exposing (Sound)
 import Url exposing (Url)
 
 
