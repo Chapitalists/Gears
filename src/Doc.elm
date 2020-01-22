@@ -56,6 +56,7 @@ type Shortcut
     | Play
     | Left
     | Right
+    | Suppr
 
 
 type Msg
@@ -202,6 +203,22 @@ update msg doc =
 
                 ( Right, C _ ) ->
                     update (CollarMsg <| CEditor.CursorRight) doc
+
+                ( Suppr, C e ) ->
+                    case e.common.edit of
+                        Just (B i) ->
+                            update (CollarMsg <| CEditor.DeleteBead i) doc
+
+                        _ ->
+                            ( doc, Cmd.none )
+
+                ( Suppr, M e ) ->
+                    case e.common.edit of
+                        Just (G id) ->
+                            update (MobileMsg <| MEditor.DeleteGear id) doc
+
+                        _ ->
+                            ( doc, Cmd.none )
 
                 _ ->
                     ( doc, Cmd.none )
