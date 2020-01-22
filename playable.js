@@ -12,6 +12,7 @@ function prepare(model, rate = 1) {
     }
     if (model.soundName) {
         model.player = new Tone.Player(buffers[model.soundName]).toMaster()
+        setVolume(model)
         model.duration = model.player.buffer.duration
         model.player.playbackRate = model.rate = rate * model.duration / model.length
         model.player.loop = true
@@ -58,8 +59,7 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
         Tone.Draw.schedule(() => model.view.animate().play(), t)
     }
     if (model.soundName && model.player.output) {
-        if (mute || model.mute) model.player.mute = true
-        else model.player.volume.value = ((model.volume * volume) - 1) * 60
+        setVolume(model, volume, mute)
         model.player.start(t, model.pauseOffset)
     }
     if (model.mobile) {
