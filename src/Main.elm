@@ -21,6 +21,9 @@ import Element.Input as Input
 import File exposing (File)
 import File.Download as DL
 import File.Select as Select
+import Html
+import Html.Attributes as Attr
+import Html.Events as Events
 import Http
 import Interact
 import Json.Decode as D
@@ -30,6 +33,7 @@ import Result exposing (Result)
 import Set exposing (Set)
 import Sound exposing (Sound)
 import Url exposing (Url)
+import Url.Builder
 
 
 port loadSound : String -> Cmd msg
@@ -66,7 +70,7 @@ main =
 type alias Model =
     { connected : Bool
     , currentUrl : Url.Url
-    , soundList : Set String
+    , soundList : Dict String Bool
     , loadedSoundList : List Sound
     , savesList : Set String
     , doc : Doc
@@ -92,7 +96,7 @@ init screen url _ =
     ( Model
         False
         url
-        Set.empty
+        Dict.empty
         []
         Set.empty
         (Doc.init <| Just url)
@@ -111,6 +115,7 @@ init screen url _ =
 type Msg
     = GotSoundList (Result Http.Error String)
     | RequestSoundList
+    | PreListening String Bool
     | RequestSoundLoad String
     | RequestSoundDownload String
     | RequestSavesList
@@ -135,7 +140,11 @@ update msg model =
             case result of
                 Ok stringList ->
                     ( { model
-                        | soundList = Set.union model.soundList <| Set.fromList <| String.split "\\" stringList
+                        | soundList =
+                            Dict.union model.soundList <|
+                                Dict.fromList <|
+                                    List.map (\str -> ( str, False )) <|
+                                        String.split "\\" stringList
                         , connected = True
                       }
                     , Cmd.none
@@ -214,7 +223,7 @@ update msg model =
         RequestSoundLoad n ->
             -- TODO handle no response
             ( model
-            , if Set.member n model.soundList then
+            , if Dict.member n model.soundList then
                 loadSound n
 
               else
@@ -223,7 +232,7 @@ update msg model =
 
         RequestSoundDownload n ->
             ( model
-            , if Set.member n model.soundList then
+            , if Dict.member n model.soundList then
                 DL.url <| Url.toString model.currentUrl ++ "sons/" ++ n
 
               else
@@ -270,6 +279,9 @@ update msg model =
                     )
                     (f :: lf)
             )
+
+        PreListening s p ->
+            ( { model | soundList = Dict.update s (Maybe.map <| always p) model.soundList }, Cmd.none )
 
         ChangedExplorerTab tab ->
             ( { model | fileExplorerTab = tab }, Cmd.none )
@@ -496,26 +508,56 @@ viewSounds model =
             }
         , column [ width fill, height <| fillPortion 1, spacing 5, padding 2, scrollbarY ] <|
             (List.map
-                (\s ->
-                    el
-                        [ onClick <|
-                            if model.mode == Downloading then
-                                RequestSoundDownload s
+                (\( s, playing ) ->
+                    row [ spacing 5 ]
+                        ([ Input.button
+                            [ Font.color <|
+                                if List.any ((==) s) <| List.map Sound.toString model.loadedSoundList then
+                                    rgb 0.2 0.8 0.2
 
-                            else
-                                RequestSoundLoad s
-                        , Font.color <|
-                            if List.any ((==) s) <| List.map Sound.toString model.loadedSoundList then
-                                rgb 0.2 0.8 0.2
+                                else
+                                    rgb 1 1 1
+                            ]
+                            { label = text s
+                            , onPress =
+                                Just <|
+                                    if model.mode == Downloading then
+                                        RequestSoundDownload s
 
-                            else
-                                rgb 1 1 1
-                        ]
-                        (text s)
+                                    else
+                                        RequestSoundLoad s
+                            }
+                         , Input.button []
+                            -- Charset ref https://www.w3schools.com/charsets/ref_utf_geometric.asp
+                            { label =
+                                text <|
+                                    if playing then
+                                        "◼"
+
+                                    else
+                                        "▶"
+                            , onPress = Just <| PreListening s <| not playing
+                            }
+                         ]
+                            ++ (if playing then
+                                    [ Element.html <|
+                                        Html.audio
+                                            [ Attr.hidden True
+                                            , Attr.src <| Debug.log "url" <| Url.Builder.relative [ "sons", s ] []
+                                            , Attr.autoplay True
+                                            , Events.on "ended" <| D.succeed <| PreListening s False
+                                            ]
+                                            []
+                                    ]
+
+                                else
+                                    []
+                               )
+                        )
                 )
              <|
-                List.sortWith Natural.compare <|
-                    Set.toList model.soundList
+                List.sortWith (\t1 t2 -> Natural.compare (Tuple.first t1) (Tuple.first t2)) <|
+                    Dict.toList model.soundList
             )
         ]
     ]
