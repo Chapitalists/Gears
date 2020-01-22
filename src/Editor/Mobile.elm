@@ -197,25 +197,29 @@ update msg ( model, mobile ) =
             { return | model = { model | mode = mode } }
 
         ToggleEngine ->
-            case model.tool of
-                Play True r ->
-                    { return
-                        | model = { model | tool = Play False r, engine = Engine.init }
-                        , toEngine = Just Engine.stop
-                    }
+            if Coll.maybeGet mobile.motor mobile.gears == Nothing then
+                return
 
-                Play False r ->
-                    let
-                        ( engine, v ) =
-                            Engine.addPlaying
-                                (Motor.getMotored mobile.motor mobile.gears)
-                                mobile.gears
-                                model.engine
-                    in
-                    { return | model = { model | tool = Play True r, engine = engine }, toEngine = v }
+            else
+                case model.tool of
+                    Play True r ->
+                        { return
+                            | model = { model | tool = Play False r, engine = Engine.init }
+                            , toEngine = Just Engine.stop
+                        }
 
-                _ ->
-                    return
+                    Play False r ->
+                        let
+                            ( engine, v ) =
+                                Engine.addPlaying
+                                    (Motor.getMotored mobile.motor mobile.gears)
+                                    mobile.gears
+                                    model.engine
+                        in
+                        { return | model = { model | tool = Play True r, engine = engine }, toEngine = v }
+
+                    _ ->
+                        return
 
         ToggleRecord rec ->
             case model.tool of

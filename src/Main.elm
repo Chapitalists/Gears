@@ -566,7 +566,7 @@ viewSounds model =
                                     [ Element.html <|
                                         Html.audio
                                             [ Attr.hidden True
-                                            , Attr.src <| Debug.log "url" <| Url.Builder.relative [ "sons", s ] []
+                                            , Attr.src <| Url.Builder.relative [ "sons", s ] []
                                             , Attr.autoplay True
                                             , Events.on "ended" <| D.succeed <| PreListening s False
                                             ]
