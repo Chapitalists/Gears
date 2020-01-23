@@ -45,7 +45,6 @@ type alias Model =
     , tool : Tool
     , mode : Mode
     , link : Maybe LinkInfo
-    , shallow : Maybe ( Vec2, Float )
     , engine : Engine
     , interact : Interact.State Interactable
     , common : CommonModel
@@ -97,6 +96,8 @@ type Dragging
     | VolumeChange
     | SizeChange
     | Moving
+    | Content ( Vec2, Float )
+    | ChgContent (Id Geer) Dragging
 
 
 init : Maybe Mobeel -> Maybe ( CommonModel, PanSvg.Model ) -> Model
@@ -105,7 +106,6 @@ init mayMobile mayShared =
     , tool = Play False False
     , mode = CommonMode Normal
     , link = Nothing
-    , shallow = Nothing
     , engine = Engine.init
     , interact = Interact.init
     , common = commonInit <| Maybe.map Tuple.first mayShared
@@ -783,6 +783,19 @@ viewContent ( model, mobile ) =
                             Cut seg _ ->
                                 [ Link.drawCut seg <| PanSvg.getScale model.svg ]
 
+                            Content ( p, l ) ->
+                                [ S.circle
+                                    [ SA.cx <| Num <| Vec.getX p
+                                    , SA.cy <| Num <| Vec.getY p
+                                    , SA.r <| Num (l / 2)
+                                    , SA.strokeWidth <| Num <| l / 30
+                                    , SA.stroke Color.black
+                                    , SA.strokeOpacity <| Opacity 0.5
+                                    , SA.fillOpacity <| Opacity 0
+                                    ]
+                                    []
+                                ]
+
                             _ ->
                                 []
                        )
@@ -819,23 +832,6 @@ viewContent ( model, mobile ) =
                                        )
 
                             _ ->
-                                []
-                       )
-                    ++ (case model.shallow of
-                            Just ( p, l ) ->
-                                [ S.circle
-                                    [ SA.cx <| Num <| Vec.getX p
-                                    , SA.cy <| Num <| Vec.getY p
-                                    , SA.r <| Num (l / 2)
-                                    , SA.strokeWidth <| Num <| l / 30
-                                    , SA.stroke Color.black
-                                    , SA.strokeOpacity <| Opacity 0.5
-                                    , SA.fillOpacity <| Opacity 0
-                                    ]
-                                    []
-                                ]
-
-                            Nothing ->
                                 []
                        )
 
@@ -1224,22 +1220,17 @@ manageInteractEvent event model mobile =
                     return
 
         CommonMode Normal ->
-            case ( event.item, event.action ) of
-                ( ISound s, Interact.Clicked _ ) ->
+            case ( event.item, event.action, model.dragging ) of
+                ( ISound s, Interact.Clicked _, _ ) ->
                     update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
 
-                ( ISound s, Interact.Dragged _ p _ ) ->
+                ( ISound s, Interact.Dragged _ p _, _ ) ->
                     { return
-                        | model = { model | shallow = Just ( p, Sound.length s ) }
+                        | model = { model | dragging = Content ( p, Sound.length s ) }
                     }
 
-                ( ISound s, Interact.DragEnded True ) ->
-                    case model.shallow of
-                        Just ( p, _ ) ->
-                            update (NewGear p <| Content.S s) ( { model | shallow = Nothing }, mobile )
-
-                        Nothing ->
-                            return
+                ( ISound s, Interact.DragEnded True, Content ( p, _ ) ) ->
+                    update (NewGear p <| Content.S s) ( { model | dragging = NoDrag }, mobile )
 
                 _ ->
                     case model.tool of
