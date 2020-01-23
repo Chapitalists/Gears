@@ -144,7 +144,7 @@ type Msg
     | Collared (Id Geer)
     | InteractMsg (Interact.Msg Interactable)
     | SvgMsg PanSvg.Msg
-    | WheelMsg ( Id Geer, Wheel.Msg )
+    | WheelMsgs (List ( Id Geer, Wheel.Msg ))
     | GearMsg ( Id Geer, Gear.Msg )
     | OutMsg DocMsg
 
@@ -254,15 +254,12 @@ update msg ( model, mobile ) =
             let
                 ( id, gears ) =
                     Coll.insertTellId (Mobile.gearFromContent content p) mobile.gears
-
-                colorGen =
-                    Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
             in
             { return
                 | mobile = { mobile | gears = gears }
                 , toUndo = Group
                 , model = { model | svg = PanSvg.centerZoom (Mobile.gearPosSize id gears) model.svg }
-                , cmd = Random.generate (\color -> WheelMsg ( id, Wheel.ChangeColor color )) colorGen
+                , cmd = Random.generate (\color -> WheelMsgs [ ( id, Wheel.ChangeColor color ) ]) colorGen
             }
 
         DeleteGear id ->
@@ -326,7 +323,7 @@ update msg ( model, mobile ) =
             else
                 case model.common.edit of
                     [ G id ] ->
-                        update (WheelMsg ( id, Wheel.ChangeContent <| Wheel.getContent { wheel = w } )) ( model, mobile )
+                        doChangeContent id (Wheel.getContent { wheel = w }) (Just w.color) model mobile
 
                     _ ->
                         return
@@ -566,8 +563,18 @@ update msg ( model, mobile ) =
                 , toUndo = Do
             }
 
-        WheelMsg ( id, subMsg ) ->
-            { return | mobile = { mobile | gears = Coll.update id (Wheel.update subMsg) mobile.gears }, toUndo = Do }
+        WheelMsgs msgs ->
+            { return
+                | mobile =
+                    { mobile
+                        | gears =
+                            List.foldl
+                                (\( id, subMsg ) gears -> Coll.update id (Wheel.update subMsg) gears)
+                                mobile.gears
+                                msgs
+                    }
+                , toUndo = Do
+            }
 
         GearMsg ( id, subMsg ) ->
             { return | mobile = { mobile | gears = Coll.update id (Gear.update subMsg) mobile.gears }, toUndo = Do }
@@ -870,10 +877,10 @@ viewEditDetails model mobile =
                     Coll.get id mobile.gears
             in
             [ viewDetailsColumn <|
-                [ viewNameInput g (Gear.toUID id) <| \str -> WheelMsg ( id, Wheel.Named str )
+                [ viewNameInput g (Gear.toUID id) <| \str -> WheelMsgs [ ( id, Wheel.Named str ) ]
                 , viewContentButton g <| OutMsg <| Inside <| G id
                 , column [ width fill, scrollbarY, spacing 20, padding 10 ] <|
-                    [ viewVolumeSlider g <| \f -> WheelMsg ( id, Wheel.ChangeVolume f )
+                    [ viewVolumeSlider g <| \f -> WheelMsgs [ ( id, Wheel.ChangeVolume f ) ]
                     , row [ spacing 16 ] <|
                         text "x"
                             :: List.map
@@ -1116,6 +1123,55 @@ doResize id oldPos newPos add mobile =
     { mobile | gears = Harmo.resizeFree id newSize gears }
 
 
+doChangeContent : Id Geer -> Content Wheel -> Maybe Color.Color -> Model -> Mobeel -> Return
+doChangeContent id c mayColor model mobile =
+    let
+        return =
+            { model = model
+            , mobile = mobile
+            , toUndo = NOOP
+            , toEngine = Nothing
+            , outMsg = Nothing
+            , cmd = Cmd.none
+            }
+
+        group =
+            Harmo.getHarmonicGroup (Coll.idMap id) mobile.gears
+
+        chSound =
+            Wheel.update <| Wheel.ChangeContent c
+
+        gears =
+            List.foldl (\el -> Coll.update el chSound) mobile.gears group
+
+        newModel =
+            { model | mode = CommonMode Normal }
+    in
+    case mayColor of
+        Just color ->
+            let
+                chColor =
+                    Wheel.update <| Wheel.ChangeColor color
+            in
+            { return
+                | mobile = { mobile | gears = List.foldl (\el -> Coll.update el chColor) gears group }
+                , toUndo = Do
+                , model = newModel
+            }
+
+        Nothing ->
+            let
+                colorToMsgs color =
+                    List.map (\el -> ( el, Wheel.ChangeColor color )) group
+            in
+            { return
+                | mobile = { mobile | gears = gears }
+                , toUndo = Group
+                , model = newModel
+                , cmd = Random.generate (WheelMsgs << colorToMsgs) colorGen
+            }
+
+
 computeCuts : ( Vec2, Vec2 ) -> Coll Geer -> List (Link Geer)
 computeCuts cut gears =
     Motor.getAllLinks gears
@@ -1162,18 +1218,7 @@ manageInteractEvent event model mobile =
         CommonMode (ChangeSound (G id)) ->
             case ( event.item, event.action ) of
                 ( ISound s, Interact.Clicked _ ) ->
-                    let
-                        group =
-                            Harmo.getHarmonicGroup (Coll.idMap id) mobile.gears
-
-                        chSound =
-                            Wheel.update <| Wheel.ChangeContent <| Content.S s
-                    in
-                    { return
-                        | mobile = { mobile | gears = List.foldl (\el -> Coll.update el chSound) mobile.gears group }
-                        , toUndo = Do
-                        , model = { model | mode = CommonMode Normal }
-                    }
+                    doChangeContent id (Content.S s) Nothing model mobile
 
                 _ ->
                     return
@@ -1438,3 +1483,8 @@ interactMove event model mobile =
 
         _ ->
             Nothing
+
+
+colorGen : Random.Generator Color.Color
+colorGen =
+    Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
