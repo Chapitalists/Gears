@@ -112,7 +112,7 @@ init mayMobile mayShared =
     , svg =
         let
             base =
-                Maybe.withDefault PanSvg.init <| Maybe.map Tuple.second mayShared
+                Maybe.withDefault (PanSvg.init svgId) <| Maybe.map Tuple.second mayShared
         in
         Maybe.withDefault base <|
             Maybe.map (\m -> PanSvg.centerZoom (Mobile.gearPosSize m.motor m.gears) base) mayMobile
@@ -144,6 +144,7 @@ type Msg
     | Collared (Id Geer)
     | InteractMsg (Interact.Msg Interactable Zone)
     | SvgMsg PanSvg.Msg
+    | SVGSize (Result D.Error PanSvg.Size)
     | WheelMsgs (List ( Id Geer, Wheel.Msg ))
     | GearMsg ( Id Geer, Gear.Msg )
     | OutMsg DocMsg
@@ -585,6 +586,19 @@ update msg ( model, mobile ) =
         SvgMsg subMsg ->
             { return | model = { model | svg = PanSvg.update subMsg model.svg } }
 
+        SVGSize res ->
+            case res of
+                Result.Err e ->
+                    Debug.log (D.errorToString e) return
+
+                Result.Ok s ->
+                    { return
+                        | model =
+                            { model
+                                | svg = PanSvg.update (PanSvg.ScaleSize 1 s) model.svg
+                            }
+                    }
+
         -- TODO use some pattern like outMessage package? or elm-state? elm-return?
         InteractMsg subMsg ->
             let
@@ -620,7 +634,7 @@ update msg ( model, mobile ) =
 
 subs : Model -> List (Sub Msg)
 subs { interact } =
-    (Sub.map SvgMsg <| PanSvg.sub)
+    PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
         :: (gotRecord <| (GotRecord << D.decodeValue D.string))
         :: (List.map (Sub.map InteractMsg) <| Interact.subs interact)
 

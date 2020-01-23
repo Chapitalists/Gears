@@ -11,6 +11,7 @@ import Element.Input as Input
 import Engine
 import Html.Attributes
 import Interact
+import Json.Decode as D
 import Json.Encode as E
 import Math.Vector2 as Vec exposing (vec2)
 import PanSvg
@@ -75,6 +76,7 @@ type Msg
     | ResizeToContent Int
     | WheelMsg ( Int, Wheel.Msg )
     | SvgMsg PanSvg.Msg
+    | SVGSize (Result D.Error PanSvg.Size)
     | OutMsg DocMsg
     | InteractMsg (Interact.Msg Interactable Zone)
 
@@ -179,6 +181,19 @@ update msg ( model, collar ) =
         SvgMsg subMsg ->
             { return | model = { model | svg = PanSvg.update subMsg model.svg } }
 
+        SVGSize res ->
+            case res of
+                Result.Err e ->
+                    Debug.log (D.errorToString e) return
+
+                Result.Ok s ->
+                    { return
+                        | model =
+                            { model
+                                | svg = PanSvg.update (PanSvg.ScaleSize 1 s) model.svg
+                            }
+                    }
+
         OutMsg subMsg ->
             { return | outMsg = Just subMsg }
 
@@ -200,7 +215,7 @@ update msg ( model, collar ) =
 
 subs : Model -> List (Sub Msg)
 subs { interact } =
-    (Sub.map SvgMsg <| PanSvg.sub)
+    PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
         :: (List.map (Sub.map InteractMsg) <| Interact.subs interact)
 
 

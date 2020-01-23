@@ -15,6 +15,7 @@ port newSVGSize : (D.Value -> msg) -> Sub msg
 type alias Model =
     { svgSize : Size
     , viewPos : ViewPos
+    , id : String
     }
 
 
@@ -63,15 +64,16 @@ centerZoom ( pos, size ) model =
     { model | viewPos = ViewPos pos <| size * 8 }
 
 
-init : Model
-init =
+init : String -> Model
+init id =
     { svgSize = Size 0 0
     , viewPos = ViewPos (vec2 0 0) 10
+    , id = id
     }
 
 
 type Msg
-    = SVGSize (Result D.Error Size)
+    = ScaleSize Float Size
     | Zoom Float ( Float, Float )
     | Pan Direction
 
@@ -86,13 +88,8 @@ type Direction
 update : Msg -> Model -> Model
 update msg model =
     case msg of
-        SVGSize res ->
-            case res of
-                Result.Err e ->
-                    Debug.log (D.errorToString e) model
-
-                Result.Ok s ->
-                    { model | svgSize = s }
+        ScaleSize scale size ->
+            { model | svgSize = { width = size.width * scale, height = size.height * scale } }
 
         Zoom f ( x, y ) ->
             let
@@ -145,16 +142,11 @@ update msg model =
             }
 
 
-sub : Sub Msg
-sub =
-    newSVGSize (SVGSize << D.decodeValue sizeDecoder)
-
-
 svgAttributes : Model -> List (Svg.Attribute Msg)
 svgAttributes model =
     [ computeViewBox model
     , Wheel.onWheel (\e -> Zoom e.deltaY e.mouseEvent.offsetPos)
-    , Html.Attributes.id "svg"
+    , Html.Attributes.id model.id
     , Svg.attribute "width" "100%"
     , Svg.attribute "height" "100%"
     , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet

@@ -15,6 +15,11 @@ import Interact
 import Sound exposing (Sound)
 
 
+svgId : String
+svgId =
+    "svg"
+
+
 type alias CommonModel =
     { edit : List Identifier
     , pack : Maybe ( Wheel, Float )
