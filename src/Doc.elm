@@ -74,7 +74,7 @@ type Msg
     | DirectionRepeat PanSvg.Direction
     | MobileMsg MEditor.Msg
     | CollarMsg CEditor.Msg
-    | InteractMsg (Interact.Msg Editors.Interactable)
+    | InteractMsg (Interact.Msg Editors.Interactable Editors.Zone)
 
 
 update : Msg -> Doc -> ( Doc, Cmd Msg )

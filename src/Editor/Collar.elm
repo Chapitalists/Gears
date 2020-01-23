@@ -76,7 +76,7 @@ type Msg
     | WheelMsg ( Int, Wheel.Msg )
     | SvgMsg PanSvg.Msg
     | OutMsg DocMsg
-    | InteractMsg (Interact.Msg Interactable)
+    | InteractMsg (Interact.Msg Interactable Zone)
 
 
 type alias Return =
@@ -232,7 +232,7 @@ viewContent ( model, collar ) =
     Element.html <|
         S.svg
             (List.map (Html.Attributes.map SvgMsg) (PanSvg.svgAttributes model.svg)
-                ++ (List.map (Html.Attributes.map InteractMsg) <| Interact.dragSpaceEvents model.interact)
+                ++ (List.map (Html.Attributes.map InteractMsg) <| Interact.dragSpaceEvents model.interact ZSurface)
             )
         <|
             List.map (Svg.map <| InteractMsg << Interact.map fromWheelInteractable)
@@ -321,7 +321,7 @@ viewDetails model c =
                     []
 
 
-manageInteractEvent : Interact.Event Interactable -> Model -> Colleer -> Return
+manageInteractEvent : Interact.Event Interactable Zone -> Model -> Colleer -> Return
 manageInteractEvent event model collar =
     let
         return =

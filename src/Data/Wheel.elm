@@ -124,7 +124,7 @@ update msg g =
             { g | wheel = { wheel | color = c } }
 
 
-view : Wheel -> Vec2 -> Float -> Style -> id -> String -> Svg (Interact.Msg (Interactable id))
+view : Wheel -> Vec2 -> Float -> Style -> id -> String -> Svg (Interact.Msg (Interactable id) zone)
 view w pos length style id uid =
     let
         tickH =

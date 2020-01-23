@@ -142,7 +142,7 @@ type Msg
     | ResizeToContent (Id Geer)
     | Capsuled (List (Id Geer))
     | Collared (Id Geer)
-    | InteractMsg (Interact.Msg Interactable)
+    | InteractMsg (Interact.Msg Interactable Zone)
     | SvgMsg PanSvg.Msg
     | WheelMsgs (List ( Id Geer, Wheel.Msg ))
     | GearMsg ( Id Geer, Gear.Msg )
@@ -602,13 +602,14 @@ update msg ( model, mobile ) =
                     let
                         inEvent =
                             case e.action of
-                                Interact.Dragged pos1 pos2 k ->
+                                Interact.Dragged pos1 pos2 k zone ->
                                     { e
                                         | action =
                                             Interact.Dragged
                                                 (PanSvg.mapIn pos1 newModel.svg)
                                                 (PanSvg.mapIn pos2 newModel.svg)
                                                 k
+                                                zone
                                     }
 
                                 _ ->
@@ -721,7 +722,7 @@ viewContent ( model, mobile ) =
         S.svg
             (List.map (Html.Attributes.map SvgMsg) (PanSvg.svgAttributes model.svg)
                 ++ (List.map (Html.Attributes.map InteractMsg) <|
-                        Interact.dragSpaceEvents model.interact
+                        Interact.dragSpaceEvents model.interact ZSurface
                             ++ Interact.draggableEvents ISurface
                    )
             )
@@ -1174,7 +1175,7 @@ computeCuts cut gears =
         |> List.filter (Link.cuts cut << Link.toSegment << Gear.toDrawLink gears)
 
 
-manageInteractEvent : Interact.Event Interactable -> Model -> Mobeel -> Return
+manageInteractEvent : Interact.Event Interactable Zone -> Model -> Mobeel -> Return
 manageInteractEvent event model mobile =
     let
         return =
@@ -1224,7 +1225,7 @@ manageInteractEvent event model mobile =
                 ( ISound s, Interact.Clicked _, _ ) ->
                     update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
 
-                ( ISound s, Interact.Dragged _ p _, _ ) ->
+                ( ISound s, Interact.Dragged _ p _ ZSurface, _ ) ->
                     { return
                         | model = { model | dragging = Content ( p, Sound.length s ) }
                     }
@@ -1255,7 +1256,7 @@ manageInteractEvent event model mobile =
             return
 
 
-interactPlay : Bool -> Interact.Event Interactable -> Model -> Mobeel -> Return
+interactPlay : Bool -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
 interactPlay on event model mobile =
     let
         return =
@@ -1293,10 +1294,10 @@ interactPlay on event model mobile =
             }
 
         -- CUT
-        ( ISurface, Interact.Dragged p1 p2 _, NoDrag ) ->
+        ( ISurface, Interact.Dragged p1 p2 _ ZSurface, NoDrag ) ->
             { return | model = { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears } }
 
-        ( ISurface, Interact.Dragged _ p2 _, Cut ( p1, _ ) _ ) ->
+        ( ISurface, Interact.Dragged _ p2 _ ZSurface, Cut ( p1, _ ) _ ) ->
             { return | model = { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears } }
 
         ( ISurface, Interact.DragEnded True, Cut _ cuts ) ->
@@ -1315,7 +1316,7 @@ interactPlay on event model mobile =
             }
 
         -- VOLUME
-        ( IWheel (G id), Interact.Dragged oldPos newPos ( True, _, _ ), NoDrag ) ->
+        ( IWheel (G id), Interact.Dragged oldPos newPos ( True, _, _ ) ZSurface, NoDrag ) ->
             let
                 res =
                     doVolumeChange id oldPos newPos scale mobile model.engine
@@ -1327,7 +1328,7 @@ interactPlay on event model mobile =
                 , toEngine = res.toEngine
             }
 
-        ( IWheel (G id), Interact.Dragged oldPos newPos _, VolumeChange ) ->
+        ( IWheel (G id), Interact.Dragged oldPos newPos _ ZSurface, VolumeChange ) ->
             let
                 res =
                     doVolumeChange id oldPos newPos scale mobile model.engine
@@ -1338,11 +1339,11 @@ interactPlay on event model mobile =
             { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
         -- LINK -> MOTOR
-        ( IWheel _, Interact.Dragged _ _ _, CompleteLink _ ) ->
+        ( IWheel _, Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
             -- If ConpleteLink, don’t move
             return
 
-        ( IWheel (G id), Interact.Dragged _ pos _, _ ) ->
+        ( IWheel (G id), Interact.Dragged _ pos _ ZSurface, _ ) ->
             { return | model = { model | dragging = HalfLink ( id, pos ) } }
 
         ( IWheel (G to), Interact.DragIn, HalfLink ( from, _ ) ) ->
@@ -1378,7 +1379,7 @@ interactPlay on event model mobile =
             return
 
 
-interactHarmonize : Interact.Event Interactable -> Model -> Mobeel -> Return
+interactHarmonize : Interact.Event Interactable Zone -> Model -> Mobeel -> Return
 interactHarmonize event model mobile =
     let
         return =
@@ -1396,25 +1397,25 @@ interactHarmonize event model mobile =
             { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
         -- RESIZE
-        ( IResizeHandle (G id) add, Interact.Dragged oldPos newPos _, NoDrag ) ->
+        ( IResizeHandle (G id) add, Interact.Dragged oldPos newPos _ ZSurface, NoDrag ) ->
             { return
                 | model = { model | dragging = SizeChange }
                 , mobile = doResize id oldPos newPos add mobile
                 , toUndo = Group
             }
 
-        ( IResizeHandle (G id) add, Interact.Dragged oldPos newPos _, SizeChange ) ->
+        ( IResizeHandle (G id) add, Interact.Dragged oldPos newPos _ ZSurface, SizeChange ) ->
             { return | mobile = doResize id oldPos newPos add mobile, toUndo = Group }
 
         ( _, Interact.DragEnded _, SizeChange ) ->
             { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
         -- LINK -> HARMO
-        ( IWheel _, Interact.Dragged _ _ _, CompleteLink _ ) ->
+        ( IWheel _, Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
             -- If Complete Link, don’t move
             return
 
-        ( IWheel (G id), Interact.Dragged _ pos _, _ ) ->
+        ( IWheel (G id), Interact.Dragged _ pos _ ZSurface, _ ) ->
             { return | model = { model | dragging = HalfLink ( id, pos ) } }
 
         ( IWheel (G to), Interact.DragIn, HalfLink ( from, _ ) ) ->
@@ -1455,10 +1456,10 @@ interactHarmonize event model mobile =
             return
 
 
-interactMove : Interact.Event Interactable -> Model -> Mobeel -> Maybe { model : Model, mobile : Mobeel, toUndo : ToUndo }
+interactMove : Interact.Event Interactable Zone -> Model -> Mobeel -> Maybe { model : Model, mobile : Mobeel, toUndo : ToUndo }
 interactMove event model mobile =
     case ( event.item, event.action, model.dragging ) of
-        ( IWheel (G id), Interact.Dragged _ pos _, _ ) ->
+        ( IWheel (G id), Interact.Dragged _ pos _ ZSurface, _ ) ->
             let
                 gearUp =
                     Gear.update <| Gear.NewPos pos

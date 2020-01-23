@@ -79,6 +79,11 @@ type Interactable
     | ISound Sound
 
 
+type Zone
+    = ZSurface
+    | ZPack
+
+
 fromWheelInteractable : Wheel.Interactable Identifier -> Interactable
 fromWheelInteractable i =
     case i of
@@ -260,7 +265,7 @@ viewPack model packMsg unpackMsg =
            )
 
 
-interactNav : Interact.Event Interactable -> Content Wheel -> Maybe DocMsg
+interactNav : Interact.Event Interactable Zone -> Content Wheel -> Maybe DocMsg
 interactNav event content =
     case ( event.item, event.action ) of
         ( IWheel id, Interact.Clicked _ ) ->
@@ -278,7 +283,7 @@ interactNav event content =
             Nothing
 
 
-interactSelectEdit : Interact.Event Interactable -> CommonModel -> CommonModel
+interactSelectEdit : Interact.Event Interactable Zone -> CommonModel -> CommonModel
 interactSelectEdit event model =
     case ( event.item, event.action ) of
         ( IWheel id, Interact.Clicked ( _, False, False ) ) ->
