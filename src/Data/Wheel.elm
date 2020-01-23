@@ -80,7 +80,12 @@ type Mod
 
 
 type alias Style =
-    { mod : Mod, motor : Bool, dashed : Bool }
+    { mod : Mod, motor : Bool, dashed : Bool, baseColor : Maybe Color }
+
+
+defaultStyle : Style
+defaultStyle =
+    { mod = None, motor = False, dashed = False, baseColor = Nothing }
 
 
 type Interactable x
@@ -182,6 +187,22 @@ view w pos length style id uid =
                 ]
                 []
              ]
+                ++ (case style.baseColor of
+                        Just c ->
+                            [ S.circle
+                                [ SA.cx <| Num 0
+                                , SA.cy <| Num 0
+                                , SA.r <| Num (length / 2 - tickW * 2.5)
+                                , SA.strokeWidth <| Num (tickW * 4)
+                                , SA.stroke c
+                                , SA.fill FillNone
+                                ]
+                                []
+                            ]
+
+                        Nothing ->
+                            []
+                   )
                 ++ (let
                         symSize =
                             length / 4

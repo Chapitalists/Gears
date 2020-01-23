@@ -725,7 +725,13 @@ viewContent ( model, mobile ) =
                         Wheel.view g.wheel
                             g.pos
                             (Harmo.getLength g.harmony mobile.gears)
-                            { mod = getMod id, motor = id == mobile.motor, dashed = Harmo.hasHarmonics g.harmony }
+                            { mod = getMod id
+                            , motor = id == mobile.motor
+                            , dashed = Harmo.hasHarmonics g.harmony
+                            , baseColor =
+                                Maybe.map (\bId -> (Coll.get bId mobile.gears).wheel.color) <|
+                                    Harmo.getBaseId g.harmony
+                            }
                             (G id)
                             (Gear.toUID id)
                             |> Svg.map (Interact.map fromWheelInteractable)

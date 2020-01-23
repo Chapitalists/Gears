@@ -4,7 +4,7 @@ import Color
 import Data.Collar as Collar exposing (Colleer)
 import Data.Common as CommonData
 import Data.Content as Content exposing (Content)
-import Data.Wheel as Wheel exposing (Wheel)
+import Data.Wheel as Wheel exposing (Wheel, defaultStyle)
 import Editor.Common exposing (..)
 import Element exposing (..)
 import Element.Input as Input
@@ -241,7 +241,7 @@ viewContent ( model, collar ) =
                         ( Wheel.view b.wheel
                             (vec2 (p + b.length / 2) <| Vec.getY leftmostPoint)
                             b.length
-                            { mod = getMod i, motor = False, dashed = False }
+                            { defaultStyle | mod = getMod i }
                             (B i)
                             (Collar.toUID i)
                             :: l
