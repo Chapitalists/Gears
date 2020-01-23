@@ -110,15 +110,15 @@ decoder wDecoder =
 
 
 type Msg
-    = Move Vec2
+    = NewPos Vec2
     | ResizeFract Fraction
 
 
 update : Msg -> Gear w -> Gear w
 update msg g =
     case msg of
-        Move d ->
-            { g | pos = Vec.add d g.pos }
+        NewPos p ->
+            { g | pos = p }
 
         ResizeFract f ->
             Harmo.setFract (Fract.multiplication (Harmo.getFract g) f) g

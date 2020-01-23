@@ -1458,10 +1458,10 @@ interactHarmonize event model mobile =
 interactMove : Interact.Event Interactable -> Model -> Mobeel -> Maybe { model : Model, mobile : Mobeel, toUndo : ToUndo }
 interactMove event model mobile =
     case ( event.item, event.action, model.dragging ) of
-        ( IWheel (G id), Interact.Dragged oldPos newPos _, _ ) ->
+        ( IWheel (G id), Interact.Dragged _ pos _, _ ) ->
             let
                 gearUp =
-                    Gear.update <| Gear.Move <| Vec.sub newPos oldPos
+                    Gear.update <| Gear.NewPos pos
             in
             Just
                 { model = { model | dragging = Moving }
