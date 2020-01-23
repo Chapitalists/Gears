@@ -52,8 +52,8 @@ function prepare(model, rate = 1) {
 function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What if no new model (first play)
     if (!model.paused) return;
     model.paused = false
-    model.volume = newModel.volume || 1 // TODO cf first TODO
-    model.mute = newModel.mute || false // TODO cf first TODO
+    model.volume = newModel.volume || model.volume // TODO cf first TODO
+    model.mute = newModel.mute || model.mute // TODO cf first TODO
     model.startTime = t - model.pauseOffset / model.rate
     if (model.view) {
         Tone.Draw.schedule(() => model.view.animate().play(), t)
@@ -121,7 +121,7 @@ function stop(model) {
 
 function setVolume(model, volume = 1, mute = false) {
     if (model.soundName) {
-        if (mute || model.mute) model.player.mute = true
+        if (mute || model.mute) model.player.volume.value = -100000
         else model.player.volume.value = ((model.volume * volume) - 1) * 60
     }
     if (model.mobile) model.gears.map(v => setVolume(v, model.volume * volume, model.mute || mute))
