@@ -246,6 +246,7 @@ view w pos length style id uid =
                    )
             )
          ]
+            -- Not Draggable
             ++ (case style.mod of
                     Selected first ->
                         [ S.circle

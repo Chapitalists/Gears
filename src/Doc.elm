@@ -326,10 +326,10 @@ update msg doc =
         InteractMsg subMsg ->
             case doc.editor of
                 M e ->
-                    update (MobileMsg <| MEditor.InteractMsg <| subMsg) doc
+                    update (MobileMsg <| MEditor.InteractMsg subMsg) doc
 
                 C e ->
-                    update (CollarMsg <| CEditor.InteractMsg <| subMsg) doc
+                    update (CollarMsg <| CEditor.InteractMsg subMsg) doc
 
 
 subs : Doc -> List (Sub Msg)
