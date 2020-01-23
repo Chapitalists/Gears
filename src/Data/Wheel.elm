@@ -177,16 +177,8 @@ view w pos length style id uid =
                 [ SA.width <| Num tickW
                 , SA.height <| Num tickH
                 , SA.x <| Num (tickW / -2)
-                , SA.y <| Num ((length / -2) - tickH)
-                ]
-                []
-             , S.rect
-                [ SA.width <| Num tickW
-                , SA.height <| Num tickH
-                , SA.x <| Num (tickW / -2)
                 , SA.y <| Num (tickH / -2)
-                , SA.fill <| Fill Color.orange
-                , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) + (tickH / 2)) ]
+                , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) - (tickH / 2)) ]
                 ]
                 []
              ]
