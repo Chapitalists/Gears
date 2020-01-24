@@ -57,6 +57,7 @@ type Shortcut
     | Left
     | Right
     | Suppr
+    | Pack
 
 
 type Msg
@@ -167,62 +168,67 @@ update msg doc =
                     update (CollarMsg <| CEditor.NewBead content) doc
 
         KeyPressed sh ->
-            case ( sh, doc.editor ) of
-                ( Tool i, M _ ) ->
-                    case i of
-                        1 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False False) doc
-
-                        2 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Harmonize) doc
-
-                        3 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Edit) doc
-
-                        _ ->
-                            ( doc, Cmd.none )
-
-                ( Tool i, C _ ) ->
-                    case i of
-                        1 ->
-                            update (CollarMsg <| CEditor.ChangedTool <| CEditor.Play False) doc
-
-                        3 ->
-                            update (CollarMsg <| CEditor.ChangedTool <| CEditor.Edit) doc
-
-                        _ ->
-                            ( doc, Cmd.none )
-
-                ( Play, M _ ) ->
-                    update (MobileMsg <| MEditor.ToggleEngine) doc
-
-                ( Play, C _ ) ->
-                    update (CollarMsg <| CEditor.ToggleEngine) doc
-
-                ( Left, C _ ) ->
-                    update (CollarMsg <| CEditor.CursorLeft) doc
-
-                ( Right, C _ ) ->
-                    update (CollarMsg <| CEditor.CursorRight) doc
-
-                ( Suppr, C e ) ->
-                    case e.common.edit of
-                        [ B i ] ->
-                            update (CollarMsg <| CEditor.DeleteBead i) doc
-
-                        _ ->
-                            ( doc, Cmd.none )
-
-                ( Suppr, M e ) ->
-                    case e.common.edit of
-                        [ G id ] ->
-                            update (MobileMsg <| MEditor.DeleteGear id) doc
-
-                        _ ->
-                            ( doc, Cmd.none )
+            case sh of
+                Pack ->
+                    update (EditorsMsg <| Editors.TogglePack) doc
 
                 _ ->
-                    ( doc, Cmd.none )
+                    case ( sh, doc.editor ) of
+                        ( Tool i, M _ ) ->
+                            case i of
+                                1 ->
+                                    update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False False) doc
+
+                                2 ->
+                                    update (MobileMsg <| MEditor.ChangedTool <| MEditor.Harmonize) doc
+
+                                3 ->
+                                    update (MobileMsg <| MEditor.ChangedTool <| MEditor.Edit) doc
+
+                                _ ->
+                                    ( doc, Cmd.none )
+
+                        ( Tool i, C _ ) ->
+                            case i of
+                                1 ->
+                                    update (CollarMsg <| CEditor.ChangedTool <| CEditor.Play False) doc
+
+                                3 ->
+                                    update (CollarMsg <| CEditor.ChangedTool <| CEditor.Edit) doc
+
+                                _ ->
+                                    ( doc, Cmd.none )
+
+                        ( Play, M _ ) ->
+                            update (MobileMsg <| MEditor.ToggleEngine) doc
+
+                        ( Play, C _ ) ->
+                            update (CollarMsg <| CEditor.ToggleEngine) doc
+
+                        ( Left, C _ ) ->
+                            update (CollarMsg <| CEditor.CursorLeft) doc
+
+                        ( Right, C _ ) ->
+                            update (CollarMsg <| CEditor.CursorRight) doc
+
+                        ( Suppr, C e ) ->
+                            case e.common.edit of
+                                [ B i ] ->
+                                    update (CollarMsg <| CEditor.DeleteBead i) doc
+
+                                _ ->
+                                    ( doc, Cmd.none )
+
+                        ( Suppr, M e ) ->
+                            case e.common.edit of
+                                [ G id ] ->
+                                    update (MobileMsg <| MEditor.DeleteGear id) doc
+
+                                _ ->
+                                    ( doc, Cmd.none )
+
+                        _ ->
+                            ( doc, Cmd.none )
 
         DirectionRepeat dir ->
             case doc.editor of

@@ -188,7 +188,7 @@ keyCodeToMode =
 
 type CommonMsg
     = Delete Identifier
-    | ShowPack Bool
+    | TogglePack
     | Pack
     | Unpack (Id Packed)
     | EmptyPack
@@ -205,8 +205,8 @@ commonUpdate msg model =
         Delete id ->
             { model | edit = List.filter ((/=) id) model.edit }
 
-        ShowPack b ->
-            { model | packVisible = b }
+        TogglePack ->
+            { model | packVisible = not model.packVisible }
 
         Pack ->
             let
@@ -360,7 +360,7 @@ viewPackButtons model =
 
                 else
                     "Ouvrir le sac"
-        , onPress = Just <| ShowPack <| not model.packVisible
+        , onPress = Just TogglePack
         }
     , Input.button []
         { label = text "Vider son sac"

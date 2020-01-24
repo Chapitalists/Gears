@@ -415,6 +415,7 @@ keyCodeToShortcut =
         , ( "ArrowRight", Doc.Right )
         , ( "Backspace", Doc.Suppr )
         , ( "Delete", Doc.Suppr )
+        , ( "KeyT", Doc.Pack )
         ]
 
 
