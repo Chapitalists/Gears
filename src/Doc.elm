@@ -614,5 +614,8 @@ updateData to newMobile { data } =
         Editors.Group ->
             Data.group newMobile data
 
+        Editors.Cancel ->
+            Data.cancelGroup data
+
         Editors.NOOP ->
             data

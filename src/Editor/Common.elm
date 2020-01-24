@@ -109,6 +109,7 @@ commonInit may =
 type ToUndo
     = Do
     | Group
+    | Cancel
     | NOOP
 
 
