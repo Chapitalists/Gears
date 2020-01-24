@@ -331,7 +331,7 @@ viewDetails model c =
                         , viewChangeContent <| ChangedMode <| CommonMode <| ChangeSound <| B i
                         , viewDeleteButton <| DeleteBead i
                         ]
-                            ++ (List.map (Element.map CommonMsg) <| viewPackButtons model.common)
+                            ++ viewPackButtons model.common (Content.C c) (\w -> UnpackBead ( w, 0 ) False) CommonMsg
                     ]
 
                 _ ->

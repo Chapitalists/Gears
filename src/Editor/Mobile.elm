@@ -134,6 +134,7 @@ type Msg
     | GotRecord (Result D.Error String)
       --
     | CopyGear (Id Geer)
+    | CopyContent Wheel
     | NewGear Vec2 (Content Wheel)
     | DeleteGear (Id Geer)
     | EnteredFract Bool String -- True for Numerator
@@ -253,6 +254,14 @@ update msg ( model, mobile ) =
 
         CopyGear id ->
             { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
+
+        CopyContent w ->
+            case model.common.edit of
+                [ G id ] ->
+                    doChangeContent id (Wheel.getContent { wheel = w }) (Just w.color) model mobile
+
+                _ ->
+                    return
 
         NewGear p content ->
             let
@@ -940,7 +949,7 @@ viewEditDetails model mobile =
                       else
                         viewDeleteButton <| DeleteGear id
                     ]
-                        ++ (List.map (Element.map CommonMsg) <| viewPackButtons model.common)
+                        ++ viewPackButtons model.common (Content.M mobile) CopyContent CommonMsg
                         ++ [ text <|
                                 "Durée : "
                                     ++ Harmo.view id

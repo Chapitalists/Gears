@@ -35,6 +35,7 @@ packId =
 
 type alias CommonModel =
     { edit : List Identifier
+    , packontent : Maybe Wheel
     , pack : Coll Packed
     , packVisible : Bool
     , packSvg : PanSvg.Model
@@ -149,6 +150,7 @@ commonInit : Maybe CommonModel -> CommonModel
 commonInit may =
     Maybe.withDefault
         { edit = []
+        , packontent = Nothing
         , pack = Coll.empty typeString defaultPacked
         , packVisible = False
         , packSvg = PanSvg.init packId
@@ -189,6 +191,7 @@ keyCodeToMode =
 type CommonMsg
     = Delete Identifier
     | TogglePack
+    | Packontent Wheel
     | Pack
     | Unpack (Id Packed)
     | EmptyPack
@@ -207,6 +210,9 @@ commonUpdate msg model =
 
         TogglePack ->
             { model | packVisible = not model.packVisible }
+
+        Packontent w ->
+            { model | packontent = Just w }
 
         Pack ->
             let
@@ -350,8 +356,8 @@ viewDeleteButton msg =
         }
 
 
-viewPackButtons : CommonModel -> List (Element CommonMsg)
-viewPackButtons model =
+viewPackButtons : CommonModel -> Content Wheel -> (Wheel -> msg) -> (CommonMsg -> msg) -> List (Element msg)
+viewPackButtons model parent chgContent wrap =
     [ Input.button []
         { label =
             text <|
@@ -360,13 +366,36 @@ viewPackButtons model =
 
                 else
                     "Ouvrir le sac"
-        , onPress = Just TogglePack
+        , onPress = Just <| wrap TogglePack
         }
     , Input.button []
         { label = text "Vider son sac"
-        , onPress = Just <| EmptyPack
+        , onPress = Just <| wrap EmptyPack
+        }
+    , Input.button []
+        { label = text "Copier Contenu"
+        , onPress =
+            Maybe.map (wrap << Packontent) <|
+                Maybe.andThen (\id -> getWheelFromContent id parent) <|
+                    case model.edit of
+                        [ one ] ->
+                            Just one
+
+                        _ ->
+                            Nothing
         }
     ]
+        ++ (case model.packontent of
+                Just w ->
+                    [ Input.button []
+                        { label = text <| "Coller Contenu"
+                        , onPress = Just <| chgContent w
+                        }
+                    ]
+
+                Nothing ->
+                    []
+           )
 
 
 viewPack :
