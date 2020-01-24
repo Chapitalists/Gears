@@ -74,7 +74,8 @@ init id =
 
 type Msg
     = ScaleSize Float Size
-    | Zoom Float ( Float, Float )
+    | SetSmallestSize Float
+    | ZoomPoint Float ( Float, Float )
     | Pan Direction
 
 
@@ -91,7 +92,10 @@ update msg model =
         ScaleSize scale size ->
             { model | svgSize = { width = size.width * scale, height = size.height * scale } }
 
-        Zoom f ( x, y ) ->
+        SetSmallestSize f ->
+            { model | viewPos = ViewPos model.viewPos.c f }
+
+        ZoomPoint f ( x, y ) ->
             let
                 vp =
                     model.viewPos
@@ -145,7 +149,7 @@ update msg model =
 svgAttributes : Model -> List (Svg.Attribute Msg)
 svgAttributes model =
     [ computeViewBox model
-    , Wheel.onWheel (\e -> Zoom e.deltaY e.mouseEvent.offsetPos)
+    , Wheel.onWheel (\e -> ZoomPoint e.deltaY e.mouseEvent.offsetPos)
     , Html.Attributes.id model.id
     , Svg.attribute "width" "100%"
     , Svg.attribute "height" "100%"

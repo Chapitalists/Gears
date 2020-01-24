@@ -1,5 +1,6 @@
 module Editor.Collar exposing (..)
 
+import Coll
 import Color
 import Data.Collar as Collar exposing (Colleer)
 import Data.Common as CommonData
@@ -71,10 +72,10 @@ type Msg
     | ToggleEngine
     | NewBead (Content Wheel)
     | DeleteBead Int
-    | PackBead
     | UnpackBead ( Wheel, Float ) Bool
     | ResizeToContent Int
     | WheelMsg ( Int, Wheel.Msg )
+    | CommonMsg CommonMsg
     | SvgMsg PanSvg.Msg
     | SVGSize (Result D.Error PanSvg.Size)
     | OutMsg DocMsg
@@ -147,9 +148,6 @@ update msg ( model, collar ) =
                     }
             }
 
-        PackBead ->
-            { return | model = { model | common = commonUpdate (Pack <| Content.C collar) model.common } }
-
         UnpackBead ( w, l ) new ->
             if new then
                 { return
@@ -178,6 +176,9 @@ update msg ( model, collar ) =
         WheelMsg ( i, subMsg ) ->
             { return | collar = Collar.updateBead i (Wheel.update subMsg) collar, toUndo = Do }
 
+        CommonMsg subMsg ->
+            { return | model = { model | common = commonUpdate subMsg model.common } }
+
         SvgMsg subMsg ->
             { return | model = { model | svg = PanSvg.update subMsg model.svg } }
 
@@ -191,6 +192,7 @@ update msg ( model, collar ) =
                         | model =
                             { model
                                 | svg = PanSvg.update (PanSvg.ScaleSize 1 s) model.svg
+                                , common = commonUpdate (PackSvgMsg <| PanSvg.ScaleSize model.common.packScale s) model.common
                             }
                     }
 
@@ -329,7 +331,7 @@ viewDetails model c =
                         , viewChangeContent <| ChangedMode <| CommonMode <| ChangeSound <| B i
                         , viewDeleteButton <| DeleteBead i
                         ]
-                            ++ viewPack model.common PackBead UnpackBead
+                            ++ (List.map (Element.map CommonMsg) <| viewPackButtons model.common)
                     ]
 
                 _ ->
@@ -365,6 +367,13 @@ manageInteractEvent event model collar =
             case ( event.item, event.action ) of
                 ( ISound s, Interact.Clicked _ ) ->
                     update (NewBead <| Content.S s) ( model, collar )
+
+                ( IWheel (P id), Interact.Clicked _ ) ->
+                    let
+                        p =
+                            Coll.get id model.common.pack
+                    in
+                    update (UnpackBead ( p.wheel, p.length ) True) ( model, collar )
 
                 _ ->
                     case model.tool of

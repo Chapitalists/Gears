@@ -74,6 +74,7 @@ type Msg
     | DirectionRepeat PanSvg.Direction
     | MobileMsg MEditor.Msg
     | CollarMsg CEditor.Msg
+    | EditorsMsg Editors.CommonMsg
     | InteractMsg (Interact.Msg Editors.Interactable Editors.Zone)
 
 
@@ -323,6 +324,15 @@ update msg doc =
                 _ ->
                     Debug.log "IMPOSSIBLE CollarMsg while viewing no collar" ( doc, Cmd.none )
 
+        EditorsMsg subMsg ->
+            case doc.editor of
+                M e ->
+                    update (MobileMsg <| MEditor.CommonMsg subMsg) doc
+
+                C e ->
+                    -- because no drag in collar
+                    ( doc, Cmd.none )
+
         InteractMsg subMsg ->
             case doc.editor of
                 M e ->
@@ -357,6 +367,15 @@ keyCodeToMode =
 
 view : Doc -> Element Msg
 view doc =
+    let
+        ( common, interact ) =
+            case doc.editor of
+                M e ->
+                    ( e.common, e.interact )
+
+                C e ->
+                    ( e.common, e.interact )
+    in
     row [ height fill, width fill ] <|
         (column [ width fill, height fill ]
             ([ viewTop doc
@@ -364,6 +383,13 @@ view doc =
                 [ width fill
                 , height fill
                 , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
+                , Element.inFront <|
+                    Editors.viewPack common
+                        (List.map (Html.Attributes.map InteractMsg) <|
+                            Interact.dragSpaceEvents interact Editors.ZPack
+                        )
+                        EditorsMsg
+                        InteractMsg
                 ]
                <|
                 viewContent doc

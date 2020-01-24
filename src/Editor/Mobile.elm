@@ -96,26 +96,30 @@ type Dragging
     | VolumeChange
     | SizeChange
     | Moving
+    | Packing
+    | Packed Vec2 (Id Packed)
     | Content ( Vec2, Float )
     | ChgContent (Id Geer) Dragging
 
 
 init : Maybe Mobeel -> Maybe ( CommonModel, PanSvg.Model ) -> Model
 init mayMobile mayShared =
+    let
+        base =
+            Maybe.withDefault (PanSvg.init svgId) <| Maybe.map Tuple.second mayShared
+
+        svg =
+            Maybe.withDefault base <|
+                Maybe.map (\m -> PanSvg.centerZoom (Mobile.gearPosSize m.motor m.gears) base) mayMobile
+    in
     { dragging = NoDrag
     , tool = Play False False
     , mode = CommonMode Normal
     , link = Nothing
     , engine = Engine.init
     , interact = Interact.init
-    , common = commonInit <| Maybe.map Tuple.first mayShared
-    , svg =
-        let
-            base =
-                Maybe.withDefault (PanSvg.init svgId) <| Maybe.map Tuple.second mayShared
-        in
-        Maybe.withDefault base <|
-            Maybe.map (\m -> PanSvg.centerZoom (Mobile.gearPosSize m.motor m.gears) base) mayMobile
+    , common = commonUpdate (PrepareZoom svg) <| commonInit <| Maybe.map Tuple.first mayShared
+    , svg = svg
     }
 
 
@@ -132,8 +136,6 @@ type Msg
     | CopyGear (Id Geer)
     | NewGear Vec2 (Content Wheel)
     | DeleteGear (Id Geer)
-    | PackGear
-    | UnpackGear ( Wheel, Float ) Bool -- True for new, False for Content
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract (Link Geer) Fraction
     | EnteredTextFract String
@@ -147,6 +149,7 @@ type Msg
     | SVGSize (Result D.Error PanSvg.Size)
     | WheelMsgs (List ( Id Geer, Wheel.Msg ))
     | GearMsg ( Id Geer, Gear.Msg )
+    | CommonMsg CommonMsg
     | OutMsg DocMsg
 
 
@@ -255,11 +258,14 @@ update msg ( model, mobile ) =
             let
                 ( id, gears ) =
                     Coll.insertTellId (Mobile.gearFromContent content p) mobile.gears
+
+                svg =
+                    PanSvg.centerZoom (Mobile.gearPosSize id gears) model.svg
             in
             { return
                 | mobile = { mobile | gears = gears }
                 , toUndo = Group
-                , model = { model | svg = PanSvg.centerZoom (Mobile.gearPosSize id gears) model.svg }
+                , model = { model | svg = svg, common = commonUpdate (PrepareZoom svg) model.common }
                 , cmd = Random.generate (\color -> WheelMsgs [ ( id, Wheel.ChangeColor color ) ]) colorGen
             }
 
@@ -302,32 +308,6 @@ update msg ( model, mobile ) =
                                                 |> Coll.remove id
                                     }
                     }
-
-        PackGear ->
-            { return | model = { model | common = commonUpdate (Pack <| Content.M mobile) model.common } }
-
-        UnpackGear ( w, l ) new ->
-            if new then
-                let
-                    newGear =
-                        { pos = defaultAddPos
-                        , motor = []
-                        , harmony = Harmo.newSelf l
-                        , wheel = w
-                        }
-                in
-                { return
-                    | mobile = { mobile | gears = Coll.insert newGear mobile.gears }
-                    , toUndo = Do
-                }
-
-            else
-                case model.common.edit of
-                    [ G id ] ->
-                        doChangeContent id (Wheel.getContent { wheel = w }) (Just w.color) model mobile
-
-                    _ ->
-                        return
 
         EnteredFract isNumerator str ->
             Maybe.map2 Tuple.pair model.link (String.toInt str)
@@ -584,7 +564,11 @@ update msg ( model, mobile ) =
             { return | outMsg = Just subMsg }
 
         SvgMsg subMsg ->
-            { return | model = { model | svg = PanSvg.update subMsg model.svg } }
+            let
+                svg =
+                    PanSvg.update subMsg model.svg
+            in
+            { return | model = { model | svg = svg, common = commonUpdate (PrepareZoom svg) model.common } }
 
         SVGSize res ->
             case res of
@@ -596,8 +580,12 @@ update msg ( model, mobile ) =
                         | model =
                             { model
                                 | svg = PanSvg.update (PanSvg.ScaleSize 1 s) model.svg
+                                , common = commonUpdate (PackSvgMsg <| PanSvg.ScaleSize model.common.packScale s) model.common
                             }
                     }
+
+        CommonMsg subMsg ->
+            { return | model = { model | common = commonUpdate subMsg model.common } }
 
         -- TODO use some pattern like outMessage package? or elm-state? elm-return?
         InteractMsg subMsg ->
@@ -613,23 +601,37 @@ update msg ( model, mobile ) =
                     { return | model = newModel }
 
                 Just e ->
-                    let
-                        inEvent =
-                            case e.action of
-                                Interact.Dragged pos1 pos2 k zone ->
-                                    { e
-                                        | action =
-                                            Interact.Dragged
-                                                (PanSvg.mapIn pos1 newModel.svg)
-                                                (PanSvg.mapIn pos2 newModel.svg)
-                                                k
-                                                zone
-                                    }
+                    case e.action of
+                        Interact.DragEnded False ->
+                            { return | model = { newModel | dragging = NoDrag }, toUndo = Cancel }
 
-                                _ ->
-                                    e
-                    in
-                    manageInteractEvent inEvent newModel mobile
+                        _ ->
+                            let
+                                inEvent =
+                                    case e.action of
+                                        Interact.Dragged pos1 pos2 k zone ->
+                                            let
+                                                svg =
+                                                    case zone of
+                                                        ZSurface ->
+                                                            newModel.svg
+
+                                                        ZPack ->
+                                                            newModel.common.packSvg
+                                            in
+                                            { e
+                                                | action =
+                                                    Interact.Dragged
+                                                        (PanSvg.mapIn pos1 svg)
+                                                        (PanSvg.mapIn pos2 svg)
+                                                        k
+                                                        zone
+                                            }
+
+                                        _ ->
+                                            e
+                            in
+                            manageInteractEvent inEvent newModel mobile
 
 
 subs : Model -> List (Sub Msg)
@@ -811,6 +813,13 @@ viewContent ( model, mobile ) =
                                     []
                                 ]
 
+                            Packed pos id ->
+                                let
+                                    p =
+                                        Coll.get id model.common.pack
+                                in
+                                [ Wheel.drawSimple p.wheel pos p.length ]
+
                             _ ->
                                 []
                        )
@@ -931,7 +940,7 @@ viewEditDetails model mobile =
                       else
                         viewDeleteButton <| DeleteGear id
                     ]
-                        ++ viewPack model.common PackGear UnpackGear
+                        ++ (List.map (Element.map CommonMsg) <| viewPackButtons model.common)
                         ++ [ text <|
                                 "Durée : "
                                     ++ Harmo.view id
@@ -1247,6 +1256,30 @@ manageInteractEvent event model mobile =
                 ( ISound s, Interact.DragEnded True, Content ( p, _ ) ) ->
                     update (NewGear p <| Content.S s) ( { model | dragging = NoDrag }, mobile )
 
+                ( IWheel (P id), Interact.Dragged _ p _ ZPack, _ ) ->
+                    { return
+                        | model =
+                            { model | dragging = NoDrag, common = commonUpdate (DragFrom id p) model.common }
+                    }
+
+                ( IWheel (P id), Interact.Dragged _ p _ ZSurface, _ ) ->
+                    { return
+                        | model =
+                            { model | dragging = Packed p id, common = commonUpdate (InitDrag id) model.common }
+                    }
+
+                ( IWheel (P id), Interact.DragEnded True, Packed pos _ ) ->
+                    let
+                        p =
+                            Coll.get id model.common.pack
+                    in
+                    { return
+                        | model = { model | dragging = NoDrag }
+                        , mobile =
+                            { mobile | gears = Coll.insert (Mobile.newSizedGear pos p.length p.wheel) mobile.gears }
+                        , toUndo = Do
+                    }
+
                 _ ->
                     case model.tool of
                         -- PLAY --------
@@ -1470,7 +1503,11 @@ interactHarmonize event model mobile =
             return
 
 
-interactMove : Interact.Event Interactable Zone -> Model -> Mobeel -> Maybe { model : Model, mobile : Mobeel, toUndo : ToUndo }
+interactMove :
+    Interact.Event Interactable Zone
+    -> Model
+    -> Mobeel
+    -> Maybe { model : Model, mobile : Mobeel, toUndo : ToUndo }
 interactMove event model mobile =
     case ( event.item, event.action, model.dragging ) of
         ( IWheel (G id), Interact.Dragged _ pos _ ZSurface, _ ) ->
@@ -1486,6 +1523,32 @@ interactMove event model mobile =
 
         ( _, Interact.DragEnded _, Moving ) ->
             Just { model = { model | dragging = NoDrag }, mobile = mobile, toUndo = Do }
+
+        ( IWheel (G id), Interact.Dragged _ pos _ ZPack, _ ) ->
+            Just
+                { mobile = mobile
+                , toUndo = Cancel
+                , model =
+                    { model
+                        | dragging = Packing
+                        , common =
+                            commonUpdate
+                                (DragTo
+                                    { pos = pos
+                                    , length = Harmo.getLengthId id mobile.gears
+                                    , wheel = (Coll.get id mobile.gears).wheel
+                                    }
+                                )
+                                model.common
+                    }
+                }
+
+        ( IWheel (G id), Interact.DragEnded True, Packing ) ->
+            Just
+                { mobile = mobile
+                , toUndo = Cancel
+                , model = { model | dragging = NoDrag, common = commonUpdate Pack model.common }
+                }
 
         _ ->
             Nothing
