@@ -321,7 +321,17 @@ viewContentButton w msg =
 
 viewVolumeSlider : Wheeled x -> (Float -> msg) -> Element msg
 viewVolumeSlider w msgF =
-    Input.slider []
+    Input.slider
+        [ behindContent <|
+            el
+                [ width fill
+                , height <| px 2
+                , centerY
+                , Bg.color <| rgb 0 0 0
+                , Border.rounded 2
+                ]
+                Element.none
+        ]
         { label = Input.labelAbove [] <| text "Volume"
         , onChange = msgF
         , value = w.wheel.volume
