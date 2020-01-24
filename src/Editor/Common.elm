@@ -175,11 +175,15 @@ type CommonMode
     = Normal
     | Nav
     | ChangeSound Identifier
+    | SupprMode
 
 
 keyCodeToMode : List ( String, CommonMode )
 keyCodeToMode =
-    [ ( "KeyV", Nav ) ]
+    [ ( "KeyV", Nav )
+    , ( "Delete", SupprMode )
+    , ( "Backspace", SupprMode )
+    ]
 
 
 type CommonMsg

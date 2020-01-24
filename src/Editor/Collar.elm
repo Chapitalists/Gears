@@ -363,6 +363,17 @@ manageInteractEvent event model collar =
                 _ ->
                     return
 
+        CommonMode SupprMode ->
+            case ( event.item, event.action ) of
+                ( IWheel (B id), Interact.Clicked _ ) ->
+                    update (DeleteBead id) ( model, collar )
+
+                ( IWheel (P id), Interact.Clicked _ ) ->
+                    update (CommonMsg <| Unpack id) ( model, collar )
+
+                _ ->
+                    return
+
         CommonMode Normal ->
             case ( event.item, event.action ) of
                 ( ISound s, Interact.Clicked _ ) ->

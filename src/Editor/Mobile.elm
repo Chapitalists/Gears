@@ -1243,6 +1243,17 @@ manageInteractEvent event model mobile =
                 _ ->
                     return
 
+        CommonMode SupprMode ->
+            case ( event.item, event.action ) of
+                ( IWheel (G id), Interact.Clicked _ ) ->
+                    update (DeleteGear id) ( model, mobile )
+
+                ( IWheel (P id), Interact.Clicked _ ) ->
+                    update (CommonMsg <| Unpack id) ( model, mobile )
+
+                _ ->
+                    return
+
         CommonMode Normal ->
             case ( event.item, event.action, model.dragging ) of
                 ( ISound s, Interact.Clicked _, _ ) ->
