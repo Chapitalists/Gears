@@ -170,9 +170,6 @@ view w pos length style id uid =
                     if w.mute then
                         Fill Color.white
 
-                    else if style.motor then
-                        Fill Color.black
-
                     else
                         Fill w.color
                 , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
