@@ -7,6 +7,10 @@ import Json.Decode as D
 import Math.Vector2 exposing (Vec2, vec2)
 
 
+
+-- TODO Remove OldPos from Drag, but keep track on initPos, and make it a record
+
+
 type alias Interact item =
     Maybe ( item, Mode )
 
