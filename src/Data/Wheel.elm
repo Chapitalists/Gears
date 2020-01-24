@@ -296,6 +296,83 @@ view w pos length style id uid =
         )
 
 
+drawSimple : Wheel -> Vec2 -> Float -> Svg msg
+drawSimple w pos length =
+    let
+        tickH =
+            length / 15
+
+        tickW =
+            length / 30
+    in
+    S.g [ SA.transform [ Translate (getX pos) (getY pos) ] ] <|
+        [ S.circle
+            [ SA.cx <| Num 0
+            , SA.cy <| Num 0
+            , SA.r <| Num (length / 2)
+            , SA.stroke Color.black
+            , SA.strokeWidth <| Num tickW
+            , SA.fill <|
+                if w.mute then
+                    Fill Color.white
+
+                else
+                    Fill w.color
+            , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
+            ]
+            []
+        , S.rect
+            [ SA.width <| Num tickW
+            , SA.height <| Num tickH
+            , SA.x <| Num (tickW / -2)
+            , SA.y <| Num (tickH / -2)
+            , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) - (tickH / 2)) ]
+            ]
+            []
+        ]
+            ++ (let
+                    symSize =
+                        length / 4
+                in
+                case w.content of
+                    C (Content.M _) ->
+                        [ S.line
+                            [ SA.x1 <| Num -symSize
+                            , SA.y1 <| Num -symSize
+                            , SA.x2 <| Num symSize
+                            , SA.y2 <| Num symSize
+                            , SA.stroke Color.grey
+                            , SA.strokeWidth <| Num tickW
+                            ]
+                            []
+                        , S.line
+                            [ SA.x1 <| Num -symSize
+                            , SA.y1 <| Num symSize
+                            , SA.x2 <| Num symSize
+                            , SA.y2 <| Num -symSize
+                            , SA.stroke Color.grey
+                            , SA.strokeWidth <| Num tickW
+                            ]
+                            []
+                        ]
+
+                    C (Content.C _) ->
+                        [ S.line
+                            [ SA.x1 <| Num -symSize
+                            , SA.y1 <| Num 0
+                            , SA.x2 <| Num symSize
+                            , SA.y2 <| Num 0
+                            , SA.stroke Color.grey
+                            , SA.strokeWidth <| Num tickW
+                            ]
+                            []
+                        ]
+
+                    _ ->
+                        []
+               )
+
+
 encoder : Wheel -> List ( String, E.Value )
 encoder w =
     [ ( "name", E.string w.name )
