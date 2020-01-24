@@ -13,6 +13,7 @@ module Coll exposing
     , ids
     , insert
     , insertTellId
+    , isEmpty
     , maybeGet
     , remove
     , startId
@@ -78,6 +79,11 @@ startId =
 empty : String -> item -> Coll item
 empty typeString default =
     C { nextId = startInt, d = Dict.empty, default = default, typeString = typeString }
+
+
+isEmpty : Coll item -> Bool
+isEmpty (C { d }) =
+    Dict.isEmpty d
 
 
 get : Id item -> Coll item -> item
