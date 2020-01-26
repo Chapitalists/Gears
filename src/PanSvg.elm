@@ -101,7 +101,7 @@ update msg model =
                     model.viewPos
 
                 factor =
-                    1 + f / 1000
+                    clamp 0.01 2 <| 1 + f / 1000
 
                 p =
                     Vec.sub (mapIn (vec2 x y) model) vp.c
