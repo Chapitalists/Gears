@@ -212,16 +212,16 @@ update msg doc =
                             update (CollarMsg <| CEditor.CursorRight) doc
 
                         ( Suppr, C e ) ->
-                            case e.common.edit of
-                                [ B i ] ->
+                            case ( e.common.edit, e.tool ) of
+                                ( [ B i ], CEditor.Edit ) ->
                                     update (CollarMsg <| CEditor.DeleteBead i) doc
 
                                 _ ->
                                     ( doc, Cmd.none )
 
                         ( Suppr, M e ) ->
-                            case e.common.edit of
-                                [ G id ] ->
+                            case ( e.common.edit, e.tool ) of
+                                ( [ G id ], MEditor.Edit ) ->
                                     update (MobileMsg <| MEditor.DeleteGear id) doc
 
                                 _ ->
