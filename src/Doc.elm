@@ -235,8 +235,8 @@ update msg doc =
                 M editor ->
                     update (MobileMsg <| MEditor.SvgMsg <| PanSvg.Pan dir) doc
 
-                _ ->
-                    ( doc, Cmd.none )
+                C editor ->
+                    update (CollarMsg <| CEditor.SvgMsg <| PanSvg.Pan dir) doc
 
         MobileMsg subMsg ->
             case ( doc.editor, getViewing doc ) of
