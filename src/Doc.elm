@@ -101,11 +101,12 @@ update msg doc =
             ( doc, Cmd.none )
 
         New ->
-            let
-                n =
-                    init Nothing
-            in
-            ( { n | data = Data.new Mobile.new doc.data }, toEngine Engine.stop )
+            ( { data = Data.new Mobile.new doc.data
+              , viewing = []
+              , editor = MEditor.init Nothing <| Just <| getShared doc
+              }
+            , toEngine Engine.stop
+            )
 
         Loaded m name ->
             ( { data = Data.load m name doc.data
