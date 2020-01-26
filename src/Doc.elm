@@ -117,10 +117,24 @@ update msg doc =
             )
 
         Undo ->
-            ( { doc | data = Data.undo doc.data }, Cmd.none )
+            let
+                data =
+                    Data.undo doc.data
+
+                mayView =
+                    Tuple.second <| getViewingCleaned doc.viewing <| Data.current data
+            in
+            ( { doc | data = data, viewing = Maybe.withDefault doc.viewing mayView }, toEngine Engine.stop )
 
         Redo ->
-            ( { doc | data = Data.redo doc.data }, Cmd.none )
+            let
+                data =
+                    Data.redo doc.data
+
+                mayView =
+                    Tuple.second <| getViewingCleaned doc.viewing <| Data.current data
+            in
+            ( { doc | data = data, viewing = Maybe.withDefault doc.viewing mayView }, toEngine Engine.stop )
 
         View l ->
             let
