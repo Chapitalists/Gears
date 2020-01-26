@@ -1,21 +1,22 @@
 module Editor.Collar exposing (..)
 
+import Coll
 import Color
 import Data.Collar as Collar exposing (Colleer)
 import Data.Common as CommonData
 import Data.Content as Content exposing (Content)
-import Data.Wheel as Wheel exposing (Wheel)
+import Data.Wheel as Wheel exposing (Wheel, defaultStyle)
 import Editor.Common exposing (..)
 import Element exposing (..)
 import Element.Input as Input
 import Engine
 import Html.Attributes
 import Interact
+import Json.Decode as D
 import Json.Encode as E
 import Math.Vector2 as Vec exposing (vec2)
 import PanSvg
 import Random
-import Sound exposing (Sound)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
@@ -69,16 +70,16 @@ type Msg
     | CursorRight
     | CursorLeft
     | ToggleEngine
-    | SoundClicked Sound
     | NewBead (Content Wheel)
     | DeleteBead Int
-    | PackBead
     | UnpackBead ( Wheel, Float ) Bool
     | ResizeToContent Int
     | WheelMsg ( Int, Wheel.Msg )
+    | CommonMsg CommonMsg
     | SvgMsg PanSvg.Msg
+    | SVGSize (Result D.Error PanSvg.Size)
     | OutMsg DocMsg
-    | InteractMsg (Interact.Msg Interactable)
+    | InteractMsg (Interact.Msg Interactable Zone)
 
 
 type alias Return =
@@ -119,15 +120,6 @@ update msg ( model, collar ) =
         ToggleEngine ->
             { return | toEngine = Just <| Engine.playCollar collar }
 
-        SoundClicked s ->
-            case model.mode of
-                CommonMode (ChangeSound (B i)) ->
-                    update (WheelMsg ( i, Wheel.ChangeContent <| Content.S s ))
-                        ( { model | mode = CommonMode Normal }, collar )
-
-                _ ->
-                    update (NewBead <| Content.S s) ( model, collar )
-
         NewBead c ->
             let
                 colorGen =
@@ -135,7 +127,7 @@ update msg ( model, collar ) =
             in
             { return
                 | collar = Collar.add model.cursor (Collar.beadFromContent c) collar
-                , toUndo = Do
+                , toUndo = Group
                 , model = { model | cursor = model.cursor + 1 }
                 , cmd = Random.generate (\color -> WheelMsg ( model.cursor, Wheel.ChangeColor color )) colorGen
             }
@@ -156,9 +148,6 @@ update msg ( model, collar ) =
                     }
             }
 
-        PackBead ->
-            { return | model = { model | common = commonUpdate (Pack <| Content.C collar) model.common } }
-
         UnpackBead ( w, l ) new ->
             if new then
                 { return
@@ -169,7 +158,7 @@ update msg ( model, collar ) =
 
             else
                 case model.common.edit of
-                    Just (B i) ->
+                    [ B i ] ->
                         update (WheelMsg ( i, Wheel.ChangeContent <| Wheel.getContent { wheel = w } )) ( model, collar )
 
                     _ ->
@@ -187,8 +176,25 @@ update msg ( model, collar ) =
         WheelMsg ( i, subMsg ) ->
             { return | collar = Collar.updateBead i (Wheel.update subMsg) collar, toUndo = Do }
 
+        CommonMsg subMsg ->
+            { return | model = { model | common = commonUpdate subMsg model.common } }
+
         SvgMsg subMsg ->
             { return | model = { model | svg = PanSvg.update subMsg model.svg } }
+
+        SVGSize res ->
+            case res of
+                Result.Err e ->
+                    Debug.log (D.errorToString e) return
+
+                Result.Ok s ->
+                    { return
+                        | model =
+                            { model
+                                | svg = PanSvg.update (PanSvg.ScaleSize 1 s) model.svg
+                                , common = commonUpdate (PackSvgMsg <| PanSvg.ScaleSize model.common.packScale s) model.common
+                            }
+                    }
 
         OutMsg subMsg ->
             { return | outMsg = Just subMsg }
@@ -211,7 +217,7 @@ update msg ( model, collar ) =
 
 subs : Model -> List (Sub Msg)
 subs { interact } =
-    (Sub.map SvgMsg <| PanSvg.sub)
+    PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
         :: (List.map (Sub.map InteractMsg) <| Interact.subs interact)
 
 
@@ -225,8 +231,8 @@ viewContent ( model, collar ) =
     let
         getMod : Int -> Wheel.Mod
         getMod i =
-            if model.tool == Edit && model.common.edit == Just (B i) then
-                Wheel.Selected
+            if model.tool == Edit && model.common.edit == [ B i ] then
+                Wheel.Selected False
 
             else
                 case Interact.getInteract model.interact of
@@ -243,7 +249,7 @@ viewContent ( model, collar ) =
     Element.html <|
         S.svg
             (List.map (Html.Attributes.map SvgMsg) (PanSvg.svgAttributes model.svg)
-                ++ (List.map (Html.Attributes.map InteractMsg) <| Interact.dragSpaceEvents model.interact)
+                ++ (List.map (Html.Attributes.map InteractMsg) <| Interact.dragSpaceEvents model.interact ZSurface)
             )
         <|
             List.map (Svg.map <| InteractMsg << Interact.map fromWheelInteractable)
@@ -252,7 +258,7 @@ viewContent ( model, collar ) =
                         ( Wheel.view b.wheel
                             (vec2 (p + b.length / 2) <| Vec.getY leftmostPoint)
                             b.length
-                            { mod = getMod i, motor = False, dashed = False }
+                            { defaultStyle | mod = getMod i }
                             (B i)
                             (Collar.toUID i)
                             :: l
@@ -312,7 +318,7 @@ viewDetails model c =
 
         _ ->
             case ( model.tool, model.common.edit ) of
-                ( Edit, Just (B i) ) ->
+                ( Edit, [ B i ] ) ->
                     let
                         b =
                             Collar.get i c
@@ -325,14 +331,14 @@ viewDetails model c =
                         , viewChangeContent <| ChangedMode <| CommonMode <| ChangeSound <| B i
                         , viewDeleteButton <| DeleteBead i
                         ]
-                            ++ viewPack model.common PackBead UnpackBead
+                            ++ viewPackButtons model.common (Content.C c) (\w -> UnpackBead ( w, 0 ) False) CommonMsg
                     ]
 
                 _ ->
                     []
 
 
-manageInteractEvent : Interact.Event Interactable -> Model -> Colleer -> Return
+manageInteractEvent : Interact.Event Interactable Zone -> Model -> Colleer -> Return
 manageInteractEvent event model collar =
     let
         return =
@@ -348,35 +354,67 @@ manageInteractEvent event model collar =
         CommonMode Nav ->
             { return | outMsg = interactNav event <| Content.C collar }
 
-        CommonMode (ChangeSound _) ->
-            return
+        CommonMode (ChangeSound (B i)) ->
+            case ( event.item, event.action ) of
+                ( ISound s, Interact.Clicked _ ) ->
+                    update (WheelMsg ( i, Wheel.ChangeContent <| Content.S s ))
+                        ( { model | mode = CommonMode Normal }, collar )
+
+                _ ->
+                    return
+
+        CommonMode SupprMode ->
+            case ( event.item, event.action ) of
+                ( IWheel (B id), Interact.Clicked _ ) ->
+                    update (DeleteBead id) ( model, collar )
+
+                ( IWheel (P id), Interact.Clicked _ ) ->
+                    update (CommonMsg <| Unpack id) ( model, collar )
+
+                _ ->
+                    return
 
         CommonMode Normal ->
-            case model.tool of
-                Play on ->
-                    --TODO Factorize
+            case ( event.item, event.action ) of
+                ( ISound s, Interact.Clicked _ ) ->
+                    update (NewBead <| Content.S s) ( model, collar )
+
+                ( IWheel (P id), Interact.Clicked _ ) ->
                     let
-                        scale =
-                            PanSvg.getScale model.svg
+                        p =
+                            Coll.get id model.common.pack
                     in
-                    case ( event.item, event.action ) of
-                        -- MUTE
-                        ( IWheel (B i), Interact.Clicked _ ) ->
+                    update (UnpackBead ( p.wheel, p.length ) True) ( model, collar )
+
+                _ ->
+                    case model.tool of
+                        Play on ->
+                            --TODO Factorize
                             let
-                                w =
-                                    (Collar.get i collar).wheel
-
-                                newMute =
-                                    not w.mute
+                                scale =
+                                    PanSvg.getScale model.svg
                             in
-                            { return
-                                | collar = Collar.updateBead i (\b -> { b | wheel = { w | mute = newMute } }) collar
-                                , toUndo = Do
-                                , toEngine = Just <| Engine.mutedBead i newMute
-                            }
+                            case ( event.item, event.action ) of
+                                -- MUTE
+                                ( IWheel (B i), Interact.Clicked _ ) ->
+                                    let
+                                        w =
+                                            (Collar.get i collar).wheel
 
-                        _ ->
-                            return
+                                        newMute =
+                                            not w.mute
+                                    in
+                                    { return
+                                        | collar = Collar.updateBead i (\b -> { b | wheel = { w | mute = newMute } }) collar
+                                        , toUndo = Do
+                                        , toEngine = Just <| Engine.mutedBead i newMute
+                                    }
 
-                Edit ->
-                    { return | model = { model | common = interactSelectEdit event model.common } }
+                                _ ->
+                                    return
+
+                        Edit ->
+                            { return | model = { model | common = interactSelectEdit event model.common } }
+
+        _ ->
+            return

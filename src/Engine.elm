@@ -70,7 +70,7 @@ playPause : Coll Geer -> List (Id Geer) -> E.Value
 playPause coll els =
     E.object
         [ ( "action", E.string "playPause" )
-        , ( "gears", E.list (encodeGear coll) els )
+        , ( "gears", E.list (encodeGear True coll) els )
         ]
 
 
@@ -84,7 +84,7 @@ playCollar collar =
     E.object
         [ ( "action", E.string "playCollar" )
         , ( "baseId", E.string <| String.dropRight 1 <| Collar.toUID 0 )
-        , ( "collar", encodeCollar collar )
+        , ( "collar", encodeCollar collar True )
         ]
 
 
@@ -134,25 +134,26 @@ volumeChanged id volume e =
         Nothing
 
 
-encodeWheel : Wheel -> List ( String, E.Value )
-encodeWheel w =
+encodeWheel : Wheel -> Bool -> List ( String, E.Value )
+encodeWheel w hasView =
     [ ( "mute", E.bool w.mute )
     , ( "volume", E.float <| clamp 0 1 w.volume )
+    , ( "view", E.bool hasView )
     ]
         ++ (case Wheel.getContent { wheel = w } of
                 Content.S s ->
                     [ ( "soundName", E.string <| Sound.toString s ) ]
 
                 Content.M m ->
-                    [ ( "mobile", encodeMobile m ) ]
+                    [ ( "mobile", encodeMobile m False ) ]
 
                 Content.C c ->
-                    [ ( "collar", encodeCollar c ) ]
+                    [ ( "collar", encodeCollar c False ) ]
            )
 
 
-encodeGear : Coll Geer -> Id Geer -> E.Value
-encodeGear coll id =
+encodeGear : Bool -> Coll Geer -> Id Geer -> E.Value
+encodeGear hasView coll id =
     let
         g =
             Coll.get id coll
@@ -171,30 +172,30 @@ encodeGear coll id =
             ([ ( "id", E.string <| uid )
              , ( "length", E.float length )
              ]
-                ++ encodeWheel g.wheel
+                ++ encodeWheel g.wheel hasView
             )
 
 
-encodeMobile : Mobeel -> E.Value
-encodeMobile { motor, gears } =
+encodeMobile : Mobeel -> Bool -> E.Value
+encodeMobile { motor, gears } hasView =
     E.object
         [ ( "length", E.float <| Harmo.getLengthId motor gears )
-        , ( "gears", E.list (encodeGear gears) <| Motor.getMotored motor gears )
+        , ( "gears", E.list (encodeGear hasView gears) <| Motor.getMotored motor gears )
         ]
 
 
-encodeCollar : Colleer -> E.Value
-encodeCollar c =
+encodeCollar : Colleer -> Bool -> E.Value
+encodeCollar c hasView =
     E.object
         [ ( "length", E.float <| Collar.getCumulLengthAt c.matrice c )
         , ( "loopStart", E.float c.loop )
-        , ( "beads", E.list encodeBead <| Collar.getBeads c )
+        , ( "beads", E.list (encodeBead hasView) <| Collar.getBeads c )
         ]
 
 
-encodeBead : Beed -> E.Value
-encodeBead b =
+encodeBead : Bool -> Beed -> E.Value
+encodeBead hasView b =
     E.object
         (( "length", E.float b.length )
-            :: encodeWheel b.wheel
+            :: encodeWheel b.wheel hasView
         )

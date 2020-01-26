@@ -4,8 +4,15 @@ function prepare(model, rate = 1) {
     model.paused = true
     model.pauseOffset = 0
     model.length = model.length
+    if (model.view && model.id) {
+        model.view = SVG.adopt(document.getElementById(model.id))
+       /* model.once
+          ? model.view.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).pause()
+          : */model.view.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).loop().pause()
+    }
     if (model.soundName) {
         model.player = new Tone.Player(buffers[model.soundName]).toMaster()
+        setVolume(model)
         model.duration = model.player.buffer.duration
         model.player.playbackRate = model.rate = rate * model.duration / model.length
         model.player.loop = true
@@ -20,7 +27,11 @@ function prepare(model, rate = 1) {
         model.rate = (rate * model.duration / model.length) || 1 // TODO when preparing top collar, no model.length
         model.durs = model.collar.beads.map(v => v.length / model.rate)
         let totalDur = model.durs.reduce((a,b) => a+b, 0)
-        model.players = model.collar.beads.map(v => prepare(v, model.rate))
+        model.players = model.collar.beads.map((v,i) => {
+            v.id = model.baseId + i
+//            v.once = true
+            return prepare(v, model.rate)
+        })
         model.clocks = model.players.map((subModel,i,a) => {
             return new Tone.Clock(t => {
                 if (model.paused && (model.progPause <= t)) return;
@@ -29,7 +40,7 @@ function prepare(model, rate = 1) {
                 model.current = i
                 let prec = (i + a.length - 1) % a.length
                 play(subModel, t, subModel, model.volume, model.mute)
-                pause(a[prec], t, model.paused) // hence force recalculation
+                pause(a[prec], t, model.paused, true) // hence force recalculation
                 if (model.paused) pause(subModel, model.progPause) // and pause next
                 // console.log(i, Math.min(model.players[i].duration - model.players[i].pauseOffset, model.players[i].pauseOffset)) // TODO Small drift…
             }, 1/totalDur)
@@ -41,12 +52,14 @@ function prepare(model, rate = 1) {
 function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What if no new model (first play)
     if (!model.paused) return;
     model.paused = false
-    model.volume = newModel.volume || 1 // TODO cf first TODO
-    model.mute = newModel.mute || false // TODO cf first TODO
+    model.volume = newModel.volume || model.volume // TODO cf first TODO
+    model.mute = newModel.mute || model.mute // TODO cf first TODO
     model.startTime = t - model.pauseOffset / model.rate
+    if (model.view) {
+        Tone.Draw.schedule(() => model.view.animate().play(), t)
+    }
     if (model.soundName && model.player.output) {
-        if (mute || model.mute) model.player.mute = true
-        else model.player.volume.value = ((model.volume * volume) - 1) * 60
+        setVolume(model, volume, mute)
         model.player.start(t, model.pauseOffset)
     }
     if (model.mobile) {
@@ -71,10 +84,13 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
     }
 }
 
-function pause(model, t, force = false) {
+function pause(model, t, force = false, clocked = false) {
     if (model.paused && !force) return;
     model.paused = true
     model.pauseOffset = ((t - model.startTime) * model.rate)
+    if (model.view){//} && !clocked) {
+        Tone.Draw.schedule(() => model.view.animate().pause().at((model.pauseOffset/model.length/model.rate) % 1), t)
+    }
     if (model.soundName && model.player.output) {
         model.player.stop(t)
     }
@@ -94,6 +110,7 @@ function pause(model, t, force = false) {
 }
 
 function stop(model) {
+    if (model.view) model.view.animate().play().finish().stop()
     if (model.soundName) model.player.stop().dispose()
     if (model.mobile) model.gears.map(stop)
     if (model.collar) {
@@ -104,7 +121,7 @@ function stop(model) {
 
 function setVolume(model, volume = 1, mute = false) {
     if (model.soundName) {
-        if (mute || model.mute) model.player.mute = true
+        if (mute || model.mute) model.player.volume.value = -100000
         else model.player.volume.value = ((model.volume * volume) - 1) * 60
     }
     if (model.mobile) model.gears.map(v => setVolume(v, model.volume * volume, model.mute || mute))

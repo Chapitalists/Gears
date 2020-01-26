@@ -75,12 +75,17 @@ fromContent c =
 type Mod
     = None
     | Selectable
-    | Selected
+    | Selected Bool
     | Resizing
 
 
 type alias Style =
-    { mod : Mod, motor : Bool, dashed : Bool }
+    { mod : Mod, motor : Bool, dashed : Bool, baseColor : Maybe Color }
+
+
+defaultStyle : Style
+defaultStyle =
+    { mod = None, motor = False, dashed = False, baseColor = Nothing }
 
 
 type Interactable x
@@ -119,7 +124,7 @@ update msg g =
             { g | wheel = { wheel | color = c } }
 
 
-view : Wheel -> Vec2 -> Float -> Style -> id -> String -> Svg (Interact.Msg (Interactable id))
+view : Wheel -> Vec2 -> Float -> Style -> id -> String -> Svg (Interact.Msg (Interactable id) zone)
 view w pos length style id uid =
     let
         tickH =
@@ -135,25 +140,25 @@ view w pos length style id uid =
         ([ SA.transform [ Translate (getX pos) (getY pos) ] ]
             ++ Interact.hoverEvents (IWheel id)
         )
-        ([ S.g [ Html.Attributes.id uid ]
+        ([ S.g (Html.Attributes.id uid :: Interact.draggableEvents (IWheel id))
             ([ S.circle
-                ([ SA.cx <| Num 0
-                 , SA.cy <| Num 0
-                 , SA.r <| Num (length / 2)
-                 , SA.stroke <|
+                [ SA.cx <| Num 0
+                , SA.cy <| Num 0
+                , SA.r <| Num (length / 2)
+                , SA.stroke <|
                     if style.motor then
                         Color.red
 
                     else
                         Color.black
-                 , SA.strokeWidth <|
+                , SA.strokeWidth <|
                     Num <|
                         if style.mod == Selectable then
                             tickW * 2
 
                         else
                             tickW
-                 , SA.strokeDasharray <|
+                , SA.strokeDasharray <|
                     if style.dashed then
                         String.fromFloat (circum / 40 * 3 / 4)
                             ++ ","
@@ -161,25 +166,13 @@ view w pos length style id uid =
 
                     else
                         ""
-                 , SA.fill <|
+                , SA.fill <|
                     if w.mute then
                         Fill Color.white
 
-                    else if style.motor then
-                        Fill Color.black
-
                     else
                         Fill w.color
-                 , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
-                 ]
-                    ++ Interact.draggableEvents (IWheel id)
-                )
-                []
-             , S.rect
-                [ SA.width <| Num tickW
-                , SA.height <| Num tickH
-                , SA.x <| Num (tickW / -2)
-                , SA.y <| Num ((length / -2) - tickH)
+                , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
                 ]
                 []
              , S.rect
@@ -187,11 +180,26 @@ view w pos length style id uid =
                 , SA.height <| Num tickH
                 , SA.x <| Num (tickW / -2)
                 , SA.y <| Num (tickH / -2)
-                , SA.fill <| Fill Color.orange
-                , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) + (tickH / 2)) ]
+                , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) - (tickH / 2)) ]
                 ]
                 []
              ]
+                ++ (case style.baseColor of
+                        Just c ->
+                            [ S.circle
+                                [ SA.cx <| Num 0
+                                , SA.cy <| Num 0
+                                , SA.r <| Num (length / 2 - tickW * 2.5)
+                                , SA.strokeWidth <| Num (tickW * 4)
+                                , SA.stroke c
+                                , SA.fill FillNone
+                                ]
+                                []
+                            ]
+
+                        Nothing ->
+                            []
+                   )
                 ++ (let
                         symSize =
                             length / 4
@@ -235,50 +243,131 @@ view w pos length style id uid =
                    )
             )
          ]
-            ++ (if style.mod == Selected then
-                    [ S.circle
-                        [ SA.cx <| Num 0
-                        , SA.cy <| Num 0
-                        , SA.r <| Num (length / 2 + tickW * 2)
-                        , SA.strokeWidth <| Num (tickW / 2)
-                        , SA.stroke Color.black
-                        , SA.fill FillNone
-                        ]
-                        []
-                    ]
+            -- Not Draggable
+            ++ (case style.mod of
+                    Selected first ->
+                        [ S.circle
+                            [ SA.cx <| Num 0
+                            , SA.cy <| Num 0
+                            , SA.r <| Num (length / 2 + tickW * 2)
+                            , SA.strokeWidth <| Num (tickW / 2)
+                            , SA.stroke <|
+                                if first then
+                                    Color.red
 
-                else
-                    []
-               )
-            ++ (if style.mod == Resizing then
-                    [ S.polyline
-                        [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
-                        , SA.stroke Color.red
-                        , SA.strokeWidth <| Num tickW
+                                else
+                                    Color.black
+                            , SA.fill FillNone
+                            ]
+                            []
                         ]
-                        []
-                    , S.circle
-                        ([ SA.cx <| Num (-length / 2)
-                         , SA.cy <| Num 0
-                         , SA.r <| Num (tickW * 2)
-                         ]
-                            ++ Interact.draggableEvents (IResizeHandle id False)
-                        )
-                        []
-                    , S.circle
-                        ([ SA.cx <| Num (length / 2)
-                         , SA.cy <| Num 0
-                         , SA.r <| Num (tickW * 2)
-                         ]
-                            ++ Interact.draggableEvents (IResizeHandle id True)
-                        )
-                        []
-                    ]
 
-                else
-                    []
+                    Resizing ->
+                        [ S.polyline
+                            [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
+                            , SA.stroke Color.red
+                            , SA.strokeWidth <| Num tickW
+                            ]
+                            []
+                        , S.circle
+                            ([ SA.cx <| Num (-length / 2)
+                             , SA.cy <| Num 0
+                             , SA.r <| Num (tickW * 2)
+                             ]
+                                ++ Interact.draggableEvents (IResizeHandle id False)
+                            )
+                            []
+                        , S.circle
+                            ([ SA.cx <| Num (length / 2)
+                             , SA.cy <| Num 0
+                             , SA.r <| Num (tickW * 2)
+                             ]
+                                ++ Interact.draggableEvents (IResizeHandle id True)
+                            )
+                            []
+                        ]
+
+                    _ ->
+                        []
                )
         )
+
+
+drawSimple : Wheel -> Vec2 -> Float -> Svg msg
+drawSimple w pos length =
+    let
+        tickH =
+            length / 15
+
+        tickW =
+            length / 30
+    in
+    S.g [ SA.transform [ Translate (getX pos) (getY pos) ] ] <|
+        [ S.circle
+            [ SA.cx <| Num 0
+            , SA.cy <| Num 0
+            , SA.r <| Num (length / 2)
+            , SA.stroke Color.black
+            , SA.strokeWidth <| Num tickW
+            , SA.fill <|
+                if w.mute then
+                    Fill Color.white
+
+                else
+                    Fill w.color
+            , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
+            ]
+            []
+        , S.rect
+            [ SA.width <| Num tickW
+            , SA.height <| Num tickH
+            , SA.x <| Num (tickW / -2)
+            , SA.y <| Num (tickH / -2)
+            , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) - (tickH / 2)) ]
+            ]
+            []
+        ]
+            ++ (let
+                    symSize =
+                        length / 4
+                in
+                case w.content of
+                    C (Content.M _) ->
+                        [ S.line
+                            [ SA.x1 <| Num -symSize
+                            , SA.y1 <| Num -symSize
+                            , SA.x2 <| Num symSize
+                            , SA.y2 <| Num symSize
+                            , SA.stroke Color.grey
+                            , SA.strokeWidth <| Num tickW
+                            ]
+                            []
+                        , S.line
+                            [ SA.x1 <| Num -symSize
+                            , SA.y1 <| Num symSize
+                            , SA.x2 <| Num symSize
+                            , SA.y2 <| Num -symSize
+                            , SA.stroke Color.grey
+                            , SA.strokeWidth <| Num tickW
+                            ]
+                            []
+                        ]
+
+                    C (Content.C _) ->
+                        [ S.line
+                            [ SA.x1 <| Num -symSize
+                            , SA.y1 <| Num 0
+                            , SA.x2 <| Num symSize
+                            , SA.y2 <| Num 0
+                            , SA.stroke Color.grey
+                            , SA.strokeWidth <| Num tickW
+                            ]
+                            []
+                        ]
+
+                    _ ->
+                        []
+               )
 
 
 encoder : Wheel -> List ( String, E.Value )

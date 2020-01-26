@@ -53,6 +53,11 @@ gearFromContent c pos =
     }
 
 
+newSizedGear : Vec2 -> Float -> Wheel -> Geer
+newSizedGear p l w =
+    { pos = p, harmony = Harmo.newSelf l, motor = [], wheel = w }
+
+
 gearName : Id Geer -> Coll Geer -> String
 gearName id coll =
     let

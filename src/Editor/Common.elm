@@ -1,6 +1,7 @@
 module Editor.Common exposing (..)
 
-import Coll exposing (Id)
+import Coll exposing (Coll, Id)
+import Color
 import Data.Collar as Collar
 import Data.Content as Content exposing (Content)
 import Data.Gear as Gear
@@ -8,22 +9,70 @@ import Data.Mobile exposing (Geer)
 import Data.Wheel as Wheel exposing (Wheel, Wheeled)
 import Element exposing (..)
 import Element.Background as Bg
+import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
 import Harmony as Harmo
+import Html
+import Html.Attributes
 import Interact
-import Sound
+import Math.Vector2 exposing (Vec2, vec2)
+import PanSvg
+import Sound exposing (Sound)
+import Svg
+import TypedSvg as S
+
+
+svgId : String
+svgId =
+    "svg"
+
+
+packId : String
+packId =
+    "packSvg"
 
 
 type alias CommonModel =
-    { edit : Maybe Identifier
-    , pack : Maybe ( Wheel, Float )
+    { edit : List Identifier
+    , packontent : Maybe Wheel
+    , pack : Coll Packed
+    , packVisible : Bool
+    , packSvg : PanSvg.Model
+    , packScale : Float
+    , dragging : Maybe Packed
+    , initPos : Maybe Vec2 -- TODO could be in Dragging type
+    }
+
+
+typeString : String
+typeString =
+    "packed"
+
+
+toUID : Id Packed -> String
+toUID id =
+    typeString ++ "-" ++ Coll.idToString id
+
+
+type alias Packed =
+    { wheel : Wheel
+    , length : Float
+    , pos : Vec2
+    }
+
+
+defaultPacked =
+    { wheel = Wheel.default
+    , length = 0
+    , pos = vec2 0 0
     }
 
 
 type Identifier
     = G (Id Geer)
     | B Int
+    | P (Id Packed)
 
 
 getNameFromContent : Identifier -> Content Wheel -> String
@@ -38,6 +87,9 @@ getNameFromContent id c =
 
                         G i ->
                             Gear.toUID i
+
+                        P _ ->
+                            ""
 
                 else
                     w.name
@@ -76,6 +128,12 @@ type Interactable
     = ISurface
     | IWheel Identifier
     | IResizeHandle Identifier Bool
+    | ISound Sound
+
+
+type Zone
+    = ZSurface
+    | ZPack
 
 
 fromWheelInteractable : Wheel.Interactable Identifier -> Interactable
@@ -90,14 +148,24 @@ fromWheelInteractable i =
 
 commonInit : Maybe CommonModel -> CommonModel
 commonInit may =
-    { edit = Nothing
-    , pack = Maybe.withDefault Nothing <| Maybe.map .pack may
-    }
+    Maybe.withDefault
+        { edit = []
+        , packontent = Nothing
+        , pack = Coll.empty typeString defaultPacked
+        , packVisible = False
+        , packSvg = PanSvg.init packId
+        , packScale = 0.3
+        , dragging = Nothing
+        , initPos = Nothing
+        }
+    <|
+        Maybe.map (\model -> { model | edit = [] }) may
 
 
 type ToUndo
     = Do
     | Group
+    | Cancel
     | NOOP
 
 
@@ -109,44 +177,92 @@ type CommonMode
     = Normal
     | Nav
     | ChangeSound Identifier
+    | SupprMode
 
 
 keyCodeToMode : List ( String, CommonMode )
 keyCodeToMode =
-    [ ( "KeyV", Nav ) ]
+    [ ( "KeyV", Nav )
+    , ( "Delete", SupprMode )
+    , ( "Backspace", SupprMode )
+    ]
 
 
 type CommonMsg
     = Delete Identifier
-    | Pack (Content Wheel)
+    | TogglePack
+    | Packontent Wheel
+    | Pack
+    | Unpack (Id Packed)
     | EmptyPack
+    | DragTo Packed
+    | DragFrom (Id Packed) Vec2
+    | InitDrag (Id Packed)
+    | PrepareZoom PanSvg.Model
+    | PackSvgMsg PanSvg.Msg
 
 
 commonUpdate : CommonMsg -> CommonModel -> CommonModel
 commonUpdate msg model =
     case msg of
         Delete id ->
-            if model.edit == Just id then
-                { model | edit = Nothing }
+            { model | edit = List.filter ((/=) id) model.edit }
+
+        TogglePack ->
+            { model | packVisible = not model.packVisible }
+
+        Packontent w ->
+            { model | packontent = Just w }
+
+        Pack ->
+            let
+                pack =
+                    case model.dragging of
+                        Just p ->
+                            Coll.insert p model.pack
+
+                        Nothing ->
+                            model.pack
+            in
+            { model | pack = pack, dragging = Nothing }
+
+        Unpack id ->
+            { model | pack = Coll.remove id model.pack }
+
+        EmptyPack ->
+            { model | pack = Coll.empty typeString defaultPacked }
+
+        DragTo p ->
+            { model | dragging = Just p }
+
+        DragFrom id pos ->
+            { model
+                | pack = Coll.update id (\p -> { p | pos = pos }) model.pack
+                , initPos = Just <| Maybe.withDefault (Coll.get id model.pack).pos model.initPos
+            }
+
+        InitDrag id ->
+            case model.initPos of
+                Just pos ->
+                    { model
+                        | pack = Coll.update id (\p -> { p | pos = pos }) model.pack
+                        , initPos = Nothing
+                    }
+
+                Nothing ->
+                    model
+
+        PrepareZoom parent ->
+            if Coll.isEmpty model.pack then
+                commonUpdate
+                    (PackSvgMsg <| PanSvg.SetSmallestSize <| parent.viewPos.smallestSize / model.packScale / 4)
+                    model
 
             else
                 model
 
-        Pack content ->
-            { model
-                | pack =
-                    model.edit
-                        |> Maybe.andThen
-                            (\id ->
-                                Maybe.map2 Tuple.pair
-                                    (getWheelFromContent id content)
-                                <|
-                                    Debug.log "length" (getLengthFromContent (Debug.log "id" id) <| Debug.log "contont" content)
-                            )
-            }
-
-        EmptyPack ->
-            { model | pack = Nothing }
+        PackSvgMsg subMsg ->
+            { model | packSvg = PanSvg.update subMsg model.packSvg }
 
 
 viewDetailsColumn : List (Element msg) -> Element msg
@@ -161,6 +277,7 @@ viewDetailsColumn =
         ]
 
 
+viewDetailChangingSound : Identifier -> Content Wheel -> msg -> List (Element msg)
 viewDetailChangingSound id c msg =
     [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ] <|
         [ text <| getNameFromContent id c
@@ -204,7 +321,17 @@ viewContentButton w msg =
 
 viewVolumeSlider : Wheeled x -> (Float -> msg) -> Element msg
 viewVolumeSlider w msgF =
-    Input.slider []
+    Input.slider
+        [ behindContent <|
+            el
+                [ width fill
+                , height <| px 2
+                , centerY
+                , Bg.color <| rgb 0 0 0
+                , Border.rounded 2
+                ]
+                Element.none
+        ]
         { label = Input.labelAbove [] <| text "Volume"
         , onChange = msgF
         , value = w.wheel.volume
@@ -239,30 +366,92 @@ viewDeleteButton msg =
         }
 
 
-viewPack : CommonModel -> msg -> (( Wheel, Float ) -> Bool -> msg) -> List (Element msg)
-viewPack model packMsg unpackMsg =
-    Input.button []
-        { onPress = Just packMsg
-        , label = text "Copier"
-        }
-        :: (case model.pack of
-                Nothing ->
-                    []
+viewPackButtons : CommonModel -> Content Wheel -> (Wheel -> msg) -> (CommonMsg -> msg) -> List (Element msg)
+viewPackButtons model parent chgContent wrap =
+    [ Input.button []
+        { label =
+            text <|
+                if model.packVisible then
+                    "Fermer le sac"
 
-                Just ( w, l ) ->
+                else
+                    "Ouvrir le sac"
+        , onPress = Just <| wrap TogglePack
+        }
+    , Input.button []
+        { label = text "Vider son sac"
+        , onPress = Just <| wrap EmptyPack
+        }
+    , Input.button []
+        { label = text "Copier Contenu"
+        , onPress =
+            Maybe.map (wrap << Packontent) <|
+                Maybe.andThen (\id -> getWheelFromContent id parent) <|
+                    case model.edit of
+                        [ one ] ->
+                            Just one
+
+                        _ ->
+                            Nothing
+        }
+    ]
+        ++ (case model.packontent of
+                Just w ->
                     [ Input.button []
-                        { label = text <| "Coller " ++ w.name
-                        , onPress = Just <| unpackMsg ( w, l ) True
-                        }
-                    , Input.button []
-                        { label = text <| "Coller Contenu " ++ w.name
-                        , onPress = Just <| unpackMsg ( w, l ) False
+                        { label = text <| "Coller Contenu"
+                        , onPress = Just <| chgContent w
                         }
                     ]
+
+                Nothing ->
+                    []
            )
 
 
-interactNav : Interact.Event Interactable -> Content Wheel -> Maybe DocMsg
+viewPack :
+    CommonModel
+    -> List (Html.Attribute msg)
+    -> (CommonMsg -> msg)
+    -> (Interact.Msg Interactable zone -> msg)
+    -> Element msg
+viewPack model events wrapCommon wrapInteract =
+    if model.packVisible then
+        el
+            ([ Border.color <| rgb 0 0 0
+             , Border.width 4
+             , Bg.color <| rgb 1 1 1
+             , alignBottom
+             , alignRight
+             ]
+                ++ (List.map Element.htmlAttribute <|
+                        (Html.Attributes.style "height" <| (String.fromFloat <| model.packScale * 100) ++ "%")
+                            :: (Html.Attributes.style "width" <| (String.fromFloat <| model.packScale * 100) ++ "%")
+                            :: events
+                   )
+            )
+        <|
+            html <|
+                S.svg (List.map (Html.Attributes.map (wrapCommon << PackSvgMsg)) <| PanSvg.svgAttributes model.packSvg) <|
+                    List.map
+                        (\( id, p ) ->
+                            Svg.map (wrapInteract << Interact.map fromWheelInteractable) <|
+                                Wheel.view p.wheel p.pos p.length Wheel.defaultStyle (P id) <|
+                                    toUID id
+                        )
+                        (Coll.toList model.pack)
+                        ++ (case model.dragging of
+                                Just { pos, length, wheel } ->
+                                    [ Wheel.drawSimple wheel pos length ]
+
+                                Nothing ->
+                                    []
+                           )
+
+    else
+        Element.none
+
+
+interactNav : Interact.Event Interactable Zone -> Content Wheel -> Maybe DocMsg
 interactNav event content =
     case ( event.item, event.action ) of
         ( IWheel id, Interact.Clicked _ ) ->
@@ -280,11 +469,14 @@ interactNav event content =
             Nothing
 
 
-interactSelectEdit : Interact.Event Interactable -> CommonModel -> CommonModel
+interactSelectEdit : Interact.Event Interactable Zone -> CommonModel -> CommonModel
 interactSelectEdit event model =
     case ( event.item, event.action ) of
+        ( IWheel id, Interact.Clicked ( _, False, False ) ) ->
+            { model | edit = [ id ] }
+
         ( IWheel id, Interact.Clicked _ ) ->
-            { model | edit = Just id }
+            { model | edit = id :: model.edit }
 
         _ ->
             model

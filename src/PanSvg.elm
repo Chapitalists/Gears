@@ -15,6 +15,7 @@ port newSVGSize : (D.Value -> msg) -> Sub msg
 type alias Model =
     { svgSize : Size
     , viewPos : ViewPos
+    , id : String
     }
 
 
@@ -63,36 +64,44 @@ centerZoom ( pos, size ) model =
     { model | viewPos = ViewPos pos <| size * 8 }
 
 
-init : Model
-init =
+init : String -> Model
+init id =
     { svgSize = Size 0 0
     , viewPos = ViewPos (vec2 0 0) 10
+    , id = id
     }
 
 
 type Msg
-    = SVGSize (Result D.Error Size)
-    | Zoom Float ( Float, Float )
+    = ScaleSize Float Size
+    | SetSmallestSize Float
+    | ZoomPoint Float ( Float, Float )
+    | Pan Direction
+
+
+type Direction
+    = Left
+    | Right
+    | Up
+    | Down
 
 
 update : Msg -> Model -> Model
 update msg model =
     case msg of
-        SVGSize res ->
-            case res of
-                Result.Err e ->
-                    Debug.log (D.errorToString e) model
+        ScaleSize scale size ->
+            { model | svgSize = { width = size.width * scale, height = size.height * scale } }
 
-                Result.Ok s ->
-                    { model | svgSize = s }
+        SetSmallestSize f ->
+            { model | viewPos = ViewPos model.viewPos.c f }
 
-        Zoom f ( x, y ) ->
+        ZoomPoint f ( x, y ) ->
             let
                 vp =
                     model.viewPos
 
                 factor =
-                    1 + f / 1000
+                    clamp 0.01 2 <| 1 + f / 1000
 
                 p =
                     Vec.sub (mapIn (vec2 x y) model) vp.c
@@ -108,17 +117,40 @@ update msg model =
             in
             { model | viewPos = { c = nC, smallestSize = nS } }
 
+        Pan dir ->
+            let
+                viewPos =
+                    model.viewPos
 
-sub : Sub Msg
-sub =
-    newSVGSize (SVGSize << D.decodeValue sizeDecoder)
+                d =
+                    viewPos.smallestSize / 50
+            in
+            { model
+                | viewPos =
+                    { viewPos
+                        | c =
+                            Vec.add model.viewPos.c <|
+                                case dir of
+                                    Left ->
+                                        vec2 -d 0
+
+                                    Right ->
+                                        vec2 d 0
+
+                                    Up ->
+                                        vec2 0 -d
+
+                                    Down ->
+                                        vec2 0 d
+                    }
+            }
 
 
 svgAttributes : Model -> List (Svg.Attribute Msg)
 svgAttributes model =
     [ computeViewBox model
-    , Wheel.onWheel (\e -> Zoom e.deltaY e.mouseEvent.offsetPos)
-    , Html.Attributes.id "svg"
+    , Wheel.onWheel (\e -> ZoomPoint e.deltaY e.mouseEvent.offsetPos)
+    , Html.Attributes.id model.id
     , Svg.attribute "width" "100%"
     , Svg.attribute "height" "100%"
     , SA.preserveAspectRatio TypedSvg.Types.AlignNone TypedSvg.Types.Meet

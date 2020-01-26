@@ -14,9 +14,9 @@ import Element.Font as Font
 import Element.Input as Input
 import Engine
 import Html.Attributes
+import Interact
 import Json.Encode as E
 import PanSvg
-import Sound exposing (Sound)
 import Url exposing (Url)
 
 
@@ -56,6 +56,8 @@ type Shortcut
     | Play
     | Left
     | Right
+    | Suppr
+    | Pack
 
 
 type Msg
@@ -68,11 +70,13 @@ type Msg
     | Redo
     | View (List ( String, Identifier ))
     | ChangedMode Mode
-    | SoundClicked Sound
     | AddContent WContent
     | KeyPressed Shortcut
+    | DirectionRepeat PanSvg.Direction
     | MobileMsg MEditor.Msg
     | CollarMsg CEditor.Msg
+    | EditorsMsg Editors.CommonMsg
+    | InteractMsg (Interact.Msg Editors.Interactable Editors.Zone)
 
 
 update : Msg -> Doc -> ( Doc, Cmd Msg )
@@ -155,63 +159,84 @@ update msg doc =
                 _ ->
                     Debug.log "IMPOSSIBLE Mode for wrong editor" ( doc, Cmd.none )
 
-        SoundClicked sound ->
-            case doc.editor of
-                M _ ->
-                    update (MobileMsg <| MEditor.SoundClicked sound) doc
-
-                C _ ->
-                    update (CollarMsg <| CEditor.SoundClicked sound) doc
-
         AddContent content ->
             case doc.editor of
                 M _ ->
-                    update (MobileMsg <| MEditor.NewGear content) doc
+                    update (MobileMsg <| MEditor.NewGear MEditor.defaultAddPos content) doc
 
                 C _ ->
                     update (CollarMsg <| CEditor.NewBead content) doc
 
         KeyPressed sh ->
-            case ( sh, doc.editor ) of
-                ( Tool i, M _ ) ->
-                    case i of
-                        1 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False) doc
-
-                        2 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Harmonize) doc
-
-                        3 ->
-                            update (MobileMsg <| MEditor.ChangedTool <| MEditor.Edit) doc
-
-                        _ ->
-                            ( doc, Cmd.none )
-
-                ( Tool i, C _ ) ->
-                    case i of
-                        1 ->
-                            update (CollarMsg <| CEditor.ChangedTool <| CEditor.Play False) doc
-
-                        3 ->
-                            update (CollarMsg <| CEditor.ChangedTool <| CEditor.Edit) doc
-
-                        _ ->
-                            ( doc, Cmd.none )
-
-                ( Play, M _ ) ->
-                    update (MobileMsg <| MEditor.ToggleEngine) doc
-
-                ( Play, C _ ) ->
-                    update (CollarMsg <| CEditor.ToggleEngine) doc
-
-                ( Left, C _ ) ->
-                    update (CollarMsg <| CEditor.CursorLeft) doc
-
-                ( Right, C _ ) ->
-                    update (CollarMsg <| CEditor.CursorRight) doc
+            case sh of
+                Pack ->
+                    update (EditorsMsg <| Editors.TogglePack) doc
 
                 _ ->
-                    ( doc, Cmd.none )
+                    case ( sh, doc.editor ) of
+                        ( Tool i, M _ ) ->
+                            case i of
+                                1 ->
+                                    update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False False) doc
+
+                                2 ->
+                                    update (MobileMsg <| MEditor.ChangedTool <| MEditor.Harmonize) doc
+
+                                3 ->
+                                    update (MobileMsg <| MEditor.ChangedTool <| MEditor.Edit) doc
+
+                                _ ->
+                                    ( doc, Cmd.none )
+
+                        ( Tool i, C _ ) ->
+                            case i of
+                                1 ->
+                                    update (CollarMsg <| CEditor.ChangedTool <| CEditor.Play False) doc
+
+                                3 ->
+                                    update (CollarMsg <| CEditor.ChangedTool <| CEditor.Edit) doc
+
+                                _ ->
+                                    ( doc, Cmd.none )
+
+                        ( Play, M _ ) ->
+                            update (MobileMsg <| MEditor.ToggleEngine) doc
+
+                        ( Play, C _ ) ->
+                            update (CollarMsg <| CEditor.ToggleEngine) doc
+
+                        ( Left, C _ ) ->
+                            update (CollarMsg <| CEditor.CursorLeft) doc
+
+                        ( Right, C _ ) ->
+                            update (CollarMsg <| CEditor.CursorRight) doc
+
+                        ( Suppr, C e ) ->
+                            case ( e.common.edit, e.tool ) of
+                                ( [ B i ], CEditor.Edit ) ->
+                                    update (CollarMsg <| CEditor.DeleteBead i) doc
+
+                                _ ->
+                                    ( doc, Cmd.none )
+
+                        ( Suppr, M e ) ->
+                            case ( e.common.edit, e.tool ) of
+                                ( [ G id ], MEditor.Edit ) ->
+                                    update (MobileMsg <| MEditor.DeleteGear id) doc
+
+                                _ ->
+                                    ( doc, Cmd.none )
+
+                        _ ->
+                            ( doc, Cmd.none )
+
+        DirectionRepeat dir ->
+            case doc.editor of
+                M editor ->
+                    update (MobileMsg <| MEditor.SvgMsg <| PanSvg.Pan dir) doc
+
+                C editor ->
+                    update (CollarMsg <| CEditor.SvgMsg <| PanSvg.Pan dir) doc
 
         MobileMsg subMsg ->
             case ( doc.editor, getViewing doc ) of
@@ -305,6 +330,23 @@ update msg doc =
                 _ ->
                     Debug.log "IMPOSSIBLE CollarMsg while viewing no collar" ( doc, Cmd.none )
 
+        EditorsMsg subMsg ->
+            case doc.editor of
+                M e ->
+                    update (MobileMsg <| MEditor.CommonMsg subMsg) doc
+
+                C e ->
+                    -- because no drag in collar
+                    ( doc, Cmd.none )
+
+        InteractMsg subMsg ->
+            case doc.editor of
+                M e ->
+                    update (MobileMsg <| MEditor.InteractMsg subMsg) doc
+
+                C e ->
+                    update (CollarMsg <| CEditor.InteractMsg subMsg) doc
+
 
 subs : Doc -> List (Sub Msg)
 subs doc =
@@ -331,6 +373,15 @@ keyCodeToMode =
 
 view : Doc -> Element Msg
 view doc =
+    let
+        ( common, interact ) =
+            case doc.editor of
+                M e ->
+                    ( e.common, e.interact )
+
+                C e ->
+                    ( e.common, e.interact )
+    in
     row [ height fill, width fill ] <|
         (column [ width fill, height fill ]
             ([ viewTop doc
@@ -338,6 +389,13 @@ view doc =
                 [ width fill
                 , height fill
                 , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
+                , Element.inFront <|
+                    Editors.viewPack common
+                        (List.map (Html.Attributes.map InteractMsg) <|
+                            Interact.dragSpaceEvents interact Editors.ZPack
+                        )
+                        EditorsMsg
+                        InteractMsg
                 ]
                <|
                 viewContent doc
@@ -587,6 +645,9 @@ updateData to newMobile { data } =
 
         Editors.Group ->
             Data.group newMobile data
+
+        Editors.Cancel ->
+            Data.cancelGroup data
 
         Editors.NOOP ->
             data
