@@ -321,9 +321,6 @@ update msg model =
                 Doc.MobileMsg (MEditor.ChangedMode (MEditor.CommonMode (Editors.ChangeSound _))) ->
                     ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
 
-                Doc.CollarMsg (CEditor.ChangedMode (CEditor.CommonMode (Editors.ChangeSound _))) ->
-                    ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
-
                 _ ->
                     ( { model | doc = doc }, Cmd.map DocMsg cmd )
 

@@ -25,8 +25,8 @@ port toEngine : E.Value -> Cmd msg
 
 type alias Doc =
     { data : Data Mobeel
-    , viewing : List ( String, Identifier )
-    , editor : Editor
+    , viewing : List ( String, Id Geer )
+    , editor : MEditor.Model
     }
 
 
@@ -43,7 +43,7 @@ init : Maybe Url -> Doc
 init url =
     { data = Data.init Mobile.new url
     , viewing = []
-    , editor = M <| MEditor.init Nothing Nothing
+    , editor = MEditor.init Nothing Nothing
     }
 
 
@@ -68,13 +68,12 @@ type Msg
     | Loaded Mobeel String
     | Undo
     | Redo
-    | View (List ( String, Identifier ))
+    | View (List ( String, Id Geer ))
     | ChangedMode Mode
     | AddContent WContent
     | KeyPressed Shortcut
     | DirectionRepeat PanSvg.Direction
     | MobileMsg MEditor.Msg
-    | CollarMsg CEditor.Msg
     | EditorsMsg Editors.CommonMsg
     | InteractMsg (Interact.Msg Editors.Interactable Editors.Zone)
 
@@ -111,7 +110,7 @@ update msg doc =
         Loaded m name ->
             ( { data = Data.load m name doc.data
               , viewing = []
-              , editor = M <| MEditor.init (Just m) <| Just <| getShared doc
+              , editor = MEditor.init (Just m) <| Just <| getShared doc
               }
             , toEngine Engine.stop
             )
@@ -124,48 +123,26 @@ update msg doc =
 
         View l ->
             let
-                mobileContent =
-                    Content.M <| Data.current doc.data
-
-                v =
-                    cleanViewing l mobileContent
+                ( mobile, mayView ) =
+                    getViewingCleaned l <| Data.current doc.data
             in
-            case getViewingHelper v mobileContent of
-                Content.C c ->
-                    ( { doc | viewing = v, editor = C <| CEditor.init c <| getShared doc }, toEngine Engine.stop )
-
-                Content.M m ->
-                    ( { doc | viewing = l, editor = M <| MEditor.init (Just m) <| Just <| getShared doc }
-                    , toEngine Engine.stop
-                    )
-
-                _ ->
-                    Debug.log "IMPOSSIBLE Cannot view Sound" ( doc, Cmd.none )
+            ( { doc
+                | viewing = Maybe.withDefault l mayView
+                , editor = MEditor.init (Just mobile) <| Just <| getShared doc
+              }
+            , toEngine Engine.stop
+            )
 
         ChangedMode mode ->
-            case ( mode, doc.editor ) of
-                ( MobileMode subMode, M _ ) ->
+            case mode of
+                MobileMode subMode ->
                     update (MobileMsg <| MEditor.ChangedMode subMode) doc
 
-                ( CollarMode subMode, C _ ) ->
-                    update (CollarMsg <| CEditor.ChangedMode subMode) doc
-
-                ( CommonMode subMode, M _ ) ->
+                CommonMode subMode ->
                     update (MobileMsg <| MEditor.ChangedMode <| MEditor.CommonMode subMode) doc
 
-                ( CommonMode subMode, C _ ) ->
-                    update (CollarMsg <| CEditor.ChangedMode <| CEditor.CommonMode subMode) doc
-
-                _ ->
-                    Debug.log "IMPOSSIBLE Mode for wrong editor" ( doc, Cmd.none )
-
         AddContent content ->
-            case doc.editor of
-                M _ ->
-                    update (MobileMsg <| MEditor.NewGear MEditor.defaultAddPos content) doc
-
-                C _ ->
-                    update (CollarMsg <| CEditor.NewBead content) doc
+            update (MobileMsg <| MEditor.NewGear MEditor.defaultAddPos content) doc
 
         KeyPressed sh ->
             case sh of
@@ -173,8 +150,8 @@ update msg doc =
                     update (EditorsMsg <| Editors.TogglePack) doc
 
                 _ ->
-                    case ( sh, doc.editor ) of
-                        ( Tool i, M _ ) ->
+                    case sh of
+                        Tool i ->
                             case i of
                                 1 ->
                                     update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False False) doc
@@ -188,39 +165,11 @@ update msg doc =
                                 _ ->
                                     ( doc, Cmd.none )
 
-                        ( Tool i, C _ ) ->
-                            case i of
-                                1 ->
-                                    update (CollarMsg <| CEditor.ChangedTool <| CEditor.Play False) doc
-
-                                3 ->
-                                    update (CollarMsg <| CEditor.ChangedTool <| CEditor.Edit) doc
-
-                                _ ->
-                                    ( doc, Cmd.none )
-
-                        ( Play, M _ ) ->
+                        Play ->
                             update (MobileMsg <| MEditor.ToggleEngine) doc
 
-                        ( Play, C _ ) ->
-                            update (CollarMsg <| CEditor.ToggleEngine) doc
-
-                        ( Left, C _ ) ->
-                            update (CollarMsg <| CEditor.CursorLeft) doc
-
-                        ( Right, C _ ) ->
-                            update (CollarMsg <| CEditor.CursorRight) doc
-
-                        ( Suppr, C e ) ->
-                            case ( e.common.edit, e.tool ) of
-                                ( [ B i ], CEditor.Edit ) ->
-                                    update (CollarMsg <| CEditor.DeleteBead i) doc
-
-                                _ ->
-                                    ( doc, Cmd.none )
-
-                        ( Suppr, M e ) ->
-                            case ( e.common.edit, e.tool ) of
+                        Suppr ->
+                            case ( doc.editor.common.edit, doc.editor.tool ) of
                                 ( [ G id ], MEditor.Edit ) ->
                                     update (MobileMsg <| MEditor.DeleteGear id) doc
 
@@ -231,156 +180,80 @@ update msg doc =
                             ( doc, Cmd.none )
 
         DirectionRepeat dir ->
-            case doc.editor of
-                M editor ->
-                    update (MobileMsg <| MEditor.SvgMsg <| PanSvg.Pan dir) doc
-
-                C editor ->
-                    update (CollarMsg <| CEditor.SvgMsg <| PanSvg.Pan dir) doc
+            update (MobileMsg <| MEditor.SvgMsg <| PanSvg.Pan dir) doc
 
         MobileMsg subMsg ->
-            case ( doc.editor, getViewing doc ) of
-                ( M editor, Content.M mobile ) ->
-                    let
-                        res =
-                            MEditor.update subMsg ( editor, mobile )
+            let
+                mobile =
+                    getViewing doc
 
-                        newMobile =
-                            updateMobile doc.viewing (always res.mobile) <| Data.current doc.data
+                res =
+                    MEditor.update subMsg ( doc.editor, mobile )
 
-                        data =
-                            updateData res.toUndo newMobile doc
+                newMobile =
+                    updateViewing doc.viewing (always res.mobile) <| Data.current doc.data
 
-                        newDoc =
-                            { doc | data = data, editor = M res.model }
+                data =
+                    updateData res.toUndo newMobile doc
 
-                        ( finalDoc, cmd ) =
-                            Maybe.withDefault ( newDoc, Cmd.none )
-                                (res.outMsg
-                                    |> Maybe.map
-                                        (\outMsg ->
-                                            case outMsg of
-                                                Editors.Inside (G id) ->
-                                                    update
-                                                        (View <|
-                                                            doc.viewing
-                                                                ++ [ ( Mobile.gearName id mobile.gears, G id ) ]
-                                                        )
-                                                        newDoc
+                newDoc =
+                    { doc | data = data, editor = res.model }
 
-                                                _ ->
-                                                    ( newDoc, Cmd.none )
-                                        )
+                ( finalDoc, cmd ) =
+                    Maybe.withDefault ( newDoc, Cmd.none )
+                        (res.outMsg
+                            |> Maybe.map
+                                (\outMsg ->
+                                    case outMsg of
+                                        Editors.Inside (G id) ->
+                                            update
+                                                (View <|
+                                                    doc.viewing
+                                                        ++ [ ( Mobile.gearName id mobile.gears, id ) ]
+                                                )
+                                                newDoc
+
+                                        _ ->
+                                            ( newDoc, Cmd.none )
                                 )
-                    in
-                    ( finalDoc
-                    , Cmd.batch
-                        [ Cmd.map MobileMsg res.cmd
-                        , Maybe.withDefault Cmd.none <| Maybe.map toEngine res.toEngine
-                        , cmd
-                        ]
-                    )
-
-                _ ->
-                    Debug.log "IMPOSSIBLE MobileMsg while viewing no mobile" ( doc, Cmd.none )
-
-        CollarMsg subMsg ->
-            case ( doc.editor, getViewing doc ) of
-                ( C editor, Content.C collar ) ->
-                    let
-                        res =
-                            CEditor.update subMsg ( editor, collar )
-
-                        newMobile =
-                            updateCollar doc.viewing (always res.collar) <| Data.current doc.data
-
-                        data =
-                            updateData res.toUndo newMobile doc
-
-                        newDoc =
-                            { doc | data = data, editor = C res.model }
-
-                        ( finalDoc, cmd ) =
-                            Maybe.withDefault ( newDoc, Cmd.none )
-                                (res.outMsg
-                                    |> Maybe.map
-                                        (\outMsg ->
-                                            case outMsg of
-                                                Editors.Inside (B id) ->
-                                                    update
-                                                        (View <|
-                                                            doc.viewing
-                                                                ++ [ ( Collar.beadName id collar, B id ) ]
-                                                        )
-                                                        newDoc
-
-                                                _ ->
-                                                    ( newDoc, Cmd.none )
-                                        )
-                                )
-                    in
-                    ( finalDoc
-                    , Cmd.batch
-                        [ Cmd.map CollarMsg res.cmd
-                        , Maybe.withDefault Cmd.none <| Maybe.map toEngine res.toEngine
-                        , cmd
-                        ]
-                    )
-
-                _ ->
-                    Debug.log "IMPOSSIBLE CollarMsg while viewing no collar" ( doc, Cmd.none )
+                        )
+            in
+            ( finalDoc
+            , Cmd.batch
+                [ Cmd.map MobileMsg res.cmd
+                , Maybe.withDefault Cmd.none <| Maybe.map toEngine res.toEngine
+                , cmd
+                ]
+            )
 
         EditorsMsg subMsg ->
-            case doc.editor of
-                M e ->
-                    update (MobileMsg <| MEditor.CommonMsg subMsg) doc
-
-                C e ->
-                    -- because no drag in collar
-                    ( doc, Cmd.none )
+            update (MobileMsg <| MEditor.CommonMsg subMsg) doc
 
         InteractMsg subMsg ->
-            case doc.editor of
-                M e ->
-                    update (MobileMsg <| MEditor.InteractMsg subMsg) doc
-
-                C e ->
-                    update (CollarMsg <| CEditor.InteractMsg subMsg) doc
+            update (MobileMsg <| MEditor.InteractMsg subMsg) doc
 
 
 subs : Doc -> List (Sub Msg)
 subs doc =
-    case doc.editor of
-        M e ->
-            List.map (Sub.map MobileMsg) <| MEditor.subs e
-
-        C e ->
-            List.map (Sub.map CollarMsg) <| CEditor.subs e
+    List.map (Sub.map MobileMsg) <| MEditor.subs doc.editor
 
 
 type Mode
     = CommonMode Editors.CommonMode
     | MobileMode MEditor.Mode
-    | CollarMode CEditor.Mode
 
 
 keyCodeToMode : List ( String, Mode )
 keyCodeToMode =
     List.map (Tuple.mapSecond CommonMode) Editors.keyCodeToMode
         ++ List.map (Tuple.mapSecond MobileMode) MEditor.keyCodeToMode
-        ++ List.map (Tuple.mapSecond CollarMode) CEditor.keyCodeToMode
 
 
 view : Doc -> Element Msg
 view doc =
     let
         ( common, interact ) =
-            case doc.editor of
-                M e ->
-                    ( e.common, e.interact )
-
-                C e ->
-                    ( e.common, e.interact )
+            ( doc.editor.common, doc.editor.interact )
     in
     row [ height fill, width fill ] <|
         (column [ width fill, height fill ]
@@ -411,13 +284,7 @@ viewTop doc =
     column [ width fill ]
         [ viewNav doc
         , row [ width fill, padding 10, spacing 20, Font.size 14 ]
-            ((case doc.editor of
-                M editor ->
-                    Element.map MobileMsg <| MEditor.viewTools editor
-
-                C editor ->
-                    Element.map CollarMsg <| CEditor.viewTools editor
-             )
+            ((Element.map MobileMsg <| MEditor.viewTools doc.editor)
                 :: [ Input.text [ width (fill |> maximum 500), centerX ]
                         { label = Input.labelHidden "Nom du fichier"
                         , text = Data.getName doc.data
@@ -483,158 +350,71 @@ viewNav doc =
 
 viewBottom : Doc -> List (Element Msg)
 viewBottom doc =
-    case doc.editor of
-        M editor ->
-            [ Element.map MobileMsg <| MEditor.viewExtraTools editor ]
-
-        _ ->
-            []
+    [ Element.map MobileMsg <| MEditor.viewExtraTools doc.editor ]
 
 
 viewSide : Doc -> List (Element Msg)
 viewSide doc =
-    case ( doc.editor, getViewing doc ) of
-        ( M editor, Content.M m ) ->
-            List.map (Element.map MobileMsg) <| MEditor.viewDetails editor m
-
-        ( C editor, Content.C c ) ->
-            List.map (Element.map CollarMsg) <| CEditor.viewDetails editor c
-
-        _ ->
-            []
+    List.map (Element.map MobileMsg) <| MEditor.viewDetails doc.editor <| getViewing doc
 
 
 viewContent : Doc -> Element Msg
 viewContent doc =
-    case ( getViewing doc, doc.editor ) of
-        ( Content.M m, M editor ) ->
-            Element.map MobileMsg <| MEditor.viewContent ( editor, m )
-
-        ( Content.C c, C editor ) ->
-            Element.map CollarMsg <| CEditor.viewContent ( editor, c )
-
-        _ ->
-            text "Cannot edit Sound currently"
+    Element.map MobileMsg <| MEditor.viewContent ( doc.editor, getViewing doc )
 
 
 getShared : Doc -> ( Editors.CommonModel, PanSvg.Model )
 getShared doc =
-    case doc.editor of
-        M e ->
-            ( e.common, e.svg )
-
-        C e ->
-            ( e.common, e.svg )
+    ( doc.editor.common, doc.editor.svg )
 
 
-getViewing : Doc -> WContent
+getViewing : Doc -> Mobeel
 getViewing { viewing, data } =
-    getViewingHelper viewing <| Content.M <| Data.current data
+    Tuple.first <| getViewingCleaned viewing <| Data.current data
 
 
-getViewingHelper : List ( String, Identifier ) -> WContent -> WContent
-getViewingHelper l content =
-    case ( l, content ) of
-        ( [], _ ) ->
-            content
+getViewingCleaned : List ( String, Id Geer ) -> Mobeel -> ( Mobeel, Maybe (List ( String, Id Geer )) )
+getViewingCleaned l mobile =
+    case l of
+        ( str, next ) :: rest ->
+            case Coll.maybeGet next mobile.gears of
+                Just g ->
+                    case Wheel.getContent g of
+                        Content.M m ->
+                            let
+                                ( mob, may ) =
+                                    getViewingCleaned rest m
+                            in
+                            ( mob, Maybe.map ((::) ( str, next )) may )
 
-        ( ( _, G next ) :: rest, Content.M m ) ->
-            getViewingHelper rest <| Wheel.getContent <| Coll.get next m.gears
+                        _ ->
+                            Debug.log ("No mobile to view in " ++ str) ( mobile, Just [] )
 
-        ( ( _, B next ) :: rest, Content.C c ) ->
-            getViewingHelper rest <| Wheel.getContent <| Collar.get next c
-
-        _ ->
-            Debug.log "IMPOSSIBLE Should’ve cleaned Viewing before get" content
-
-
-
--- TODO Should clean Viewing with each update of data, do it in update before case ?
-
-
-cleanViewing : List ( String, Identifier ) -> WContent -> List ( String, Identifier )
-cleanViewing l content =
-    case ( l, content ) of
-        ( [], _ ) ->
-            []
-
-        ( ( str, G next ) :: rest, Content.M m ) ->
-            ( str, G next ) :: (cleanViewing rest <| Wheel.getContent <| Coll.get next m.gears)
-
-        ( ( str, B next ) :: rest, Content.C c ) ->
-            ( str, B next ) :: (cleanViewing rest <| Wheel.getContent <| Collar.get next c)
+                Nothing ->
+                    Debug.log ("No Gear to view at " ++ str) ( mobile, Just [] )
 
         _ ->
-            Debug.log ("Cleaned view " ++ (String.concat <| List.map Tuple.first l) ++ Debug.toString content) []
+            ( mobile, Nothing )
 
 
-updateViewing : List ( String, Identifier ) -> (WContent -> WContent) -> WContent -> WContent
-updateViewing l f content =
-    case ( l, content ) of
-        ( [], _ ) ->
-            f content
+updateViewing : List ( String, Id Geer ) -> (Mobeel -> Mobeel) -> Mobeel -> Mobeel
+updateViewing l f mobile =
+    case l of
+        ( _, next ) :: rest ->
+            case Wheel.getContent <| Coll.get next mobile.gears of
+                Content.M subMobile ->
+                    { mobile
+                        | gears =
+                            Coll.update next
+                                (Wheel.setContent <| Content.M <| updateViewing rest f subMobile)
+                                mobile.gears
+                    }
 
-        ( ( _, G next ) :: rest, Content.M m ) ->
-            Content.M
-                { m
-                    | gears =
-                        Coll.update next
-                            (Wheel.setContent <| updateViewing rest f <| Wheel.getContent <| Coll.get next m.gears)
-                            m.gears
-                }
-
-        ( ( _, B next ) :: rest, Content.C c ) ->
-            Content.C <|
-                Collar.updateBead next
-                    (Wheel.setContent <| updateViewing rest f <| Wheel.getContent <| Collar.get next c)
-                    c
+                _ ->
+                    Debug.log "IMPOSSIBLE View isn’t correct, should’ve been cleaned" mobile
 
         _ ->
-            Debug.log "IMPOSSIBLE Should’ve cleaned Viewing before update" content
-
-
-updateMobile : List ( String, Identifier ) -> (Mobeel -> Mobeel) -> Mobeel -> Mobeel
-updateMobile l f m =
-    case
-        updateViewing l
-            (\c ->
-                case c of
-                    Content.M mo ->
-                        Content.M <| f mo
-
-                    _ ->
-                        Debug.log "Can’t update, not viewing mobile" c
-            )
-        <|
-            Content.M m
-    of
-        Content.M mo ->
-            mo
-
-        _ ->
-            Debug.log "IMPOSSIBLE Racine isn’t a mobile" m
-
-
-updateCollar : List ( String, Identifier ) -> (Colleer -> Colleer) -> Mobeel -> Mobeel
-updateCollar l f m =
-    case
-        updateViewing l
-            (\c ->
-                case c of
-                    Content.C co ->
-                        Content.C <| f co
-
-                    _ ->
-                        Debug.log "Can’t update, not viewing collar" c
-            )
-        <|
-            Content.M m
-    of
-        Content.M mo ->
-            mo
-
-        _ ->
-            Debug.log "IMPOSSIBLE Racine isn’t a mobile" m
+            f mobile
 
 
 updateData : Editors.ToUndo -> Mobeel -> Doc -> Data Mobeel
