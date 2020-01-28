@@ -88,11 +88,6 @@ defaultStyle =
     { mod = None, motor = False, dashed = False, baseColor = Nothing }
 
 
-type Interactable x
-    = IWheel x
-    | IResizeHandle x Bool -- True = Right
-
-
 type Msg
     = ChangeContent (Content Wheel)
     | ChangeVolume Float
@@ -124,8 +119,8 @@ update msg g =
             { g | wheel = { wheel | color = c } }
 
 
-view : Wheel -> Vec2 -> Float -> Style -> id -> String -> Svg (Interact.Msg (Interactable id) zone)
-view w pos length style id uid =
+view : Wheel -> Vec2 -> Float -> Style -> id -> Maybe (Bool -> id) -> String -> Svg (Interact.Msg id zone)
+view w pos length style wheel mayHandle uid =
     let
         tickH =
             length / 15
@@ -138,9 +133,9 @@ view w pos length style id uid =
     in
     S.g
         ([ SA.transform [ Translate (getX pos) (getY pos) ] ]
-            ++ Interact.hoverEvents (IWheel id)
+            ++ Interact.hoverEvents wheel
         )
-        ([ S.g (Html.Attributes.id uid :: Interact.draggableEvents (IWheel id))
+        ([ S.g (Html.Attributes.id uid :: Interact.draggableEvents wheel)
             ([ S.circle
                 [ SA.cx <| Num 0
                 , SA.cy <| Num 0
@@ -263,29 +258,34 @@ view w pos length style id uid =
                         ]
 
                     Resizing ->
-                        [ S.polyline
-                            [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
-                            , SA.stroke Color.red
-                            , SA.strokeWidth <| Num tickW
-                            ]
-                            []
-                        , S.circle
-                            ([ SA.cx <| Num (-length / 2)
-                             , SA.cy <| Num 0
-                             , SA.r <| Num (tickW * 2)
-                             ]
-                                ++ Interact.draggableEvents (IResizeHandle id False)
-                            )
-                            []
-                        , S.circle
-                            ([ SA.cx <| Num (length / 2)
-                             , SA.cy <| Num 0
-                             , SA.r <| Num (tickW * 2)
-                             ]
-                                ++ Interact.draggableEvents (IResizeHandle id True)
-                            )
-                            []
-                        ]
+                        case mayHandle of
+                            Just handle ->
+                                [ S.polyline
+                                    [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
+                                    , SA.stroke Color.red
+                                    , SA.strokeWidth <| Num tickW
+                                    ]
+                                    []
+                                , S.circle
+                                    ([ SA.cx <| Num (-length / 2)
+                                     , SA.cy <| Num 0
+                                     , SA.r <| Num (tickW * 2)
+                                     ]
+                                        ++ Interact.draggableEvents (handle False)
+                                    )
+                                    []
+                                , S.circle
+                                    ([ SA.cx <| Num (length / 2)
+                                     , SA.cy <| Num 0
+                                     , SA.r <| Num (tickW * 2)
+                                     ]
+                                        ++ Interact.draggableEvents (handle True)
+                                    )
+                                    []
+                                ]
+
+                            Nothing ->
+                                []
 
                     _ ->
                         []
