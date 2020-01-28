@@ -2,13 +2,11 @@ port module Doc exposing (..)
 
 import Coll exposing (Coll, Id)
 import Data exposing (Data)
-import Data.Collar as Collar exposing (Colleer)
 import Data.Content as Content exposing (Content)
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
 import Data.Wheel as Wheel exposing (Wheel)
-import Editor.Collar as CEditor
-import Editor.Common as Editors exposing (Identifier(..))
-import Editor.Mobile as MEditor
+import Editor.Interacting exposing (Interactable, Zone(..))
+import Editor.Mobile as Editor
 import Element exposing (..)
 import Element.Font as Font
 import Element.Input as Input
@@ -16,6 +14,7 @@ import Engine
 import Html.Attributes
 import Interact
 import Json.Encode as E
+import Pack exposing (Pack)
 import PanSvg
 import Url exposing (Url)
 
@@ -26,24 +25,15 @@ port toEngine : E.Value -> Cmd msg
 type alias Doc =
     { data : Data Mobeel
     , viewing : List ( String, Id Geer )
-    , editor : MEditor.Model
+    , editor : Editor.Model
     }
-
-
-type Editor
-    = M MEditor.Model
-    | C CEditor.Model
-
-
-type alias WContent =
-    Content Wheel
 
 
 init : Maybe Url -> Doc
 init url =
     { data = Data.init Mobile.new url
     , viewing = []
-    , editor = MEditor.init Nothing Nothing
+    , editor = Editor.init Nothing Nothing
     }
 
 
@@ -69,13 +59,11 @@ type Msg
     | Undo
     | Redo
     | View (List ( String, Id Geer ))
-    | ChangedMode Mode
-    | AddContent WContent
+    | AddContent (Content Wheel)
     | KeyPressed Shortcut
     | DirectionRepeat PanSvg.Direction
-    | MobileMsg MEditor.Msg
-    | EditorsMsg Editors.CommonMsg
-    | InteractMsg (Interact.Msg Editors.Interactable Editors.Zone)
+    | MobileMsg Editor.Msg
+    | InteractMsg (Interact.Msg Interactable Zone)
 
 
 update : Msg -> Doc -> ( Doc, Cmd Msg )
@@ -103,7 +91,7 @@ update msg doc =
         New ->
             ( { data = Data.new Mobile.new doc.data
               , viewing = []
-              , editor = MEditor.init Nothing <| Just <| getShared doc
+              , editor = Editor.init Nothing <| Just <| Editor.getShared doc.editor
               }
             , toEngine Engine.stop
             )
@@ -111,7 +99,7 @@ update msg doc =
         Loaded m name ->
             ( { data = Data.load m name doc.data
               , viewing = []
-              , editor = MEditor.init (Just m) <| Just <| getShared doc
+              , editor = Editor.init (Just m) <| Just <| Editor.getShared doc.editor
               }
             , toEngine Engine.stop
             )
@@ -143,50 +131,42 @@ update msg doc =
             in
             ( { doc
                 | viewing = Maybe.withDefault l mayView
-                , editor = MEditor.init (Just mobile) <| Just <| getShared doc
+                , editor = Editor.init (Just mobile) <| Just <| Editor.getShared doc.editor
               }
             , toEngine Engine.stop
             )
 
-        ChangedMode mode ->
-            case mode of
-                MobileMode subMode ->
-                    update (MobileMsg <| MEditor.ChangedMode subMode) doc
-
-                CommonMode subMode ->
-                    update (MobileMsg <| MEditor.ChangedMode <| MEditor.CommonMode subMode) doc
-
         AddContent content ->
-            update (MobileMsg <| MEditor.NewGear MEditor.defaultAddPos content) doc
+            update (MobileMsg <| Editor.NewGear Editor.defaultAddPos content) doc
 
         KeyPressed sh ->
             case sh of
                 Pack ->
-                    update (EditorsMsg <| Editors.TogglePack) doc
+                    update (MobileMsg <| Editor.PackMsg <| Pack.TogglePack) doc
 
                 _ ->
                     case sh of
                         Tool i ->
                             case i of
                                 1 ->
-                                    update (MobileMsg <| MEditor.ChangedTool <| MEditor.Play False False) doc
+                                    update (MobileMsg <| Editor.ChangedTool <| Editor.Play False False) doc
 
                                 2 ->
-                                    update (MobileMsg <| MEditor.ChangedTool <| MEditor.Harmonize) doc
+                                    update (MobileMsg <| Editor.ChangedTool <| Editor.Harmonize) doc
 
                                 3 ->
-                                    update (MobileMsg <| MEditor.ChangedTool <| MEditor.Edit) doc
+                                    update (MobileMsg <| Editor.ChangedTool <| Editor.Edit) doc
 
                                 _ ->
                                     ( doc, Cmd.none )
 
                         Play ->
-                            update (MobileMsg <| MEditor.ToggleEngine) doc
+                            update (MobileMsg <| Editor.ToggleEngine) doc
 
                         Suppr ->
-                            case ( doc.editor.common.edit, doc.editor.tool ) of
-                                ( [ G id ], MEditor.Edit ) ->
-                                    update (MobileMsg <| MEditor.DeleteGear id) doc
+                            case ( doc.editor.edit, doc.editor.tool ) of
+                                ( [ id ], Editor.Edit ) ->
+                                    update (MobileMsg <| Editor.DeleteGear id) doc
 
                                 _ ->
                                     ( doc, Cmd.none )
@@ -195,7 +175,7 @@ update msg doc =
                             ( doc, Cmd.none )
 
         DirectionRepeat dir ->
-            update (MobileMsg <| MEditor.SvgMsg <| PanSvg.Pan dir) doc
+            update (MobileMsg <| Editor.SvgMsg <| PanSvg.Pan dir) doc
 
         MobileMsg subMsg ->
             let
@@ -203,7 +183,7 @@ update msg doc =
                     getViewing doc
 
                 res =
-                    MEditor.update subMsg ( doc.editor, mobile )
+                    Editor.update subMsg ( doc.editor, mobile )
 
                 newMobile =
                     updateViewing doc.viewing (always res.mobile) <| Data.current doc.data
@@ -220,16 +200,13 @@ update msg doc =
                             |> Maybe.map
                                 (\outMsg ->
                                     case outMsg of
-                                        Editors.Inside (G id) ->
+                                        Editor.Inside id ->
                                             update
                                                 (View <|
                                                     doc.viewing
                                                         ++ [ ( Mobile.gearName id mobile.gears, id ) ]
                                                 )
                                                 newDoc
-
-                                        _ ->
-                                            ( newDoc, Cmd.none )
                                 )
                         )
             in
@@ -241,35 +218,22 @@ update msg doc =
                 ]
             )
 
-        EditorsMsg subMsg ->
-            update (MobileMsg <| MEditor.CommonMsg subMsg) doc
-
         InteractMsg subMsg ->
-            update (MobileMsg <| MEditor.InteractMsg subMsg) doc
+            update (MobileMsg <| Editor.InteractMsg subMsg) doc
 
 
 subs : Doc -> List (Sub Msg)
 subs doc =
-    List.map (Sub.map MobileMsg) <| MEditor.subs doc.editor
+    List.map (Sub.map MobileMsg) <| Editor.subs doc.editor
 
 
-type Mode
-    = CommonMode Editors.CommonMode
-    | MobileMode MEditor.Mode
-
-
-keyCodeToMode : List ( String, Mode )
+keyCodeToMode : List ( String, Editor.Mode )
 keyCodeToMode =
-    List.map (Tuple.mapSecond CommonMode) Editors.keyCodeToMode
-        ++ List.map (Tuple.mapSecond MobileMode) MEditor.keyCodeToMode
+    Editor.keyCodeToMode
 
 
 view : Doc -> Element Msg
 view doc =
-    let
-        ( common, interact ) =
-            ( doc.editor.common, doc.editor.interact )
-    in
     row [ height fill, width fill ] <|
         (column [ width fill, height fill ]
             ([ viewTop doc
@@ -277,13 +241,6 @@ view doc =
                 [ width fill
                 , height fill
                 , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
-                , Element.inFront <|
-                    Editors.viewPack common
-                        (List.map (Html.Attributes.map InteractMsg) <|
-                            Interact.dragSpaceEvents interact Editors.ZPack
-                        )
-                        EditorsMsg
-                        InteractMsg
                 ]
                <|
                 viewContent doc
@@ -299,7 +256,7 @@ viewTop doc =
     column [ width fill ]
         [ viewNav doc
         , row [ width fill, padding 10, spacing 20, Font.size 14 ]
-            ((Element.map MobileMsg <| MEditor.viewTools doc.editor)
+            ((Element.map MobileMsg <| Editor.viewTools doc.editor)
                 :: [ Input.text [ width (fill |> maximum 500), centerX ]
                         { label = Input.labelHidden "Nom du fichier"
                         , text = Data.getName doc.data
@@ -365,22 +322,17 @@ viewNav doc =
 
 viewBottom : Doc -> List (Element Msg)
 viewBottom doc =
-    [ Element.map MobileMsg <| MEditor.viewExtraTools doc.editor ]
+    [ Element.map MobileMsg <| Editor.viewExtraTools doc.editor ]
 
 
 viewSide : Doc -> List (Element Msg)
 viewSide doc =
-    List.map (Element.map MobileMsg) <| MEditor.viewDetails doc.editor <| getViewing doc
+    List.map (Element.map MobileMsg) <| Editor.viewDetails doc.editor <| getViewing doc
 
 
 viewContent : Doc -> Element Msg
 viewContent doc =
-    Element.map MobileMsg <| MEditor.viewContent ( doc.editor, getViewing doc )
-
-
-getShared : Doc -> ( Editors.CommonModel, PanSvg.Model )
-getShared doc =
-    ( doc.editor.common, doc.editor.svg )
+    Element.map MobileMsg <| Editor.viewContent ( doc.editor, getViewing doc )
 
 
 getViewing : Doc -> Mobeel
@@ -432,17 +384,17 @@ updateViewing l f mobile =
             f mobile
 
 
-updateData : Editors.ToUndo -> Mobeel -> Doc -> Data Mobeel
+updateData : Editor.ToUndo -> Mobeel -> Doc -> Data Mobeel
 updateData to newMobile { data } =
     case to of
-        Editors.Do ->
+        Editor.Do ->
             Data.do newMobile data
 
-        Editors.Group ->
+        Editor.Group ->
             Data.group newMobile data
 
-        Editors.Cancel ->
+        Editor.Cancel ->
             Data.cancelGroup data
 
-        Editors.NOOP ->
+        Editor.NOOP ->
             data

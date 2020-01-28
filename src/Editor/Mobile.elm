@@ -120,6 +120,11 @@ type Dragging
     | ChgContent (Id Geer) Dragging
 
 
+getShared : Model -> ( Pack, PanSvg.Model )
+getShared { pack, svg } =
+    ( pack, svg )
+
+
 init : Maybe Mobeel -> Maybe ( Pack, PanSvg.Model ) -> Model
 init mayMobile mayShared =
     let

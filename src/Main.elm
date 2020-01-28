@@ -10,9 +10,8 @@ import Data.Mobile as Mobile exposing (Mobeel)
 import Data.Wheel as Wheel
 import Dict exposing (Dict)
 import Doc exposing (Doc)
-import Editor.Collar as CEditor
-import Editor.Common as Editors
-import Editor.Mobile as MEditor
+import Editor.Interacting as Interacting
+import Editor.Mobile as Editor
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Events exposing (..)
@@ -290,13 +289,13 @@ update msg model =
         -- FIXME Code smell?
         ChangedMode mode ->
             case mode of
-                DocMode subMode ->
-                    update (DocMsg <| Doc.ChangedMode subMode) { model | mode = mode }
+                EditorMode subMode ->
+                    update (DocMsg <| Doc.MobileMsg <| Editor.ChangedMode subMode) { model | mode = mode }
 
                 _ ->
                     let
                         ( newModel, cmds ) =
-                            update (DocMsg <| Doc.ChangedMode <| Doc.CommonMode Editors.Normal) model
+                            update (DocMsg <| Doc.MobileMsg <| Editor.ChangedMode Editor.Normal) model
                     in
                     case mode of
                         Capsuling ->
@@ -318,12 +317,13 @@ update msg model =
             in
             case subMsg of
                 -- FIXME Absurd... Should be a commonMsg and common ChangedMode
-                Doc.MobileMsg (MEditor.ChangedMode (MEditor.CommonMode (Editors.ChangeSound _))) ->
+                Doc.MobileMsg (Editor.ChangedMode (Editor.ChangeSound _)) ->
                     ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
 
                 _ ->
                     ( { model | doc = doc }, Cmd.map DocMsg cmd )
 
+        -- TODO Should dispatch KeysMsg, not specific messages to each part, too big of a dependency
         KeysMsg subMsg ->
             let
                 ( state, events ) =
@@ -386,7 +386,7 @@ subs { doc } =
 
 
 type Mode
-    = DocMode Doc.Mode -- FIXME Second source of truth, not reliable
+    = EditorMode Editor.Mode -- FIXME Second source of truth, not reliable
     | Capsuling
     | Downloading
     | NoMode
@@ -398,7 +398,7 @@ keyCodeToMode =
         [ ( "KeyE", Capsuling )
         , ( "KeyR", Downloading )
         ]
-            ++ List.map (Tuple.mapSecond DocMode) Doc.keyCodeToMode
+            ++ List.map (Tuple.mapSecond EditorMode) Doc.keyCodeToMode
 
 
 keyCodeToShortcut : Dict String Doc.Shortcut
@@ -604,7 +604,7 @@ soundView s =
                 >> (Element.mapAttribute <| DocMsg << Doc.InteractMsg)
             )
          <|
-            Interact.draggableEvents (Editors.ISound s)
+            Interact.draggableEvents (Interacting.ISound s)
         )
         (text (Sound.toString s))
 
