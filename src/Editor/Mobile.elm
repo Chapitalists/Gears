@@ -7,7 +7,7 @@ import Data.Common as CommonData
 import Data.Content as Content exposing (Content)
 import Data.Gear as Gear
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
-import Data.Wheel as Wheel exposing (Wheel)
+import Data.Wheel as Wheel exposing (Conteet, Wheel)
 import Editor.Interacting exposing (Interactable(..), Zone(..))
 import Element exposing (..)
 import Element.Background as Bg
@@ -159,7 +159,7 @@ type Msg
       --
     | CopyGear (Id Geer)
     | CopyContent Wheel
-    | NewGear Vec2 (Content Wheel)
+    | NewGear Vec2 Conteet
     | DeleteGear (Id Geer)
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract (Link Geer) Fraction
@@ -1292,7 +1292,7 @@ doResize id oldPos newPos add mobile =
     { mobile | gears = Harmo.resizeFree id newSize gears }
 
 
-doChangeContent : Id Geer -> Content Wheel -> Maybe Color.Color -> Model -> Mobeel -> Return
+doChangeContent : Id Geer -> Conteet -> Maybe Color.Color -> Model -> Mobeel -> Return
 doChangeContent id c mayColor model mobile =
     let
         return =

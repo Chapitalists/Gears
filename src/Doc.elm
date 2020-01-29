@@ -4,7 +4,7 @@ import Coll exposing (Coll, Id)
 import Data exposing (Data)
 import Data.Content as Content exposing (Content)
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
-import Data.Wheel as Wheel exposing (Wheel)
+import Data.Wheel as Wheel exposing (Conteet, Wheel)
 import Editor.Interacting exposing (Interactable, Zone(..))
 import Editor.Mobile as Editor
 import Element exposing (..)
@@ -59,7 +59,7 @@ type Msg
     | Undo
     | Redo
     | View (List ( String, Id Geer ))
-    | AddContent (Content Wheel)
+    | AddContent Conteet
     | KeyPressed Shortcut
     | DirectionRepeat PanSvg.Direction
     | MobileMsg Editor.Msg

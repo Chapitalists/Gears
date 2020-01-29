@@ -4,7 +4,7 @@ import Coll exposing (Coll, Id)
 import Data.Common exposing (..)
 import Data.Content as Content exposing (Content, Mobile)
 import Data.Gear as Gear exposing (Gear)
-import Data.Wheel as Wheel exposing (Wheel)
+import Data.Wheel as Wheel exposing (Conteet, Wheel)
 import Harmony as Harmo exposing (Harmony)
 import Json.Decode as D
 import Json.Encode as E
@@ -44,7 +44,7 @@ defaultGear =
     Gear.default Wheel.default
 
 
-gearFromContent : Content Wheel -> Vec2 -> Geer
+gearFromContent : Conteet -> Vec2 -> Geer
 gearFromContent c pos =
     { pos = pos
     , harmony = Harmo.newSelf <| getContentLength c

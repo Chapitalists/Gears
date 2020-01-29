@@ -29,25 +29,29 @@ type alias Wheel =
     }
 
 
+type alias Conteet =
+    Content Wheel
+
+
 type WheelContent
-    = C (Content Wheel)
+    = C Conteet
 
 
-getContent : Wheeled g -> Content Wheel
+getContent : Wheeled g -> Conteet
 getContent { wheel } =
     case wheel.content of
         C c ->
             c
 
 
-getWheelContent : Wheel -> Content Wheel
+getWheelContent : Wheel -> Conteet
 getWheelContent { content } =
     case content of
         C c ->
             c
 
 
-setContent : Content Wheel -> Wheeled g -> Wheeled g
+setContent : Conteet -> Wheeled g -> Wheeled g
 setContent c g =
     let
         w =
@@ -67,7 +71,7 @@ default =
     }
 
 
-fromContent : Content Wheel -> Wheel
+fromContent : Conteet -> Wheel
 fromContent c =
     { default | content = C c }
 
@@ -89,7 +93,7 @@ defaultStyle =
 
 
 type Msg
-    = ChangeContent (Content Wheel)
+    = ChangeContent Conteet
     | ChangeVolume Float
     | Named String
     | ChangeColor Color

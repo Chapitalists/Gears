@@ -1,12 +1,12 @@
 module Data.Common exposing (..)
 
 import Data.Content as Content exposing (Content)
-import Data.Wheel exposing (Wheel)
+import Data.Wheel exposing (Conteet)
 import Harmony as Harmo
 import Sound
 
 
-getContentLength : Content Wheel -> Float
+getContentLength : Conteet -> Float
 getContentLength c =
     case c of
         Content.S s ->

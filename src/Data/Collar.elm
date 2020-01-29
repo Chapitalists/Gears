@@ -2,7 +2,7 @@ module Data.Collar exposing (..)
 
 import Data.Common exposing (..)
 import Data.Content as Content exposing (Bead, Collar, Content)
-import Data.Wheel as Wheel exposing (Wheel)
+import Data.Wheel as Wheel exposing (Conteet, Wheel)
 import Json.Decode as D
 import Json.Encode as E
 
@@ -20,7 +20,7 @@ toUID i =
     "bead-" ++ String.fromInt i
 
 
-beadFromContent : Content Wheel -> Beed
+beadFromContent : Conteet -> Beed
 beadFromContent c =
     { length = getContentLength c, wheel = Wheel.fromContent c }
 
