@@ -140,7 +140,7 @@ encodeWheel w hasView =
     , ( "volume", E.float <| clamp 0 1 w.volume )
     , ( "view", E.bool hasView )
     ]
-        ++ (case Wheel.getContent { wheel = w } of
+        ++ (case Wheel.getWheelContent w of
                 Content.S s ->
                     [ ( "soundName", E.string <| Sound.toString s ) ]
 

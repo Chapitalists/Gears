@@ -175,7 +175,7 @@ update msg model =
                         loadList l =
                             List.concatMap
                                 (\wheel ->
-                                    case Wheel.getContent { wheel = wheel } of
+                                    case Wheel.getWheelContent wheel of
                                         Content.S s ->
                                             if List.member s model.loadedSoundList then
                                                 []

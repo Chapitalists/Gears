@@ -293,7 +293,7 @@ update msg ( model, mobile ) =
         CopyContent w ->
             case model.edit of
                 [ id ] ->
-                    doChangeContent id (Wheel.getContent { wheel = w }) (Just w.color) model mobile
+                    doChangeContent id (Wheel.getWheelContent w) (Just w.color) model mobile
 
                 _ ->
                     return
