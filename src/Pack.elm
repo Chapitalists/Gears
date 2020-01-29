@@ -188,13 +188,15 @@ view pack events wrap interactable wrapInteract =
                     List.map
                         (\( id, p ) ->
                             Svg.map wrapInteract <|
-                                Wheel.view p.wheel p.pos p.length Wheel.defaultStyle (interactable id) Nothing <|
+                                Wheel.view p.wheel p.pos p.length Wheel.defaultStyle (Just <| interactable id) Nothing <|
                                     toUID id
                         )
                         (Coll.toList pack.wheels)
                         ++ (case pack.dragging of
                                 Just { pos, length, wheel } ->
-                                    [ Wheel.drawSimple wheel pos length ]
+                                    [ Svg.map wrapInteract <|
+                                        Wheel.view wheel pos length Wheel.defaultStyle Nothing Nothing ""
+                                    ]
 
                                 Nothing ->
                                     []
