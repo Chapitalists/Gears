@@ -754,7 +754,7 @@ viewContent ( model, mobile ) =
 
             else
                 case Interact.getInteract model.interact of
-                    Just ( IGear iid, mode ) ->
+                    Just ( IWheel iid [], mode ) ->
                         if iid /= id then
                             Wheel.None
 
@@ -814,7 +814,7 @@ viewContent ( model, mobile ) =
                                     Maybe.map (\bId -> (Coll.get bId mobile.gears).wheel.color) <|
                                         Harmo.getBaseId g.harmony
                                 }
-                                (Just <| IGear id)
+                                (Just <| IWheel id [])
                                 (Just <| IResizeHandle id)
                                 (Gear.toUID id)
                         )
@@ -1369,7 +1369,7 @@ manageInteractEvent event model mobile =
             { return
                 | outMsg =
                     case ( event.item, event.action ) of
-                        ( IGear id, Interact.Clicked _ ) ->
+                        ( IWheel id [], Interact.Clicked _ ) ->
                             case Wheel.getWheelContent <| (Coll.get id mobile.gears).wheel of
                                 Content.M _ ->
                                     Just <| Inside id
@@ -1391,7 +1391,7 @@ manageInteractEvent event model mobile =
 
         SelectMotor ->
             case ( event.item, event.action ) of
-                ( IGear id, Interact.Clicked _ ) ->
+                ( IWheel id [], Interact.Clicked _ ) ->
                     { return
                         | model = { model | mode = Normal }
                         , mobile = { mobile | motor = id }
@@ -1411,7 +1411,7 @@ manageInteractEvent event model mobile =
 
         SupprMode ->
             case ( event.item, event.action ) of
-                ( IGear id, Interact.Clicked _ ) ->
+                ( IWheel id [], Interact.Clicked _ ) ->
                     update (DeleteGear id) ( model, mobile )
 
                 ( IPack id, Interact.Clicked _ ) ->
@@ -1496,7 +1496,7 @@ interactPlay on event model mobile =
     in
     case ( event.item, event.action, model.dragging ) of
         -- MUTE
-        ( IGear id, Interact.Clicked _, _ ) ->
+        ( IWheel id [], Interact.Clicked _, _ ) ->
             let
                 w =
                     (Coll.get id mobile.gears).wheel
@@ -1539,7 +1539,7 @@ interactPlay on event model mobile =
             }
 
         -- VOLUME
-        ( IGear id, Interact.Dragged oldPos newPos ( True, _, _ ) ZSurface, NoDrag ) ->
+        ( IWheel id [], Interact.Dragged oldPos newPos ( True, _, _ ) ZSurface, NoDrag ) ->
             let
                 res =
                     doVolumeChange id oldPos newPos scale mobile model.engine
@@ -1551,7 +1551,7 @@ interactPlay on event model mobile =
                 , toEngine = res.toEngine
             }
 
-        ( IGear id, Interact.Dragged oldPos newPos _ ZSurface, VolumeChange ) ->
+        ( IWheel id [], Interact.Dragged oldPos newPos _ ZSurface, VolumeChange ) ->
             let
                 res =
                     doVolumeChange id oldPos newPos scale mobile model.engine
@@ -1562,24 +1562,24 @@ interactPlay on event model mobile =
             { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
         -- LINK -> MOTOR
-        ( IGear _, Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
+        ( IWheel _ [], Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
             -- If ConpleteLink, don’t move
             return
 
-        ( IGear id, Interact.Dragged _ pos _ ZSurface, _ ) ->
+        ( IWheel id [], Interact.Dragged _ pos _ ZSurface, _ ) ->
             { return | model = { model | dragging = HalfLink ( id, pos ) } }
 
-        ( IGear to, Interact.DragIn, HalfLink ( from, _ ) ) ->
+        ( IWheel to [], Interact.DragIn, HalfLink ( from, _ ) ) ->
             { return | model = { model | dragging = CompleteLink ( from, to ) } }
 
-        ( IGear to, Interact.DragOut, CompleteLink ( from, _ ) ) ->
+        ( IWheel to [], Interact.DragOut, CompleteLink ( from, _ ) ) ->
             let
                 toCenter =
                     (Coll.get to mobile.gears).pos
             in
             { return | model = { model | dragging = HalfLink ( from, toCenter ) } }
 
-        ( IGear _, Interact.DragEnded True, CompleteLink l ) ->
+        ( IWheel _ [], Interact.DragEnded True, CompleteLink l ) ->
             let
                 ( gears, toPlay ) =
                     Motor.add l mobile.gears <| Engine.playingIds model.engine
@@ -1616,7 +1616,7 @@ interactHarmonize event model mobile =
     in
     case ( event.item, event.action, model.dragging ) of
         -- COPY
-        ( IGear id, Interact.Clicked _, _ ) ->
+        ( IWheel id [], Interact.Clicked _, _ ) ->
             { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
         -- RESIZE
@@ -1634,24 +1634,24 @@ interactHarmonize event model mobile =
             { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
         -- LINK -> HARMO
-        ( IGear _, Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
+        ( IWheel _ [], Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
             -- If Complete Link, don’t move
             return
 
-        ( IGear id, Interact.Dragged _ pos _ ZSurface, _ ) ->
+        ( IWheel id [], Interact.Dragged _ pos _ ZSurface, _ ) ->
             { return | model = { model | dragging = HalfLink ( id, pos ) } }
 
-        ( IGear to, Interact.DragIn, HalfLink ( from, _ ) ) ->
+        ( IWheel to [], Interact.DragIn, HalfLink ( from, _ ) ) ->
             { return | model = { model | dragging = CompleteLink ( from, to ) } }
 
-        ( IGear to, Interact.DragOut, CompleteLink ( from, _ ) ) ->
+        ( IWheel to [], Interact.DragOut, CompleteLink ( from, _ ) ) ->
             let
                 toCenter =
                     (Coll.get to mobile.gears).pos
             in
             { return | model = { model | dragging = HalfLink ( from, toCenter ) } }
 
-        ( IGear _, Interact.DragEnded True, CompleteLink l ) ->
+        ( IWheel _ [], Interact.DragEnded True, CompleteLink l ) ->
             let
                 ( newGears, mayFract ) =
                     doLinked l mobile.gears
@@ -1682,10 +1682,10 @@ interactHarmonize event model mobile =
 interactSelectEdit : Interact.Event Interactable Zone -> Model -> Model
 interactSelectEdit event model =
     case ( event.item, event.action ) of
-        ( IGear id, Interact.Clicked ( _, False, False ) ) ->
+        ( IWheel id [], Interact.Clicked ( _, False, False ) ) ->
             { model | edit = [ id ] }
 
-        ( IGear id, Interact.Clicked _ ) ->
+        ( IWheel id [], Interact.Clicked _ ) ->
             { model | edit = id :: model.edit }
 
         _ ->
@@ -1699,7 +1699,7 @@ interactMove :
     -> Maybe { model : Model, mobile : Mobeel, toUndo : ToUndo }
 interactMove event model mobile =
     case ( event.item, event.action, model.dragging ) of
-        ( IGear id, Interact.Dragged _ pos _ ZSurface, _ ) ->
+        ( IWheel id [], Interact.Dragged _ pos _ ZSurface, _ ) ->
             let
                 gearUp =
                     Gear.update <| Gear.NewPos pos
@@ -1713,7 +1713,7 @@ interactMove event model mobile =
         ( _, Interact.DragEnded _, Moving ) ->
             Just { model = { model | dragging = NoDrag }, mobile = mobile, toUndo = Do }
 
-        ( IGear id, Interact.Dragged _ pos _ ZPack, _ ) ->
+        ( IWheel id [], Interact.Dragged _ pos _ ZPack, _ ) ->
             Just
                 { mobile = mobile
                 , toUndo = Cancel
@@ -1733,7 +1733,7 @@ interactMove event model mobile =
                     }
                 }
 
-        ( IGear id, Interact.DragEnded True, Packing ) ->
+        ( IWheel id [], Interact.DragEnded True, Packing ) ->
             Just
                 { mobile = mobile
                 , toUndo = Cancel
