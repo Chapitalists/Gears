@@ -125,9 +125,25 @@ update msg g =
             { g | wheel = { wheel | color = c } }
 
 
-view : Wheel -> Vec2 -> Float -> Style -> Maybe inter -> Maybe (Bool -> inter) -> String -> Svg (Interact.Msg inter x)
+view :
+    Wheel
+    -> Vec2
+    -> Float
+    -> Style
+    -> Maybe (List Int -> inter)
+    -> Maybe (Bool -> inter)
+    -> String
+    -> Svg (Interact.Msg inter x)
 view w pos length style mayWheelInter mayHandleInter uid =
     let
+        viewContent =
+            case w.content of
+                C (Content.C _) ->
+                    w.viewContent
+
+                _ ->
+                    False
+
         tickH =
             length / 15
 
@@ -139,7 +155,9 @@ view w pos length style mayWheelInter mayHandleInter uid =
 
         ( hoverAttrs, dragAttrs ) =
             Maybe.withDefault ( [], [] ) <|
-                Maybe.map (\inter -> ( Interact.hoverEvents inter, Interact.draggableEvents inter )) mayWheelInter
+                Maybe.map
+                    (\inter -> ( Interact.hoverEvents <| inter [], Interact.draggableEvents <| inter [] ))
+                    mayWheelInter
     in
     S.g
         ([ SA.transform [ Translate (getX pos) (getY pos) ] ]
@@ -211,46 +229,55 @@ view w pos length style mayWheelInter mayHandleInter uid =
                         Nothing ->
                             []
                    )
-                ++ (let
-                        symSize =
-                            length / 4
-                    in
-                    case w.content of
-                        C (Content.M _) ->
-                            [ S.line
-                                [ SA.x1 <| Num -symSize
-                                , SA.y1 <| Num -symSize
-                                , SA.x2 <| Num symSize
-                                , SA.y2 <| Num symSize
-                                , SA.stroke Color.grey
-                                , SA.strokeWidth <| Num tickW
-                                ]
-                                []
-                            , S.line
-                                [ SA.x1 <| Num -symSize
-                                , SA.y1 <| Num symSize
-                                , SA.x2 <| Num symSize
-                                , SA.y2 <| Num -symSize
-                                , SA.stroke Color.grey
-                                , SA.strokeWidth <| Num tickW
-                                ]
-                                []
-                            ]
+                ++ (if viewContent then
+                        case w.content of
+                            C (Content.C collar) ->
+                                insideCollarView collar (vec2 (-length / 2) 0) uid
 
-                        C (Content.C _) ->
-                            [ S.line
-                                [ SA.x1 <| Num -symSize
-                                , SA.y1 <| Num 0
-                                , SA.x2 <| Num symSize
-                                , SA.y2 <| Num 0
-                                , SA.stroke Color.grey
-                                , SA.strokeWidth <| Num tickW
-                                ]
-                                []
-                            ]
+                            _ ->
+                                Debug.todo "view Sound or Mobile inside wheel"
 
-                        _ ->
-                            []
+                    else
+                        let
+                            symSize =
+                                length / 4
+                        in
+                        case w.content of
+                            C (Content.M _) ->
+                                [ S.line
+                                    [ SA.x1 <| Num -symSize
+                                    , SA.y1 <| Num -symSize
+                                    , SA.x2 <| Num symSize
+                                    , SA.y2 <| Num symSize
+                                    , SA.stroke Color.grey
+                                    , SA.strokeWidth <| Num tickW
+                                    ]
+                                    []
+                                , S.line
+                                    [ SA.x1 <| Num -symSize
+                                    , SA.y1 <| Num symSize
+                                    , SA.x2 <| Num symSize
+                                    , SA.y2 <| Num -symSize
+                                    , SA.stroke Color.grey
+                                    , SA.strokeWidth <| Num tickW
+                                    ]
+                                    []
+                                ]
+
+                            C (Content.C _) ->
+                                [ S.line
+                                    [ SA.x1 <| Num -symSize
+                                    , SA.y1 <| Num 0
+                                    , SA.x2 <| Num symSize
+                                    , SA.y2 <| Num 0
+                                    , SA.stroke Color.grey
+                                    , SA.strokeWidth <| Num tickW
+                                    ]
+                                    []
+                                ]
+
+                            _ ->
+                                []
                    )
             )
          ]
@@ -307,6 +334,28 @@ view w pos length style mayWheelInter mayHandleInter uid =
                         []
                )
         )
+
+
+insideCollarView : Content.Collar Wheel -> Vec2 -> String -> List (Svg (Interact.Msg a x))
+insideCollarView collar leftmostPoint parentUid =
+    Tuple.first <|
+        List.foldl
+            (\b ( l, ( p, i ) ) ->
+                ( view b.wheel
+                    (vec2 (p + b.length / 2) <| getY leftmostPoint)
+                    b.length
+                    defaultStyle
+                    Nothing
+                    Nothing
+                    (parentUid ++ String.fromInt i)
+                    :: l
+                , ( p + b.length
+                  , i + 1
+                  )
+                )
+            )
+            ( [], ( getX leftmostPoint, 0 ) )
+            (Content.getBeads collar)
 
 
 encoder : Wheel -> List ( String, E.Value )
