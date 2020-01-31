@@ -107,6 +107,7 @@ type Msg
     | ChangeVolume Float
     | Named String
     | ChangeColor Color
+    | ToggleContentView
 
 
 update : Msg -> Wheeled g -> Wheeled g
@@ -131,6 +132,9 @@ update msg g =
 
         ChangeColor c ->
             { g | wheel = { wheel | color = c } }
+
+        ToggleContentView ->
+            { g | wheel = { wheel | viewContent = not wheel.viewContent } }
 
 
 view :

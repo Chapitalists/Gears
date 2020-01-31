@@ -1010,8 +1010,14 @@ viewEditDetails model mobile =
 
                     Content.C _ ->
                         Input.button []
-                            { label = text "Déplier Collier"
-                            , onPress = Nothing
+                            { label =
+                                text <|
+                                    if g.wheel.viewContent then
+                                        "Replier Collier"
+
+                                    else
+                                        "Déplier Collier"
+                            , onPress = Just <| WheelMsgs [ ( id, Wheel.ToggleContentView ) ]
                             }
                 , column [ width fill, scrollbarY, spacing 20, padding 10 ] <|
                     [ Input.slider
@@ -1366,20 +1372,20 @@ manageInteractEvent event model mobile =
     -- TODO Find good pattern for big mess there
     case model.mode of
         Nav ->
-            { return
-                | outMsg =
-                    case ( event.item, event.action ) of
-                        ( IWheel id [], Interact.Clicked _ ) ->
-                            case Wheel.getWheelContent <| (Coll.get id mobile.gears).wheel of
-                                Content.M _ ->
-                                    Just <| Inside id
+            case ( event.item, event.action ) of
+                ( IWheel id [], Interact.Clicked _ ) ->
+                    case Wheel.getWheelContent <| (Coll.get id mobile.gears).wheel of
+                        Content.M _ ->
+                            { return | outMsg = Just <| Inside id }
 
-                                _ ->
-                                    Nothing
+                        Content.C _ ->
+                            update (WheelMsgs [ ( id, Wheel.ToggleContentView ) ]) ( model, mobile )
 
                         _ ->
-                            Nothing
-            }
+                            return
+
+                _ ->
+                    return
 
         Move ->
             case interactMove event model mobile of
