@@ -164,8 +164,8 @@ view :
     Pack
     -> List (Html.Attribute msg)
     -> (Msg -> msg)
-    -> (Id Packed -> int)
-    -> (Interact.Msg int zone -> msg)
+    -> (Id Packed -> inter)
+    -> (Interact.Msg inter zone -> msg)
     -> Element msg
 view pack events wrap interactable wrapInteract =
     if pack.visible then

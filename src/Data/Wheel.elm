@@ -86,12 +86,20 @@ type Mod
 
 
 type alias Style =
-    { mod : Mod, motor : Bool, dashed : Bool, baseColor : Maybe Color }
+    { mod : Mod
+    , motor : Bool
+    , dashed : Bool
+    , baseColor : Maybe Color
+    }
 
 
 defaultStyle : Style
 defaultStyle =
-    { mod = None, motor = False, dashed = False, baseColor = Nothing }
+    { mod = None
+    , motor = False
+    , dashed = False
+    , baseColor = Nothing
+    }
 
 
 type Msg
@@ -281,7 +289,7 @@ view w pos length style mayWheelInter mayHandleInter uid =
                    )
             )
          ]
-            -- Not Draggable
+            -- No drag events part
             ++ (case style.mod of
                     Selected first ->
                         [ S.circle
