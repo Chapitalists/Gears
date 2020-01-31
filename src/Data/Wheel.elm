@@ -24,6 +24,7 @@ type alias Wheel =
     , startPercent : Float
     , volume : Float
     , content : WheelContent
+    , viewContent : Bool
     , mute : Bool
     , color : Color
     }
@@ -66,6 +67,7 @@ default =
     , startPercent = 0
     , volume = 1
     , content = C <| Content.S Sound.noSound
+    , viewContent = True
     , mute = False
     , color = Color.black
     }
@@ -314,6 +316,7 @@ encoder w =
     , ( "volume", E.float w.volume )
     , ( "mute", E.bool w.mute )
     , ( "color", colorEncoder w.color )
+    , ( "viewContent", E.bool w.viewContent )
     , case w.content of
         C c ->
             Content.encoder encoder c
@@ -325,24 +328,27 @@ decoder =
     Content.decoder (D.lazy (\_ -> decoder)) default
         |> D.andThen
             (\content ->
-                Field.attempt "name" D.string <|
-                    \name ->
-                        Field.require "startPercent" D.float <|
-                            \startPercent ->
-                                Field.require "volume" D.float <|
-                                    \volume ->
-                                        Field.require "mute" D.bool <|
-                                            \mute ->
-                                                Field.attempt "color" colorDecoder <|
-                                                    \color ->
-                                                        D.succeed
-                                                            { name = Maybe.withDefault "" name
-                                                            , startPercent = startPercent
-                                                            , volume = volume
-                                                            , content = C content
-                                                            , mute = mute
-                                                            , color = Maybe.withDefault Color.black color
-                                                            }
+                Field.attempt "viewContent" D.bool <|
+                    \viewContent ->
+                        Field.attempt "name" D.string <|
+                            \name ->
+                                Field.require "startPercent" D.float <|
+                                    \startPercent ->
+                                        Field.require "volume" D.float <|
+                                            \volume ->
+                                                Field.require "mute" D.bool <|
+                                                    \mute ->
+                                                        Field.attempt "color" colorDecoder <|
+                                                            \color ->
+                                                                D.succeed
+                                                                    { name = Maybe.withDefault "" name
+                                                                    , startPercent = startPercent
+                                                                    , volume = volume
+                                                                    , content = C content
+                                                                    , viewContent = Maybe.withDefault True viewContent
+                                                                    , mute = mute
+                                                                    , color = Maybe.withDefault Color.black color
+                                                                    }
             )
 
 
