@@ -98,6 +98,11 @@ getCumulLengthAt i c =
     List.foldl (\b sum -> sum + b.length) 0 <| List.take i <| getBeads c
 
 
+getMatriceLength : Collar item -> Float
+getMatriceLength c =
+    getCumulLengthAt c.matrice c
+
+
 collarEncoder : (item -> List ( String, E.Value )) -> Collar item -> E.Value
 collarEncoder wheelEncoder c =
     E.object

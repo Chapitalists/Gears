@@ -244,7 +244,13 @@ view w pos length style mayWheelInter mayHandleInter uid =
                 ++ (if viewContent then
                         case w.content of
                             C (Content.C collar) ->
-                                insideCollarView collar (vec2 (-length / 2) 0) uid
+                                let
+                                    scale =
+                                        length / Content.getMatriceLength collar
+                                in
+                                [ S.g [ SA.transform [ Translate (-length / 2) 0, Scale scale scale ] ] <|
+                                    insideCollarView collar uid
+                                ]
 
                             _ ->
                                 Debug.todo "view Sound or Mobile inside wheel"
@@ -348,13 +354,13 @@ view w pos length style mayWheelInter mayHandleInter uid =
         )
 
 
-insideCollarView : Content.Collar Wheel -> Vec2 -> String -> List (Svg (Interact.Msg a x))
-insideCollarView collar leftmostPoint parentUid =
+insideCollarView : Content.Collar Wheel -> String -> List (Svg (Interact.Msg a x))
+insideCollarView collar parentUid =
     Tuple.first <|
         List.foldl
             (\b ( l, ( p, i ) ) ->
                 ( view b.wheel
-                    (vec2 (p + b.length / 2) <| getY leftmostPoint)
+                    (vec2 (p + b.length / 2) 0)
                     b.length
                     defaultStyle
                     Nothing
@@ -366,7 +372,7 @@ insideCollarView collar leftmostPoint parentUid =
                   )
                 )
             )
-            ( [], ( getX leftmostPoint, 0 ) )
+            ( [], ( 0, 0 ) )
             (Content.getBeads collar)
 
 
