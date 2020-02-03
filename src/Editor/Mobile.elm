@@ -814,7 +814,7 @@ viewContent ( model, mobile ) =
                                     Maybe.map (\bId -> (Coll.get bId mobile.gears).wheel.color) <|
                                         Harmo.getBaseId g.harmony
                                 }
-                                (Just <| IWheel id)
+                                (Just ( IWheel id, [] ))
                                 (Just <| IResizeHandle id)
                                 (Gear.toUID id)
                         )

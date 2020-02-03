@@ -193,7 +193,7 @@ view pack events wrap interactable wrapInteract =
                                     p.pos
                                     p.length
                                     Wheel.defaultStyle
-                                    (Just <| always <| interactable id)
+                                    (Just ( always <| interactable id, [] ))
                                     Nothing
                                     (toUID id)
                         )

@@ -142,7 +142,7 @@ view :
     -> Vec2
     -> Float
     -> Style
-    -> Maybe (List Int -> inter)
+    -> Maybe ( List Int -> inter, List Int )
     -> Maybe (Bool -> inter)
     -> String
     -> Svg (Interact.Msg inter x)
@@ -168,7 +168,7 @@ view w pos length style mayWheelInter mayHandleInter uid =
         ( hoverAttrs, dragAttrs ) =
             Maybe.withDefault ( [], [] ) <|
                 Maybe.map
-                    (\inter -> ( Interact.hoverEvents <| inter [], Interact.draggableEvents <| inter [] ))
+                    (\( inter, l ) -> ( Interact.hoverEvents <| inter l, Interact.draggableEvents <| inter l ))
                     mayWheelInter
     in
     S.g
@@ -249,7 +249,7 @@ view w pos length style mayWheelInter mayHandleInter uid =
                                         length / Content.getMatriceLength collar
                                 in
                                 [ S.g [ SA.transform [ Translate (-length / 2) 0, Scale scale scale ] ] <|
-                                    insideCollarView collar uid
+                                    insideCollarView collar mayWheelInter uid
                                 ]
 
                             _ ->
@@ -354,19 +354,23 @@ view w pos length style mayWheelInter mayHandleInter uid =
         )
 
 
-insideCollarView : Content.Collar Wheel -> String -> List (Svg (Interact.Msg a x))
-insideCollarView collar parentUid =
+insideCollarView :
+    Content.Collar Wheel
+    -> Maybe ( List Int -> inter, List Int )
+    -> String
+    -> List (Svg (Interact.Msg inter x))
+insideCollarView collar mayWheelInter parentUid =
     Tuple.first <|
         List.foldl
-            (\b ( l, ( p, i ) ) ->
+            (\b ( res, ( p, i ) ) ->
                 ( view b.wheel
                     (vec2 (p + b.length / 2) 0)
                     b.length
                     defaultStyle
-                    Nothing
+                    (Maybe.map (\( inter, l ) -> ( inter, l ++ [ i ] )) mayWheelInter)
                     Nothing
                     (parentUid ++ String.fromInt i)
-                    :: l
+                    :: res
                 , ( p + b.length
                   , i + 1
                   )
