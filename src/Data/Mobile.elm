@@ -80,6 +80,11 @@ gearPosSize id coll =
     ( g.pos, Harmo.getLength g.harmony coll )
 
 
+updateGear : Id Geer -> (Geer -> Geer) -> Mobeel -> Mobeel
+updateGear =
+    Content.updateGear
+
+
 encoder : Mobeel -> E.Value
 encoder =
     Content.mobileEncoder Wheel.encoder

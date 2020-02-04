@@ -78,13 +78,8 @@ getCumulLengthAt =
 
 
 get : Int -> Colleer -> Beed
-get i c =
-    case List.head <| List.drop i <| getBeads c of
-        Just b ->
-            b
-
-        Nothing ->
-            Debug.log ("Cannot get Bead " ++ String.fromInt i) <| c.head
+get =
+    Content.getBead
 
 
 add : Int -> Beed -> Colleer -> Colleer
@@ -130,24 +125,8 @@ rm i c =
 
 
 updateBead : Int -> (Beed -> Beed) -> Colleer -> Colleer
-updateBead i f c =
-    if i <= 0 then
-        { c | head = f c.head }
-
-    else
-        { c
-            | beads =
-                List.concat
-                    [ List.take (i - 1) c.beads
-                    , case List.head <| List.drop (i - 1) c.beads of
-                        Nothing ->
-                            []
-
-                        Just b ->
-                            [ f b ]
-                    , List.drop i c.beads
-                    ]
-        }
+updateBead =
+    Content.updateBead
 
 
 encoder : Colleer -> E.Value
