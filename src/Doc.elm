@@ -145,35 +145,36 @@ update msg doc =
                 Pack ->
                     update (MobileMsg <| Editor.PackMsg <| Pack.TogglePack) doc
 
-                _ ->
-                    case sh of
-                        Tool i ->
-                            case i of
-                                1 ->
-                                    update (MobileMsg <| Editor.ChangedTool <| Editor.Play False False) doc
+                Tool i ->
+                    case i of
+                        1 ->
+                            update (MobileMsg <| Editor.ChangedTool <| Editor.Play False False) doc
 
-                                2 ->
-                                    update (MobileMsg <| Editor.ChangedTool <| Editor.Harmonize) doc
+                        2 ->
+                            update (MobileMsg <| Editor.ChangedTool <| Editor.Harmonize) doc
 
-                                3 ->
-                                    update (MobileMsg <| Editor.ChangedTool <| Editor.Edit) doc
-
-                                _ ->
-                                    ( doc, Cmd.none )
-
-                        Play ->
-                            update (MobileMsg <| Editor.ToggleEngine) doc
-
-                        Suppr ->
-                            case ( doc.editor.edit, doc.editor.tool ) of
-                                ( [ id ], Editor.Edit ) ->
-                                    update (MobileMsg <| Editor.DeleteWheel ( id, [] )) doc
-
-                                _ ->
-                                    ( doc, Cmd.none )
+                        3 ->
+                            update (MobileMsg <| Editor.ChangedTool <| Editor.Edit) doc
 
                         _ ->
                             ( doc, Cmd.none )
+
+                Play ->
+                    update (MobileMsg <| Editor.ToggleEngine) doc
+
+                Suppr ->
+                    case ( doc.editor.edit, doc.editor.tool ) of
+                        ( [ id ], Editor.Edit ) ->
+                            update (MobileMsg <| Editor.DeleteWheel ( id, [] )) doc
+
+                        _ ->
+                            ( doc, Cmd.none )
+
+                Left ->
+                    update (MobileMsg <| Editor.CursorLeft) doc
+
+                Right ->
+                    update (MobileMsg <| Editor.CursorRight) doc
 
         DirectionRepeat dir ->
             update (MobileMsg <| Editor.SvgMsg <| PanSvg.Pan dir) doc

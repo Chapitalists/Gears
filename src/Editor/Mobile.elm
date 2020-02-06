@@ -23,7 +23,7 @@ import Interact exposing (Interact)
 import Json.Decode as D
 import Json.Encode as E
 import Link exposing (Link)
-import Math.Vector2 as Vec exposing (Vec2, vec2)
+import Math.Vector2 as Vec exposing (Vec2, getX, getY, vec2)
 import Motor
 import Pack exposing (Pack, Packed)
 import PanSvg
@@ -33,7 +33,7 @@ import Sound exposing (Sound)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
-import TypedSvg.Types exposing (Length(..), Opacity(..))
+import TypedSvg.Types exposing (Fill(..), Length(..), Opacity(..), Transform(..))
 import Waveform exposing (Waveform)
 
 
@@ -57,6 +57,7 @@ type alias Model =
     , tool : Tool
     , mode : Mode
     , edit : List (Id Geer)
+    , cursor : Int
     , link : Maybe LinkInfo
     , engine : Engine
     , interact : Interact.State Interactable
@@ -141,6 +142,7 @@ init mayMobile mayShared =
     , tool = Play False False
     , mode = Normal
     , edit = []
+    , cursor = 0
     , link = Nothing
     , engine = Engine.init
     , interact = Interact.init
@@ -159,6 +161,11 @@ type Msg
     | StopGear (Id Geer)
     | ToggleRecord Bool
     | GotRecord (Result D.Error String)
+      -- COLLAR EDIT
+    | CursorRight
+    | CursorLeft
+    | NewBead Conteet
+    | UnpackBead ( Wheel, Float ) Bool
       --
     | CopyGear (Id Geer)
     | CopyContent Wheel
@@ -292,6 +299,84 @@ update msg ( model, mobile ) =
         StopGear id ->
             { return | model = { model | engine = Engine.init }, toEngine = Just Engine.stop }
 
+        CursorRight ->
+            case model.edit of
+                [ id ] ->
+                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                        Content.C col ->
+                            { return | model = { model | cursor = min (model.cursor + 1) <| Collar.length col } }
+
+                        _ ->
+                            return
+
+                _ ->
+                    return
+
+        CursorLeft ->
+            case model.edit of
+                [ id ] ->
+                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                        Content.C _ ->
+                            { return | model = { model | cursor = max (model.cursor - 1) 0 } }
+
+                        _ ->
+                            return
+
+                _ ->
+                    return
+
+        NewBead c ->
+            case model.edit of
+                [ id ] ->
+                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                        Content.C col ->
+                            { return
+                                | mobile =
+                                    CommonData.updateWheel ( id, [] )
+                                        (Wheel.ChangeContent <| Content.C <| Collar.add model.cursor (Collar.beadFromContent c) col)
+                                        mobile
+                                , toUndo = Group
+                                , model = { model | cursor = model.cursor + 1 }
+                                , cmd = Random.generate (\color -> WheelMsgs [ ( ( id, [ model.cursor ] ), Wheel.ChangeColor color ) ]) colorGen
+                            }
+
+                        _ ->
+                            return
+
+                _ ->
+                    return
+
+        UnpackBead ( w, l ) new ->
+            case model.edit of
+                [ id ] ->
+                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                        Content.C col ->
+                            if new then
+                                { return
+                                    | mobile =
+                                        CommonData.updateWheel ( id, [] )
+                                            (Wheel.ChangeContent <| Content.C <| Collar.add model.cursor { wheel = w, length = l } col)
+                                            mobile
+                                    , toUndo = Do
+                                    , model = { model | cursor = model.cursor + 1 }
+                                }
+
+                            else
+                                Debug.todo "ChangeContent of bead, has to select bead"
+
+                        {- case model.common.edit of
+                           [ B i ] ->
+                               update (WheelMsg ( i, Wheel.ChangeContent <| Wheel.getContent { wheel = w } )) ( model, collar )
+
+                           _ ->
+                               return
+                        -}
+                        _ ->
+                            return
+
+                _ ->
+                    return
+
         CopyGear id ->
             { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
@@ -328,6 +413,26 @@ update msg ( model, mobile ) =
 
                             else
                                 model.edit
+                        , cursor =
+                            if model.edit == [ id ] then
+                                case l of
+                                    [ i ] ->
+                                        case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                                            Content.C _ ->
+                                                if model.cursor > i then
+                                                    model.cursor - 1
+
+                                                else
+                                                    model.cursor
+
+                                            _ ->
+                                                model.cursor
+
+                                    _ ->
+                                        model.cursor
+
+                            else
+                                model.cursor
                         , engine = Engine.init
                     }
                 , toUndo = Do
@@ -517,6 +622,16 @@ update msg ( model, mobile ) =
                 , toUndo = Do
             }
 
+        {- TODO ResizeToContent bead, has to select bead}
+           ResizeToContent i ->
+               { return
+                   | collar =
+                       Collar.updateBead i
+                           (\b -> { b | length = CommonData.getContentLength <| Wheel.getContent <| Collar.get i collar })
+                           collar
+                   , toUndo = Do
+               }
+        -}
         Capsuled [] ->
             return
 
@@ -796,6 +911,25 @@ viewContent ( model, mobile ) =
 
                     _ ->
                         Wheel.None
+
+        {--TODO bead mod inside collar (Wheel.view, viewContent)
+        getMod : Int -> Wheel.Mod
+        getMod i =
+            if model.tool == Edit && model.common.edit == [ B i ] then
+                Wheel.Selected False
+
+            else
+                case Interact.getInteract model.interact of
+                    Just ( IWheel j, Interact.Hover ) ->
+                        if B i == j then
+                            Wheel.Selectable
+
+                        else
+                            Wheel.None
+
+                    _ ->
+                        Wheel.None
+-}
     in
     Element.el
         [ Element.width Element.fill
@@ -932,9 +1066,58 @@ viewContent ( model, mobile ) =
                                                     []
                                            )
 
-                                _ ->
-                                    []
+                                Edit ->
+                                    case model.edit of
+                                        [ id ] ->
+                                            let
+                                                g =
+                                                    Coll.get id mobile.gears
+
+                                                length =
+                                                    Harmo.getLength g.harmony mobile.gears
+
+                                                pos =
+                                                    g.pos
+
+                                                w =
+                                                    g.wheel
+                                            in
+                                            case Wheel.getWheelContent w of
+                                                Content.C col ->
+                                                    let
+                                                        medLength =
+                                                            Collar.getMinLength col + Collar.getMaxLength col / 2
+
+                                                        cursorW =
+                                                            medLength / 15
+
+                                                        cursorH =
+                                                            medLength * 2
+
+                                                        scale =
+                                                            length / Content.getMatriceLength col
+                                                    in
+                                                    [ S.rect
+                                                        [ SA.transform [ Translate (getX pos) (getY pos), Translate (-length / 2) 0, Scale scale scale ]
+                                                        , SA.x <| Num <| Collar.getCumulLengthAt model.cursor col - cursorW / 2
+                                                        , SA.y <| Num <| -cursorH / 2
+                                                        , SA.width <| Num cursorW
+                                                        , SA.height <| Num cursorH
+                                                        , SA.fill <| Fill Color.lightBlue
+                                                        ]
+                                                        []
+                                                    ]
+
+                                                _ ->
+                                                    []
+
+                                        _ ->
+                                            []
                            )
+
+
+
+-- TODO duplicate with Gear.getName and Common.getName
 
 
 getNameWithDefault : Id Geer -> Mobeel -> String
@@ -1426,6 +1609,7 @@ manageInteractEvent event model mobile =
         ChangeSound id ->
             case ( event.item, event.action ) of
                 ( ISound s, Interact.Clicked _ ) ->
+                    -- TODO Should change mode to Normal here instead of if doChangeContent?
                     doChangeContent id (Content.S s) Nothing model mobile
 
                 _ ->
@@ -1446,7 +1630,17 @@ manageInteractEvent event model mobile =
             case ( event.item, event.action, model.dragging ) of
                 -- FROM SOUNDLIST
                 ( ISound s, Interact.Clicked _, _ ) ->
-                    update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
+                    case model.edit of
+                        [ id ] ->
+                            case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                                Content.C _ ->
+                                    update (NewBead <| Content.S s) ( model, mobile )
+
+                                _ ->
+                                    update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
+
+                        _ ->
+                            update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
 
                 ( ISound s, Interact.Dragged _ p _ ZSurface, _ ) ->
                     { return
@@ -1457,6 +1651,23 @@ manageInteractEvent event model mobile =
                     update (NewGear p <| Content.S s) ( { model | dragging = NoDrag }, mobile )
 
                 -- FROM PACK
+                ( IPack pId, Interact.Clicked _, _ ) ->
+                    case model.edit of
+                        [ id ] ->
+                            case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                                Content.C _ ->
+                                    let
+                                        p =
+                                            Coll.get pId model.pack.wheels
+                                    in
+                                    update (UnpackBead ( p.wheel, p.length ) True) ( model, mobile )
+
+                                _ ->
+                                    return
+
+                        _ ->
+                            return
+
                 ( IPack id, Interact.Dragged _ p _ ZPack, _ ) ->
                     { return
                         | model =
