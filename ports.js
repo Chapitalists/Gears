@@ -70,14 +70,14 @@ function engine(o) {
         o.gears.map(g=>playPause(g,t))
         break;
     case "mute" :
-        model = (beadIndexes || []).reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
+        model = o.beadIndexes.reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
         if (model) {
             model.mute = o.value
             setVolume(model)
         }
         break;
     case "volume" :
-        model = (beadIndexes || []).reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
+        model = o.beadIndexes.reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
         if (model) {
             model.volume = o.value
             setVolume(model)
