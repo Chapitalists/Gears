@@ -1634,7 +1634,11 @@ manageInteractEvent event model mobile =
                         [ id ] ->
                             case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
                                 Content.C _ ->
-                                    update (NewBead <| Content.S s) ( model, mobile )
+                                    if model.tool == Edit then
+                                        update (NewBead <| Content.S s) ( model, mobile )
+
+                                    else
+                                        update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
 
                                 _ ->
                                     update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
@@ -1656,11 +1660,15 @@ manageInteractEvent event model mobile =
                         [ id ] ->
                             case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
                                 Content.C _ ->
-                                    let
-                                        p =
-                                            Coll.get pId model.pack.wheels
-                                    in
-                                    update (UnpackBead ( p.wheel, p.length ) True) ( model, mobile )
+                                    if model.tool == Edit then
+                                        let
+                                            p =
+                                                Coll.get pId model.pack.wheels
+                                        in
+                                        update (UnpackBead ( p.wheel, p.length ) True) ( model, mobile )
+
+                                    else
+                                        return
 
                                 _ ->
                                     return
