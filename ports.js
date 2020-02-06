@@ -3,6 +3,7 @@ const app = Elm.Main.init({flags : {width : window.innerWidth, height : window.i
 if (app.ports.loadSound) app.ports.loadSound.subscribe(createBuffer)
 if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 if (app.ports.toggleRecord) app.ports.toggleRecord.subscribe(toggleRecord)
+if (app.ports.requestSoundDraw) app.ports.requestSoundDraw.subscribe(drawSound)
 
 const buffers = {}
     , ro = new ResizeObserver(sendSize)
@@ -17,6 +18,13 @@ let deb = null
 
 function sendSize(entries) {
     app.ports.newSVGSize.send(entries[0].contentRect)
+}
+
+function drawSound(soundName) {console.log(soundName)
+  if (buffers[soundName]) {
+    drawSamples(Array.from(buffers[soundName].getChannelData()))
+    app.ports.soundDrawn.send(soundName)
+  } else console.log(soundName + ' isn’t loaded, cannot draw')
 }
 
 function createBuffer(soundName) {
@@ -109,4 +117,45 @@ function playPause(model,t) {
     else {
         pause(playing[model.id], t)
     }
+}
+
+function drawSamples(samples) {
+  let canvas = document.getElementById('waveform')
+    , ctx = canvas.getContext('2d')
+    , {width, height} = canvas
+    , pxPerSample = width / samples.length
+  
+  ctx.strokeStyle = 'black'
+  ctx.beginPath()
+  ctx.moveTo(0, height / 2)
+  ctx.lineTo(width, height / 2)
+  ctx.stroke()
+  
+  ctx.strokeRect(0, 0, width, height)
+  
+  if (pxPerSample < 0.5) {
+    for (let x = 0 ; x < width ; x++) {
+      let px = samples.slice(Math.floor(x / pxPerSample), Math.floor((x + 1) / pxPerSample))
+      ctx.strokeStyle = 'black'
+      ctx.beginPath()
+      ctx.moveTo(x, (Math.min.apply(null, px) + 1) * height / 2)
+      ctx.lineTo(x, (Math.max.apply(null, px) + 1) * height / 2)
+      ctx.stroke()
+      
+      let rms = Math.sqrt(px.reduce((acc,v,i,a) => acc + Math.pow(v, 2)) / px.length)
+      ctx.strokeStyle = 'gray'
+      ctx.beginPath()
+      ctx.moveTo(x, (1 - rms) * height / 2)
+      ctx.lineTo(x, (1 + rms) * height / 2)
+      ctx.stroke()
+    }
+  } else {
+    ctx.strokeStyle = 'black'
+    ctx.beginPath()
+    ctx.moveTo(0, (samples[0] + 1) * height / 2)
+    for (let i = 1 ; i < samples.length ; i++) {
+      ctx.lineTo(i * pxPerSample, (samples[i] + 1) * height / 2)
+    }
+    ctx.stroke()
+  }
 }
