@@ -60,8 +60,7 @@ function engine(o) {
   let model = null
   switch ( o.action ) {
     case "stopReset" :
-        if (playing.clocks) stop(playing)
-        else for ( id in playing) {
+        for ( id in playing) {
             stop(playing[id])
         }
         playing = {}
@@ -70,35 +69,15 @@ function engine(o) {
         let t = Tone.now()+0.1
         o.gears.map(g=>playPause(g,t))
         break;
-    case "playCollar" :
-        if (!playing.rate) playing = prepare(o)
-        if (playing.paused) play(playing, Tone.now()+0.1, o)
-        else pause(playing, Tone.now()+0.1)
-        break;
-    case "muteBead" :
-        if (!playing.rate) break;
-        model = playing.players[o.index]
-        if (model) {
-            model.mute = o.value
-            setVolume(model)
-        }
-        break;
-    case "volumeBead" :
-        if (!playing.rate) break;
-        model = playing.players[o.index]
-        if (model) {
-            model.volume = o.value
-            setVolume(model)
-        }
     case "mute" :
-        model = playing[o.gearId]
+        model = (beadIndexes || []).reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
         if (model) {
             model.mute = o.value
             setVolume(model)
         }
         break;
     case "volume" :
-        model = playing[o.gearId]
+        model = (beadIndexes || []).reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
         if (model) {
             model.volume = o.value
             setVolume(model)

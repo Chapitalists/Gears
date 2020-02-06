@@ -103,6 +103,10 @@ getBeads c =
     c.head :: c.beads
 
 
+
+-- TODO if i >= length, get differs from update, bug, see Common.deleteWheel, updates the got bead
+
+
 getBead : Int -> Collar item -> Bead item
 getBead i c =
     case List.head <| List.drop i <| getBeads c of

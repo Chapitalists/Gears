@@ -9,6 +9,7 @@ import Harmony as Harmo exposing (Harmony)
 import Json.Decode as D
 import Json.Encode as E
 import Math.Vector2 exposing (Vec2)
+import Motor
 
 
 
@@ -58,6 +59,10 @@ newSizedGear p l w =
     { pos = p, harmony = Harmo.newSelf l, motor = [], wheel = w }
 
 
+
+-- TODO remove and use Common.getName instead
+
+
 gearName : Id Geer -> Coll Geer -> String
 gearName id coll =
     let
@@ -78,6 +83,38 @@ gearPosSize id coll =
             Coll.get id coll
     in
     ( g.pos, Harmo.getLength g.harmony coll )
+
+
+rm : Id Geer -> Mobeel -> Mobeel
+rm id m =
+    if id == m.motor then
+        m
+
+    else
+        let
+            gears =
+                Motor.clean id m.gears
+
+            harmo =
+                (Coll.get id gears).harmony
+        in
+        -- TODO check and use harmo clean
+        if Harmo.hasHarmonics harmo then
+            -- TODO delete base ?
+            Debug.log "TODO delete base" m
+
+        else
+            case Harmo.getBaseId harmo of
+                Nothing ->
+                    { m | gears = Coll.remove id gears }
+
+                Just baseId ->
+                    { m
+                        | gears =
+                            gears
+                                |> Coll.update baseId (Harmo.remove id)
+                                |> Coll.remove id
+                    }
 
 
 updateGear : Id Geer -> (Geer -> Geer) -> Mobeel -> Mobeel

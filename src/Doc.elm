@@ -2,6 +2,7 @@ port module Doc exposing (..)
 
 import Coll exposing (Coll, Id)
 import Data exposing (Data)
+import Data.Common as Common exposing (Identifier)
 import Data.Content as Content exposing (Content)
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
 import Data.Wheel as Wheel exposing (Conteet, Wheel)
@@ -24,7 +25,7 @@ port toEngine : E.Value -> Cmd msg
 
 type alias Doc =
     { data : Data Mobeel
-    , viewing : List ( String, Id Geer )
+    , viewing : List ( String, Identifier )
     , editor : Editor.Model
     }
 
@@ -38,7 +39,7 @@ init url =
 
 
 
--- TODO Should be defined in each editor, as Modes
+-- TODO Should be defined in editor, as Modes
 
 
 type Shortcut
@@ -58,7 +59,7 @@ type Msg
     | Loaded Mobeel String
     | Undo
     | Redo
-    | View (List ( String, Id Geer ))
+    | View (List ( String, Identifier ))
     | AddContent Conteet
     | KeyPressed Shortcut
     | DirectionRepeat PanSvg.Direction
@@ -166,7 +167,7 @@ update msg doc =
                         Suppr ->
                             case ( doc.editor.edit, doc.editor.tool ) of
                                 ( [ id ], Editor.Edit ) ->
-                                    update (MobileMsg <| Editor.DeleteGear id) doc
+                                    update (MobileMsg <| Editor.DeleteWheel ( id, [] )) doc
 
                                 _ ->
                                     ( doc, Cmd.none )
@@ -204,7 +205,7 @@ update msg doc =
                                             update
                                                 (View <|
                                                     doc.viewing
-                                                        ++ [ ( Mobile.gearName id mobile.gears, id ) ]
+                                                        ++ [ ( Common.getName id mobile, id ) ]
                                                 )
                                                 newDoc
                                 )
@@ -340,42 +341,38 @@ getViewing { viewing, data } =
     Tuple.first <| getViewingCleaned viewing <| Data.current data
 
 
-getViewingCleaned : List ( String, Id Geer ) -> Mobeel -> ( Mobeel, Maybe (List ( String, Id Geer )) )
+
+-- TODO Should be able to check id and indexes existence to clean, do it if Common.getWheel? Or make a copy here
+
+
+getViewingCleaned : List ( String, Identifier ) -> Mobeel -> ( Mobeel, Maybe (List ( String, Identifier )) )
 getViewingCleaned l mobile =
     case l of
         ( str, next ) :: rest ->
-            case Coll.maybeGet next mobile.gears of
-                Just g ->
-                    case Wheel.getContent g of
-                        Content.M m ->
-                            let
-                                ( mob, may ) =
-                                    getViewingCleaned rest m
-                            in
-                            ( mob, Maybe.map ((::) ( str, next )) may )
+            case Wheel.getWheelContent <| Common.getWheel next mobile of
+                Content.M m ->
+                    let
+                        ( mob, may ) =
+                            getViewingCleaned rest m
+                    in
+                    ( mob, Maybe.map ((::) ( str, next )) may )
 
-                        _ ->
-                            Debug.log ("No mobile to view in " ++ str) ( mobile, Just [] )
-
-                Nothing ->
-                    Debug.log ("No Gear to view at " ++ str) ( mobile, Just [] )
+                _ ->
+                    Debug.log ("No mobile to view in " ++ str) ( mobile, Just [] )
 
         _ ->
             ( mobile, Nothing )
 
 
-updateViewing : List ( String, Id Geer ) -> (Mobeel -> Mobeel) -> Mobeel -> Mobeel
+updateViewing : List ( String, Identifier ) -> (Mobeel -> Mobeel) -> Mobeel -> Mobeel
 updateViewing l f mobile =
     case l of
         ( _, next ) :: rest ->
-            case Wheel.getContent <| Coll.get next mobile.gears of
+            case Wheel.getWheelContent <| Common.getWheel next mobile of
                 Content.M subMobile ->
-                    { mobile
-                        | gears =
-                            Coll.update next
-                                (Wheel.setContent <| Content.M <| updateViewing rest f subMobile)
-                                mobile.gears
-                    }
+                    Common.updateWheel next
+                        (Wheel.ChangeContent <| Content.M <| updateViewing rest f subMobile)
+                        mobile
 
                 _ ->
                     Debug.log "IMPOSSIBLE View isn’t correct, should’ve been cleaned" mobile

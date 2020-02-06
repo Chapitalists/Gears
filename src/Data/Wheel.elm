@@ -105,6 +105,7 @@ defaultStyle =
 type Msg
     = ChangeContent Conteet
     | ChangeVolume Float
+    | ToggleMute
     | ChangeStart Float
     | Named String
     | ChangeColor Color
@@ -123,6 +124,9 @@ update msg g =
 
         ChangeVolume vol ->
             { g | wheel = { wheel | volume = clamp 0 1 vol } }
+
+        ToggleMute ->
+            { g | wheel = { wheel | mute = not wheel.mute } }
 
         ChangeStart percent ->
             { g | wheel = { wheel | startPercent = percent } }

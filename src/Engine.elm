@@ -4,17 +4,15 @@ module Engine exposing
     , init
     , isPlaying
     , muted
-    , mutedBead
-    , playCollar
     , playingIds
     , setPlaying
     , stop
-    , volumeBead
     , volumeChanged
     )
 
 import Coll exposing (Coll, Id)
 import Data.Collar as Collar exposing (Beed, Colleer)
+import Data.Common exposing (Identifier)
 import Data.Content as Content
 import Data.Gear as Gear exposing (Gear)
 import Data.Mobile exposing (Geer, Mobeel)
@@ -79,40 +77,14 @@ stop =
     E.object [ ( "action", E.string "stopReset" ) ]
 
 
-playCollar : Colleer -> E.Value
-playCollar collar =
-    E.object
-        [ ( "action", E.string "playCollar" )
-        , ( "baseId", E.string <| String.dropRight 1 <| Collar.toUID 0 )
-        , ( "collar", encodeCollar collar True )
-        ]
-
-
-mutedBead : Int -> Bool -> E.Value
-mutedBead i mute =
-    E.object
-        [ ( "action", E.string "muteBead" )
-        , ( "index", E.int i )
-        , ( "value", E.bool mute )
-        ]
-
-
-volumeBead : Int -> Float -> E.Value
-volumeBead i volume =
-    E.object
-        [ ( "action", E.string "volumeBead" )
-        , ( "index", E.int i )
-        , ( "value", E.float <| clamp 0 1 volume )
-        ]
-
-
-muted : Id Geer -> Bool -> Engine -> Maybe E.Value
-muted id mute e =
+muted : Identifier -> Bool -> Engine -> Maybe E.Value
+muted ( id, list ) mute e =
     if isPlaying id e then
         Just <|
             E.object
                 [ ( "action", E.string "mute" )
-                , ( "gearId", E.string <| Gear.toUID <| Coll.idMap id )
+                , ( "id", E.string <| Gear.toUID id )
+                , ( "beadIndexes", E.list E.int list )
                 , ( "value", E.bool mute )
                 ]
 
@@ -120,13 +92,14 @@ muted id mute e =
         Nothing
 
 
-volumeChanged : Id Geer -> Float -> Engine -> Maybe E.Value
-volumeChanged id volume e =
+volumeChanged : Identifier -> Float -> Engine -> Maybe E.Value
+volumeChanged ( id, list ) volume e =
     if isPlaying id e then
         Just <|
             E.object
                 [ ( "action", E.string "volume" )
-                , ( "gearId", E.string <| Gear.toUID <| Coll.idMap id )
+                , ( "id", E.string <| Gear.toUID id )
+                , ( "beadIndexes", E.list E.int list )
                 , ( "value", E.float <| clamp 0 1 volume )
                 ]
 
