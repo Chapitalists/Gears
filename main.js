@@ -3,6 +3,53 @@ Copyright ou © ou Copr. Clément Bossut, (2018)
 <bossut.clement@gmail.com>
 */
 
+
+let canvas = document.getElementById('canvas')
+  , {width, height} = canvas
+  , ctx = canvas.getContext('2d')
+  , buf = new Tone.Buffer('./sons/LOOP.wav', drawSound)
+  , samples, pxPerSample
+
+function drawSound() {
+  samples = Array.from(buf.getChannelData())
+  pxPerSample = width / samples.length
+  
+  ctx.strokeStyle = 'black'
+  ctx.beginPath()
+  ctx.moveTo(0, height / 2)
+  ctx.lineTo(width, height / 2)
+  ctx.stroke()
+  
+  ctx.strokeRect(0, 0, width, height)
+  
+  if (pxPerSample < 0.5) {
+    for (let x = 0 ; x < width ; x++) {
+      let px = samples.slice(Math.floor(x / pxPerSample), Math.floor((x + 1) / pxPerSample))
+      ctx.strokeStyle = 'black'
+      ctx.beginPath()
+      ctx.moveTo(x, (Math.min.apply(null, px) + 1) * height / 2)
+      ctx.lineTo(x, (Math.max.apply(null, px) + 1) * height / 2)
+      ctx.stroke()
+      
+      let rms = Math.sqrt(px.reduce((acc,v,i,a) => acc + Math.pow(v, 2)) / px.length)
+      ctx.strokeStyle = 'gray'
+      ctx.beginPath()
+      ctx.moveTo(x, (1 - rms) * height / 2)
+      ctx.lineTo(x, (1 + rms) * height / 2)
+      ctx.stroke()
+    }
+  } else {
+    ctx.strokeStyle = 'black'
+    ctx.beginPath()
+    ctx.moveTo(0, (samples[0] + 1) * height / 2)
+    for (let i = 1 ; i < samples.length ; i++) {
+      ctx.lineTo(i * pxPerSample, (samples[i] + 1) * height / 2)
+    }
+    ctx.stroke()
+  }
+}
+
+
 function debug(o) {
   getId('debug').innerHTML = o instanceof Object ? Object.keys(o) : Array.from(arguments).join(' ')
 }
