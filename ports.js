@@ -20,7 +20,7 @@ function sendSize(entries) {
     app.ports.newSVGSize.send(entries[0].contentRect)
 }
 
-function drawSound(soundName) {console.log(soundName)
+function drawSound(soundName) {
   if (buffers[soundName]) {
     drawSamples(Array.from(buffers[soundName].getChannelData()))
     app.ports.soundDrawn.send(soundName)

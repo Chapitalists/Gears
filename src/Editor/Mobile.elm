@@ -61,7 +61,7 @@ type alias Model =
     , engine : Engine
     , interact : Interact.State Interactable
     , pack : Pack
-    , wave : ( Waveform, Maybe Sound )
+    , wave : ( Waveform, Maybe Sound ) -- TODO Second source of truth with edit? Could be just Bool
     , svg : PanSvg.Model
     }
 
