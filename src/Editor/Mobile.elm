@@ -29,11 +29,12 @@ import Pack exposing (Pack, Packed)
 import PanSvg
 import Random
 import Round
-import Sound
+import Sound exposing (Sound)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
 import TypedSvg.Types exposing (Length(..), Opacity(..))
+import Waveform exposing (Waveform)
 
 
 port toggleRecord : Bool -> Cmd msg
@@ -60,6 +61,7 @@ type alias Model =
     , engine : Engine
     , interact : Interact.State Interactable
     , pack : Pack
+    , wave : ( Waveform, Maybe Sound )
     , svg : PanSvg.Model
     }
 
@@ -143,6 +145,7 @@ init mayMobile mayShared =
     , engine = Engine.init
     , interact = Interact.init
     , pack = Pack.update (Pack.PrepareZoom svg) <| Maybe.withDefault Pack.init <| Maybe.map Tuple.first mayShared
+    , wave = ( Waveform.init, Nothing )
     , svg = svg
     }
 
@@ -175,6 +178,7 @@ type Msg
     | WheelMsgs (List ( Id Geer, Wheel.Msg ))
     | GearMsg ( Id Geer, Gear.Msg )
     | PackMsg Pack.Msg
+    | WaveMsg Waveform.Msg
     | OutMsg DocMsg
 
 
@@ -620,16 +624,29 @@ update msg ( model, mobile ) =
                     Debug.log (D.errorToString e) return
 
                 Result.Ok s ->
+                    let
+                        ( wave, cmd ) =
+                            Waveform.update (Waveform.GotSize <| floor s.width) <| Tuple.first model.wave
+                    in
                     { return
                         | model =
                             { model
                                 | svg = PanSvg.update (PanSvg.ScaleSize 1 s) model.svg
                                 , pack = Pack.update (Pack.SvgMsg <| PanSvg.ScaleSize model.pack.scale s) model.pack
+                                , wave = Tuple.mapFirst (always wave) model.wave
                             }
+                        , cmd = Cmd.map WaveMsg cmd
                     }
 
         PackMsg subMsg ->
             { return | model = { model | pack = Pack.update subMsg model.pack } }
+
+        WaveMsg subMsg ->
+            let
+                ( wave, cmd ) =
+                    Waveform.update subMsg <| Tuple.first model.wave
+            in
+            { return | model = { model | wave = Tuple.mapFirst (always wave) model.wave }, cmd = Cmd.map WaveMsg cmd }
 
         -- TODO use some pattern like outMessage package? or elm-state? elm-return?
         -- TODO move all that in Editor.Interacting, and manage then
@@ -682,6 +699,7 @@ update msg ( model, mobile ) =
 subs : Model -> List (Sub Msg)
 subs { interact } =
     PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
+        :: Sub.map WaveMsg Waveform.sub
         :: (gotRecord <| (GotRecord << D.decodeValue D.string))
         :: (List.map (Sub.map InteractMsg) <| Interact.subs interact)
 
@@ -745,6 +763,18 @@ viewExtraTools model =
 viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
+        viewWave =
+            case ( Tuple.second model.wave, (Tuple.first model.wave).drawn ) of
+                ( Just s1, Waveform.SoundDrawn s2 ) ->
+                    if s1 == s2 then
+                        True
+
+                    else
+                        False
+
+                _ ->
+                    False
+
         getMod : Id Geer -> Wheel.Mod
         getMod id =
             if model.tool == Edit && List.member id model.edit then
@@ -790,6 +820,7 @@ viewContent ( model, mobile ) =
                 PackMsg
                 IPack
                 InteractMsg
+        , Element.inFront <| Waveform.view viewWave (Tuple.first model.wave) 0
         ]
     <|
         Element.html <|
@@ -1482,7 +1513,11 @@ manageInteractEvent event model mobile =
                                     { return | model = ret.model, mobile = ret.mobile, toUndo = ret.toUndo }
 
                                 _ ->
-                                    { return | model = interactSelectEdit event model }
+                                    let
+                                        ( newModel, cmd ) =
+                                            interactSelectEdit event mobile model
+                                    in
+                                    { return | model = newModel, cmd = cmd }
 
 
 interactPlay : Bool -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
@@ -1685,17 +1720,26 @@ interactHarmonize event model mobile =
             return
 
 
-interactSelectEdit : Interact.Event Interactable Zone -> Model -> Model
-interactSelectEdit event model =
+interactSelectEdit : Interact.Event Interactable Zone -> Mobeel -> Model -> ( Model, Cmd Msg )
+interactSelectEdit event mobile model =
     case ( event.item, event.action ) of
         ( IWheel id [], Interact.Clicked ( _, False, False ) ) ->
-            { model | edit = [ id ] }
+            case Wheel.getContent <| Coll.get id mobile.gears of
+                Content.S s ->
+                    let
+                        ( wave, cmd ) =
+                            Waveform.update (Waveform.ChgSound s) <| Tuple.first model.wave
+                    in
+                    ( { model | edit = [ id ], wave = ( wave, Just s ) }, Cmd.map WaveMsg cmd )
+
+                _ ->
+                    ( { model | edit = [ id ], wave = Tuple.mapSecond (always Nothing) model.wave }, Cmd.none )
 
         ( IWheel id [], Interact.Clicked _ ) ->
-            { model | edit = id :: model.edit }
+            ( { model | edit = id :: model.edit }, Cmd.none )
 
         _ ->
-            model
+            ( model, Cmd.none )
 
 
 interactMove :
