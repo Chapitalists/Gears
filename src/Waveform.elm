@@ -3,6 +3,7 @@ port module Waveform exposing (..)
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Border as Border
+import Element.Input as Input
 import Html exposing (canvas)
 import Html.Attributes as Attr
 import Json.Decode as D
@@ -92,8 +93,8 @@ sub =
     soundDrawn (GotDrawn << D.decodeValue D.string)
 
 
-view : Bool -> Waveform -> Float -> Element msg
-view visible { size } percent =
+view : Bool -> Waveform -> Float -> (Float -> msg) -> Element msg
+view visible { size } percent chg =
     let
         border =
             2
@@ -104,6 +105,16 @@ view visible { size } percent =
         , Border.width border
         , Bg.color <| rgb 1 1 1
         , alignBottom
+        , inFront <|
+            Input.slider [ htmlAttribute <| Attr.hidden <| not visible ]
+                { label = Input.labelHidden "Point de départ"
+                , onChange = chg
+                , min = 0
+                , max = 1
+                , value = percent
+                , thumb = Input.defaultThumb
+                , step = Nothing
+                }
         ]
     <|
         html <|

@@ -180,6 +180,7 @@ type Msg
     | PackMsg Pack.Msg
     | WaveMsg Waveform.Msg
     | OutMsg DocMsg
+    | NoMsg
 
 
 type alias Return =
@@ -611,6 +612,9 @@ update msg ( model, mobile ) =
         OutMsg subMsg ->
             { return | outMsg = Just subMsg }
 
+        NoMsg ->
+            return
+
         SvgMsg subMsg ->
             let
                 svg =
@@ -763,10 +767,18 @@ viewExtraTools model =
 viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
+        ( wavePercent, percentMsg ) =
+            case model.edit of
+                [ id ] ->
+                    ( (Coll.get id mobile.gears).wheel.startPercent, \f -> WheelMsgs [ ( id, Wheel.ChangeStart f ) ] )
+
+                _ ->
+                    ( 0, always NoMsg )
+
         viewWave =
             case ( Tuple.second model.wave, (Tuple.first model.wave).drawn ) of
                 ( Just s1, Waveform.SoundDrawn s2 ) ->
-                    if s1 == s2 then
+                    if s1 == s2 && model.tool == Edit then
                         True
 
                     else
@@ -820,7 +832,7 @@ viewContent ( model, mobile ) =
                 PackMsg
                 IPack
                 InteractMsg
-        , Element.inFront <| Waveform.view viewWave (Tuple.first model.wave) 0
+        , Element.inFront <| Waveform.view viewWave (Tuple.first model.wave) wavePercent percentMsg
         ]
     <|
         Element.html <|

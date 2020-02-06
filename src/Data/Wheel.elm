@@ -105,6 +105,7 @@ defaultStyle =
 type Msg
     = ChangeContent Conteet
     | ChangeVolume Float
+    | ChangeStart Float
     | Named String
     | ChangeColor Color
     | ToggleContentView
@@ -122,6 +123,9 @@ update msg g =
 
         ChangeVolume vol ->
             { g | wheel = { wheel | volume = clamp 0 1 vol } }
+
+        ChangeStart percent ->
+            { g | wheel = { wheel | startPercent = percent } }
 
         Named name ->
             if String.all (\c -> Char.isAlphaNum c || c == '-') name then
