@@ -60,7 +60,7 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
     }
     if (model.soundName && model.player.output) {
         setVolume(model, volume, mute)
-        model.player.start(t, model.pauseOffset)
+        model.player.start(t, model.pauseOffset + (model.startPercent * model.length))
     }
     if (model.mobile) {
         model.gears.map((v,i) => play(v, t, model.gears[i], model.volume * volume, model.mute || mute))

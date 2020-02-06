@@ -138,6 +138,7 @@ encodeWheel : Wheel -> Bool -> List ( String, E.Value )
 encodeWheel w hasView =
     [ ( "mute", E.bool w.mute )
     , ( "volume", E.float <| clamp 0 1 w.volume )
+    , ( "startPercent", E.float w.startPercent )
     , ( "view", E.bool hasView )
     ]
         ++ (case Wheel.getWheelContent w of
