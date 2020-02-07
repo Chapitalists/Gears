@@ -87,7 +87,7 @@ type alias ScreenSize =
 
 type ExTab
     = Sounds
-    | Loaded
+    | LoadedSounds
     | Saves
 
 
@@ -157,7 +157,7 @@ update msg model =
             case result of
                 Ok stringList ->
                     ( { model
-                        | savesList = Set.union model.savesList <| Set.fromList <| String.split "\\" stringList
+                        | savesList = Set.fromList <| String.split "\\" stringList
                         , connected = True
                       }
                     , Cmd.none
@@ -318,7 +318,7 @@ update msg model =
             case subMsg of
                 -- FIXME Absurd... Should be a commonMsg and common ChangedMode
                 Doc.MobileMsg (Editor.ChangedMode (Editor.ChangeSound _)) ->
-                    ( { model | doc = doc, fileExplorerTab = Loaded }, Cmd.map DocMsg cmd )
+                    ( { model | doc = doc, fileExplorerTab = LoadedSounds }, Cmd.map DocMsg cmd )
 
                 _ ->
                     ( { model | doc = doc }, Cmd.map DocMsg cmd )
@@ -477,14 +477,14 @@ viewFileExplorer model =
                 , onPress = Just <| ChangedExplorerTab Sounds
                 }
             , Input.button
-                (if model.fileExplorerTab == Loaded then
+                (if model.fileExplorerTab == LoadedSounds then
                     [ padding 5, Bg.color (rgb 0.1 0.1 0.1) ]
 
                  else
                     [ padding 5 ]
                 )
                 { label = text "Chargés"
-                , onPress = Just <| ChangedExplorerTab Loaded
+                , onPress = Just <| ChangedExplorerTab LoadedSounds
                 }
             , Input.button
                 (if model.fileExplorerTab == Saves then
@@ -502,7 +502,7 @@ viewFileExplorer model =
                     Sounds ->
                         viewSounds model
 
-                    Loaded ->
+                    LoadedSounds ->
                         viewLoaded model
 
                     Saves ->
