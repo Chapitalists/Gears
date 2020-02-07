@@ -84,6 +84,7 @@ type alias Model =
 type SoundListType
     = Playing
     | Stopped
+    | Loading
     | Directory Bool (Dict String SoundListType)
 
 
@@ -123,7 +124,7 @@ type Msg
     | RequestSoundList
     | PreListening (List String) Bool
     | ExpandDir (List String)
-    | RequestSoundLoad String
+    | RequestSoundLoad (List String)
     | RequestSoundDownload String
     | RequestSavesList
     | RequestSaveLoad String
@@ -204,46 +205,199 @@ update msg model =
             case result of
                 Ok m ->
                     let
-                        -- TODO Report bug, forced to map .wheel and {wheel} because {a | wheel} doesn’t work
-                        -- TODO Report bug, can’t define recursive function if it has no argument (f l = f l instead of f = f)
-                        loadList l =
-                            List.concatMap
-                                (\wheel ->
-                                    case Wheel.getWheelContent wheel of
-                                        Content.S s ->
-                                            if List.member s model.loadedSoundList then
-                                                []
+                        getSoundType el list dict =
+                            case ( list, Dict.get el dict ) of
+                                ( [], res ) ->
+                                    res
 
-                                            else
-                                                [ Tuple.second <|
-                                                    update
-                                                        (RequestSoundLoad <| Sound.toString s)
-                                                        model
-                                                ]
+                                ( next :: rest, Just (Directory _ d) ) ->
+                                    getSoundType next rest d
 
-                                        Content.M mob ->
-                                            loadList <| List.map .wheel <| Coll.values mob.gears
+                                _ ->
+                                    Nothing
 
-                                        Content.C col ->
-                                            loadList <| List.map .wheel <| Collar.getBeads col
-                                )
-                                l
+                        searchReplacement str dict =
+                            case Dict.get str dict of
+                                Nothing ->
+                                    Dict.foldl
+                                        (\dir sType res ->
+                                            case res of
+                                                Just got ->
+                                                    Just got
 
+                                                Nothing ->
+                                                    case sType of
+                                                        Directory _ d ->
+                                                            case searchReplacement str d of
+                                                                Nothing ->
+                                                                    Nothing
+
+                                                                Just sub ->
+                                                                    Just (dir :: sub)
+
+                                                        _ ->
+                                                            Nothing
+                                        )
+                                        Nothing
+                                        dict
+
+                                Just (Directory _ _) ->
+                                    Nothing
+
+                                _ ->
+                                    Just [ str ]
+
+                        -- if Loading, do nothing
+                        -- if Nothing, search for replacement
+                        -- -- if no replacement, abort loading with message no sound found
+                        -- -- if replaced, update wheel
+                        -- else RequestSoundLoad and update with new soundLib (model)
+                        checkLoad content soundLib cmds =
+                            case content of
+                                Content.S s ->
+                                    if List.member s model.loadedSoundList then
+                                        Just ( content, soundLib, cmds )
+
+                                    else
+                                        let
+                                            path =
+                                                List.concatMap (String.split "\\") <| String.split "/" <| Sound.toString s
+                                        in
+                                        case path of
+                                            [] ->
+                                                Nothing
+
+                                            el :: rest ->
+                                                case getSoundType el rest soundLib of
+                                                    Just Loading ->
+                                                        Just ( content, soundLib, cmds )
+
+                                                    Just Playing ->
+                                                        Just
+                                                            ( content
+                                                            , updateSoundLib soundLib path <| always <| Just Loading
+                                                            , (loadSound <| String.join "/" path) :: cmds
+                                                            )
+
+                                                    Just Stopped ->
+                                                        Just
+                                                            ( content
+                                                            , updateSoundLib soundLib path <| always <| Just Loading
+                                                            , (loadSound <| String.join "/" path) :: cmds
+                                                            )
+
+                                                    _ ->
+                                                        case List.head <| List.reverse path of
+                                                            Just str ->
+                                                                case searchReplacement str soundLib of
+                                                                    Nothing ->
+                                                                        Nothing
+
+                                                                    Just p ->
+                                                                        Just
+                                                                            ( Content.S <| Sound.chgPath s <| String.join "/" p
+                                                                            , updateSoundLib soundLib p <| always <| Just Loading
+                                                                            , (loadSound <| String.join "/" p) :: cmds
+                                                                            )
+
+                                                            Nothing ->
+                                                                Nothing
+
+                                Content.M mob ->
+                                    Maybe.map (\( gears, b, c ) -> ( Content.M { mob | gears = gears }, b, c )) <|
+                                        List.foldl
+                                            (\( id, g ) mayAcc ->
+                                                case mayAcc of
+                                                    Just ( coll, sl, cc ) ->
+                                                        case checkLoad (Wheel.getContent g) sl cc of
+                                                            Just ( newContent, newSL, newCmds ) ->
+                                                                Just ( Coll.update id (Wheel.setContent newContent) coll, newSL, newCmds )
+
+                                                            _ ->
+                                                                Nothing
+
+                                                    _ ->
+                                                        Nothing
+                                            )
+                                            (Just ( mob.gears, soundLib, cmds ))
+                                        <|
+                                            Coll.toList mob.gears
+
+                                Content.C col ->
+                                    Maybe.map (\( a, b, c ) -> ( Content.C a, b, c )) <|
+                                        List.foldl
+                                            (\( i, b ) mayAcc ->
+                                                case mayAcc of
+                                                    Just ( collar, sl, cc ) ->
+                                                        case checkLoad (Wheel.getContent b) sl cc of
+                                                            Just ( newContent, newSL, newCmds ) ->
+                                                                Just ( Collar.updateBead i (Wheel.setContent newContent) collar, newSL, newCmds )
+
+                                                            _ ->
+                                                                Nothing
+
+                                                    _ ->
+                                                        Nothing
+                                            )
+                                            (Just ( col, soundLib, cmds ))
+                                        <|
+                                            List.indexedMap Tuple.pair <|
+                                                Collar.getBeads col
+
+                        {- }
+                           -- TODO Report bug, forced to map .wheel and {wheel} because {a | wheel} doesn’t work
+                           -- TODO Report bug, can’t define recursive function if it has no argument (f l = f l instead of f = f)
+                           loadList l =
+                               List.concatMap
+                                   (\wheel ->
+                                       case Wheel.getWheelContent wheel of
+                                           Content.S s ->
+                                               if List.member s model.loadedSoundList then
+                                                   []
+
+                                               else
+                                                   [ Tuple.second <|
+                                                       update
+                                                           (RequestSoundLoad <|
+                                                               List.concatMap (String.split "\\") <|
+                                                                   String.split "/" <|
+                                                                       Sound.toString s
+                                                           )
+                                                           model
+                                                   ]
+
+                                           Content.M mob ->
+                                               loadList <| List.map .wheel <| Coll.values mob.gears
+
+                                           Content.C col ->
+                                               loadList <| List.map .wheel <| Collar.getBeads col
+                                   )
+                                   l
+                        -}
                         newModel =
                             { model | connected = True }
 
-                        subMsg =
-                            case newModel.mode of
-                                Capsuling ->
-                                    Doc.AddContent <| Content.M m
-
-                                _ ->
-                                    Doc.Loaded m name
-
-                        ( mod, cmd ) =
-                            update (DocMsg subMsg) newModel
+                        mayLoad =
+                            checkLoad (Content.M m) model.soundList []
                     in
-                    ( mod, Cmd.batch <| cmd :: (loadList <| List.map .wheel <| Coll.values m.gears) )
+                    case mayLoad of
+                        Just ( Content.M newMobile, newSL, cmds ) ->
+                            let
+                                subMsg =
+                                    case newModel.mode of
+                                        Capsuling ->
+                                            Doc.AddContent <| Content.M newMobile
+
+                                        _ ->
+                                            Doc.Loaded newMobile name
+
+                                ( mod, cmd ) =
+                                    update (DocMsg subMsg) newModel
+                            in
+                            ( { mod | soundList = newSL }, Cmd.batch <| cmd :: cmds )
+
+                        _ ->
+                            Debug.log "Cannot load, sound not found" ( model, Cmd.none )
 
                 Err (Http.BadBody err) ->
                     Debug.log err ( model, Cmd.none )
@@ -254,9 +408,24 @@ update msg model =
         RequestSoundList ->
             ( model, fetchSoundList model.currentUrl )
 
-        RequestSoundLoad n ->
+        RequestSoundLoad id ->
             -- TODO handle no response
-            ( model, loadSound n )
+            ( { model
+                | soundList =
+                    updateSoundLib model.soundList id <|
+                        \mayType ->
+                            case mayType of
+                                Nothing ->
+                                    Nothing
+
+                                Just (Directory b d) ->
+                                    Just (Directory b d)
+
+                                _ ->
+                                    Just Loading
+              }
+            , loadSound <| String.join "/" id
+            )
 
         RequestSoundDownload n ->
             ( model
@@ -282,10 +451,10 @@ update msg model =
 
         SoundLoaded res ->
             case res of
-                Result.Err e ->
+                Err e ->
                     Debug.log (D.errorToString e) ( model, Cmd.none )
 
-                Result.Ok s ->
+                Ok s ->
                     ( { model | loadedSoundList = s :: model.loadedSoundList }, Cmd.none )
 
         ClickedUpload ->
@@ -604,10 +773,13 @@ viewLib model id dict =
             (\( s, sType ) ->
                 case sType of
                     Stopped ->
-                        [ viewSoundInLib model s (id ++ [ s ]) False ]
+                        [ viewSoundInLib model s (id ++ [ s ]) False False ]
 
                     Playing ->
-                        [ viewSoundInLib model s (id ++ [ s ]) True ]
+                        [ viewSoundInLib model s (id ++ [ s ]) True False ]
+
+                    Loading ->
+                        [ viewSoundInLib model s (id ++ [ s ]) False True ]
 
                     Directory opened dir ->
                         viewDirInLib model s (id ++ [ s ]) dir opened
@@ -617,13 +789,16 @@ viewLib model id dict =
                 Dict.toList dict
 
 
-viewSoundInLib : Model -> String -> List String -> Bool -> Element Msg
-viewSoundInLib model s id playing =
+viewSoundInLib : Model -> String -> List String -> Bool -> Bool -> Element Msg
+viewSoundInLib model s id playing loading =
     row [ spacing 5 ]
         ([ Input.button
             [ Font.color <|
                 if List.any ((==) <| String.join "/" id) <| List.map Sound.toString model.loadedSoundList then
                     rgb 0.2 0.8 0.2
+
+                else if loading then
+                    rgb 0.8 0.8 0.2
 
                 else
                     rgb 1 1 1
@@ -635,7 +810,7 @@ viewSoundInLib model s id playing =
                         RequestSoundDownload <| String.join "/" id
 
                     else
-                        RequestSoundLoad <| String.join "/" id
+                        RequestSoundLoad id
             }
          , Input.button []
             -- Charset ref https://www.w3schools.com/charsets/ref_utf_geometric.asp
