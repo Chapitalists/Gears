@@ -106,13 +106,13 @@ view visible { size } percent chg =
         , Bg.color <| rgb 1 1 1
         , alignBottom
         , inFront <|
-            Input.slider [ htmlAttribute <| Attr.hidden <| not visible ]
+            Input.slider [ htmlAttribute <| Attr.hidden <| not visible, height fill ]
                 { label = Input.labelHidden "Point de départ"
                 , onChange = chg
                 , min = 0
                 , max = 1
                 , value = percent
-                , thumb = Input.defaultThumb
+                , thumb = Input.thumb [ width <| minimum 4 shrink, height fill, Bg.color <| rgb 0.2 0.2 0.8 ]
                 , step = Nothing
                 }
         ]
