@@ -1918,7 +1918,7 @@ interactHarmonize event model mobile =
 interactSelectEdit : Interact.Event Interactable Zone -> Mobeel -> Model -> ( Model, Cmd Msg )
 interactSelectEdit event mobile model =
     case ( event.item, event.action ) of
-        ( IWheel ( id, [] ), Interact.Clicked ( _, False, False ) ) ->
+        ( IWheel ( id, _ ), Interact.Clicked ( _, False, False ) ) ->
             case Wheel.getContent <| Coll.get id mobile.gears of
                 Content.S s ->
                     let
@@ -1930,7 +1930,7 @@ interactSelectEdit event mobile model =
                 _ ->
                     ( { model | edit = [ id ], wave = Tuple.mapSecond (always Nothing) model.wave }, Cmd.none )
 
-        ( IWheel ( id, [] ), Interact.Clicked _ ) ->
+        ( IWheel ( id, _ ), Interact.Clicked _ ) ->
             ( { model | edit = id :: model.edit }, Cmd.none )
 
         _ ->
