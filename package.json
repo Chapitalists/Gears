@@ -13,6 +13,7 @@
   "license": "SEE LICENSE IN LICENSE.md",
   "dependencies": {
     "formidable": "^1.2.1",
+    "fs-readdir-recursive": "^1.1.0",
     "static-route": "^0.2.0"
   }
 }

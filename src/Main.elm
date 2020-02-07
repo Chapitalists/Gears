@@ -70,7 +70,7 @@ main =
 type alias Model =
     { connected : Bool
     , currentUrl : Url.Url
-    , soundList : Dict String Bool
+    , soundList : Dict String SoundListType
     , loadedSoundList : List Sound
     , savesList : Set String
     , doc : Doc
@@ -79,6 +79,12 @@ type alias Model =
     , mode : Mode
     , keys : Keys.State
     }
+
+
+type SoundListType
+    = Playing
+    | Stopped
+    | Directory Bool (Dict String SoundListType)
 
 
 type alias ScreenSize =
@@ -115,7 +121,8 @@ init screen url _ =
 type Msg
     = GotSoundList (Result Http.Error String)
     | RequestSoundList
-    | PreListening String Bool
+    | PreListening (List String) Bool
+    | ExpandDir (List String)
     | RequestSoundLoad String
     | RequestSoundDownload String
     | RequestSavesList
@@ -141,10 +148,37 @@ update msg model =
                 Ok stringList ->
                     ( { model
                         | soundList =
-                            Dict.union model.soundList <|
-                                Dict.fromList <|
-                                    List.map (\str -> ( str, False )) <|
-                                        String.split "\\" stringList
+                            List.foldl
+                                (\str dict ->
+                                    let
+                                        rec subDict list =
+                                            case list of
+                                                [] ->
+                                                    subDict
+
+                                                part :: [] ->
+                                                    Dict.insert part Stopped subDict
+
+                                                part :: rest ->
+                                                    Dict.update part
+                                                        (\mayType ->
+                                                            case mayType of
+                                                                Just (Directory b nextDict) ->
+                                                                    Just <| Directory b <| rec nextDict rest
+
+                                                                Just notDir ->
+                                                                    Just notDir
+
+                                                                Nothing ->
+                                                                    Just <| Directory False <| rec Dict.empty rest
+                                                        )
+                                                        subDict
+                                    in
+                                    rec dict <| List.concatMap (String.split "/") <| String.split "\\" str
+                                )
+                                Dict.empty
+                            <|
+                                String.split "\u{0000}" stringList
                         , connected = True
                       }
                     , Cmd.none
@@ -222,13 +256,7 @@ update msg model =
 
         RequestSoundLoad n ->
             -- TODO handle no response
-            ( model
-            , if Dict.member n model.soundList then
-                loadSound n
-
-              else
-                Cmd.none
-            )
+            ( model, loadSound n )
 
         RequestSoundDownload n ->
             ( model
@@ -280,8 +308,43 @@ update msg model =
                     (f :: lf)
             )
 
-        PreListening s p ->
-            ( { model | soundList = Dict.update s (Maybe.map <| always p) model.soundList }, Cmd.none )
+        PreListening strs p ->
+            ( { model
+                | soundList =
+                    updateSoundLib model.soundList strs <|
+                        \mayType ->
+                            case mayType of
+                                Nothing ->
+                                    Nothing
+
+                                Just (Directory b d) ->
+                                    Just (Directory b d)
+
+                                Just _ ->
+                                    Just <|
+                                        if p then
+                                            Playing
+
+                                        else
+                                            Stopped
+              }
+            , Cmd.none
+            )
+
+        ExpandDir strs ->
+            ( { model
+                | soundList =
+                    updateSoundLib model.soundList strs <|
+                        \mayType ->
+                            case mayType of
+                                Just (Directory b d) ->
+                                    Just (Directory (not b) d)
+
+                                _ ->
+                                    mayType
+              }
+            , Cmd.none
+            )
 
         ChangedExplorerTab tab ->
             ( { model | fileExplorerTab = tab }, Cmd.none )
@@ -529,61 +592,100 @@ viewSounds model =
             { onPress = Just RequestSoundList
             , label = text "Actualiser"
             }
-        , column [ width fill, height <| fillPortion 1, spacing 5, padding 2, scrollbarY ] <|
-            (List.map
-                (\( s, playing ) ->
-                    row [ spacing 5 ]
-                        ([ Input.button
-                            [ Font.color <|
-                                if List.any ((==) s) <| List.map Sound.toString model.loadedSoundList then
-                                    rgb 0.2 0.8 0.2
-
-                                else
-                                    rgb 1 1 1
-                            ]
-                            { label = text s
-                            , onPress =
-                                Just <|
-                                    if model.mode == Downloading then
-                                        RequestSoundDownload s
-
-                                    else
-                                        RequestSoundLoad s
-                            }
-                         , Input.button []
-                            -- Charset ref https://www.w3schools.com/charsets/ref_utf_geometric.asp
-                            { label =
-                                text <|
-                                    if playing then
-                                        "◼"
-
-                                    else
-                                        "▶"
-                            , onPress = Just <| PreListening s <| not playing
-                            }
-                         ]
-                            ++ (if playing then
-                                    [ Element.html <|
-                                        Html.audio
-                                            [ Attr.hidden True
-                                            , Attr.src <| Url.Builder.relative [ "sons", s ] []
-                                            , Attr.autoplay True
-                                            , Events.on "ended" <| D.succeed <| PreListening s False
-                                            ]
-                                            []
-                                    ]
-
-                                else
-                                    []
-                               )
-                        )
-                )
-             <|
-                List.sortWith (\t1 t2 -> Natural.compare (Tuple.first t1) (Tuple.first t2)) <|
-                    Dict.toList model.soundList
-            )
+        , viewLib model [] model.soundList
         ]
     ]
+
+
+viewLib : Model -> List String -> Dict String SoundListType -> Element Msg
+viewLib model id dict =
+    column [ width fill, spacing 5, padding 2, scrollbarY ] <|
+        List.concatMap
+            (\( s, sType ) ->
+                case sType of
+                    Stopped ->
+                        [ viewSoundInLib model s (id ++ [ s ]) False ]
+
+                    Playing ->
+                        [ viewSoundInLib model s (id ++ [ s ]) True ]
+
+                    Directory opened dir ->
+                        viewDirInLib model s (id ++ [ s ]) dir opened
+            )
+        <|
+            List.sortWith (\t1 t2 -> Natural.compare (Tuple.first t1) (Tuple.first t2)) <|
+                Dict.toList dict
+
+
+viewSoundInLib : Model -> String -> List String -> Bool -> Element Msg
+viewSoundInLib model s id playing =
+    row [ spacing 5 ]
+        ([ Input.button
+            [ Font.color <|
+                if List.any ((==) <| String.join "/" id) <| List.map Sound.toString model.loadedSoundList then
+                    rgb 0.2 0.8 0.2
+
+                else
+                    rgb 1 1 1
+            ]
+            { label = text s
+            , onPress =
+                Just <|
+                    if model.mode == Downloading then
+                        RequestSoundDownload <| String.join "/" id
+
+                    else
+                        RequestSoundLoad <| String.join "/" id
+            }
+         , Input.button []
+            -- Charset ref https://www.w3schools.com/charsets/ref_utf_geometric.asp
+            { label =
+                text <|
+                    if playing then
+                        "◼"
+
+                    else
+                        "▶"
+            , onPress = Just <| PreListening id <| not playing
+            }
+         ]
+            ++ (if playing then
+                    [ Element.html <|
+                        Html.audio
+                            [ Attr.hidden True
+                            , Attr.src <| Url.Builder.relative ("sons" :: id) []
+                            , Attr.autoplay True
+                            , Events.on "ended" <| D.succeed <| PreListening id False
+                            ]
+                            []
+                    ]
+
+                else
+                    []
+               )
+        )
+
+
+viewDirInLib : Model -> String -> List String -> Dict String SoundListType -> Bool -> List (Element Msg)
+viewDirInLib model str id dict opened =
+    Input.button [ Font.color <| rgb 1 1 1 ]
+        { label =
+            text <|
+                (if opened then
+                    "▽"
+
+                 else
+                    "◿"
+                )
+                    ++ str
+        , onPress = Just <| ExpandDir id
+        }
+        :: (if opened then
+                [ el [ moveRight 10 ] <| viewLib model id dict ]
+
+            else
+                []
+           )
 
 
 viewLoaded : Model -> List (Element Msg)
@@ -630,6 +732,38 @@ viewSaveFiles model =
             )
         ]
     ]
+
+
+updateSoundLib :
+    Dict String SoundListType
+    -> List String
+    -> (Maybe SoundListType -> Maybe SoundListType)
+    -> Dict String SoundListType
+updateSoundLib lib strs up =
+    let
+        rec dict el list =
+            case list of
+                [] ->
+                    Dict.update el up dict
+
+                next :: rest ->
+                    Dict.update el
+                        (\mayType ->
+                            case mayType of
+                                Just (Directory b d) ->
+                                    Just (Directory b <| rec d next rest)
+
+                                _ ->
+                                    mayType
+                        )
+                        dict
+    in
+    case strs of
+        [] ->
+            lib
+
+        el :: list ->
+            rec lib el list
 
 
 
