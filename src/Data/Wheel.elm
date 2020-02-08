@@ -24,30 +24,35 @@ type alias Wheel =
     , startPercent : Float
     , volume : Float
     , content : WheelContent
+    , viewContent : Bool
     , mute : Bool
     , color : Color
     }
 
 
+type alias Conteet =
+    Content Wheel
+
+
 type WheelContent
-    = C (Content Wheel)
+    = C Conteet
 
 
-getContent : Wheeled g -> Content Wheel
+getContent : Wheeled g -> Conteet
 getContent { wheel } =
     case wheel.content of
         C c ->
             c
 
 
-getWheelContent : Wheel -> Content Wheel
+getWheelContent : Wheel -> Conteet
 getWheelContent { content } =
     case content of
         C c ->
             c
 
 
-setContent : Content Wheel -> Wheeled g -> Wheeled g
+setContent : Conteet -> Wheeled g -> Wheeled g
 setContent c g =
     let
         w =
@@ -62,12 +67,13 @@ default =
     , startPercent = 0
     , volume = 1
     , content = C <| Content.S Sound.noSound
+    , viewContent = True
     , mute = False
     , color = Color.black
     }
 
 
-fromContent : Content Wheel -> Wheel
+fromContent : Conteet -> Wheel
 fromContent c =
     { default | content = C c }
 
@@ -80,24 +86,30 @@ type Mod
 
 
 type alias Style =
-    { mod : Mod, motor : Bool, dashed : Bool, baseColor : Maybe Color }
+    { mod : Mod
+    , motor : Bool
+    , dashed : Bool
+    , baseColor : Maybe Color
+    }
 
 
 defaultStyle : Style
 defaultStyle =
-    { mod = None, motor = False, dashed = False, baseColor = Nothing }
-
-
-type Interactable x
-    = IWheel x
-    | IResizeHandle x Bool -- True = Right
+    { mod = None
+    , motor = False
+    , dashed = False
+    , baseColor = Nothing
+    }
 
 
 type Msg
-    = ChangeContent (Content Wheel)
+    = ChangeContent Conteet
     | ChangeVolume Float
+    | ToggleMute
+    | ChangeStart Float
     | Named String
     | ChangeColor Color
+    | ToggleContentView
 
 
 update : Msg -> Wheeled g -> Wheeled g
@@ -113,6 +125,12 @@ update msg g =
         ChangeVolume vol ->
             { g | wheel = { wheel | volume = clamp 0 1 vol } }
 
+        ToggleMute ->
+            { g | wheel = { wheel | mute = not wheel.mute } }
+
+        ChangeStart percent ->
+            { g | wheel = { wheel | startPercent = percent } }
+
         Named name ->
             if String.all (\c -> Char.isAlphaNum c || c == '-') name then
                 { g | wheel = { wheel | name = name } }
@@ -123,10 +141,36 @@ update msg g =
         ChangeColor c ->
             { g | wheel = { wheel | color = c } }
 
+        ToggleContentView ->
+            { g | wheel = { wheel | viewContent = not wheel.viewContent } }
 
-view : Wheel -> Vec2 -> Float -> Style -> id -> String -> Svg (Interact.Msg (Interactable id) zone)
-view w pos length style id uid =
+
+view :
+    Wheel
+    -> Vec2
+    -> Float
+    -> Style
+    -> Maybe ( List Int -> inter, List Int )
+    -> Maybe (Bool -> inter)
+    -> String
+    -> Svg (Interact.Msg inter x)
+view w pos lengthTmp style mayWheelInter mayHandleInter uid =
     let
+        ( viewContent, bigger ) =
+            case w.content of
+                C (Content.C col) ->
+                    ( w.viewContent, w.viewContent && List.length col.beads == 0 )
+
+                _ ->
+                    ( False, False )
+
+        length =
+            if bigger then
+                lengthTmp * 1.2
+
+            else
+                lengthTmp
+
         tickH =
             length / 15
 
@@ -135,12 +179,24 @@ view w pos length style id uid =
 
         circum =
             length * pi
+
+        ( hoverAttrs, dragAttrs ) =
+            Maybe.withDefault ( [], [] ) <|
+                Maybe.map
+                    (\( inter, l ) -> ( Interact.hoverEvents <| inter l, Interact.draggableEvents <| inter l ))
+                    mayWheelInter
     in
     S.g
         ([ SA.transform [ Translate (getX pos) (getY pos) ] ]
-            ++ Interact.hoverEvents (IWheel id)
+            ++ hoverAttrs
         )
-        ([ S.g (Html.Attributes.id uid :: Interact.draggableEvents (IWheel id))
+        ([ S.g
+            (if String.isEmpty uid then
+                []
+
+             else
+                [ Html.Attributes.id uid ] ++ dragAttrs
+            )
             ([ S.circle
                 [ SA.cx <| Num 0
                 , SA.cy <| Num 0
@@ -200,50 +256,65 @@ view w pos length style id uid =
                         Nothing ->
                             []
                    )
-                ++ (let
-                        symSize =
-                            length / 4
-                    in
-                    case w.content of
-                        C (Content.M _) ->
-                            [ S.line
-                                [ SA.x1 <| Num -symSize
-                                , SA.y1 <| Num -symSize
-                                , SA.x2 <| Num symSize
-                                , SA.y2 <| Num symSize
-                                , SA.stroke Color.grey
-                                , SA.strokeWidth <| Num tickW
+                ++ (if viewContent then
+                        case w.content of
+                            C (Content.C collar) ->
+                                let
+                                    scale =
+                                        lengthTmp / Content.getMatriceLength collar
+                                in
+                                [ S.g [ SA.transform [ Translate (-lengthTmp / 2) 0, Scale scale scale ] ] <|
+                                    insideCollarView collar mayWheelInter uid
                                 ]
-                                []
-                            , S.line
-                                [ SA.x1 <| Num -symSize
-                                , SA.y1 <| Num symSize
-                                , SA.x2 <| Num symSize
-                                , SA.y2 <| Num -symSize
-                                , SA.stroke Color.grey
-                                , SA.strokeWidth <| Num tickW
-                                ]
-                                []
-                            ]
 
-                        C (Content.C _) ->
-                            [ S.line
-                                [ SA.x1 <| Num -symSize
-                                , SA.y1 <| Num 0
-                                , SA.x2 <| Num symSize
-                                , SA.y2 <| Num 0
-                                , SA.stroke Color.grey
-                                , SA.strokeWidth <| Num tickW
-                                ]
-                                []
-                            ]
+                            _ ->
+                                Debug.todo "view Sound or Mobile inside wheel"
 
-                        _ ->
-                            []
+                    else
+                        let
+                            symSize =
+                                length / 4
+                        in
+                        case w.content of
+                            C (Content.M _) ->
+                                [ S.line
+                                    [ SA.x1 <| Num -symSize
+                                    , SA.y1 <| Num -symSize
+                                    , SA.x2 <| Num symSize
+                                    , SA.y2 <| Num symSize
+                                    , SA.stroke Color.grey
+                                    , SA.strokeWidth <| Num tickW
+                                    ]
+                                    []
+                                , S.line
+                                    [ SA.x1 <| Num -symSize
+                                    , SA.y1 <| Num symSize
+                                    , SA.x2 <| Num symSize
+                                    , SA.y2 <| Num -symSize
+                                    , SA.stroke Color.grey
+                                    , SA.strokeWidth <| Num tickW
+                                    ]
+                                    []
+                                ]
+
+                            C (Content.C _) ->
+                                [ S.line
+                                    [ SA.x1 <| Num -symSize
+                                    , SA.y1 <| Num 0
+                                    , SA.x2 <| Num symSize
+                                    , SA.y2 <| Num 0
+                                    , SA.stroke Color.grey
+                                    , SA.strokeWidth <| Num tickW
+                                    ]
+                                    []
+                                ]
+
+                            _ ->
+                                []
                    )
             )
          ]
-            -- Not Draggable
+            -- No drag events part
             ++ (case style.mod of
                     Selected first ->
                         [ S.circle
@@ -263,29 +334,34 @@ view w pos length style id uid =
                         ]
 
                     Resizing ->
-                        [ S.polyline
-                            [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
-                            , SA.stroke Color.red
-                            , SA.strokeWidth <| Num tickW
-                            ]
-                            []
-                        , S.circle
-                            ([ SA.cx <| Num (-length / 2)
-                             , SA.cy <| Num 0
-                             , SA.r <| Num (tickW * 2)
-                             ]
-                                ++ Interact.draggableEvents (IResizeHandle id False)
-                            )
-                            []
-                        , S.circle
-                            ([ SA.cx <| Num (length / 2)
-                             , SA.cy <| Num 0
-                             , SA.r <| Num (tickW * 2)
-                             ]
-                                ++ Interact.draggableEvents (IResizeHandle id True)
-                            )
-                            []
-                        ]
+                        case mayHandleInter of
+                            Just handle ->
+                                [ S.polyline
+                                    [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
+                                    , SA.stroke Color.red
+                                    , SA.strokeWidth <| Num tickW
+                                    ]
+                                    []
+                                , S.circle
+                                    ([ SA.cx <| Num (-length / 2)
+                                     , SA.cy <| Num 0
+                                     , SA.r <| Num (tickW * 2)
+                                     ]
+                                        ++ Interact.draggableEvents (handle False)
+                                    )
+                                    []
+                                , S.circle
+                                    ([ SA.cx <| Num (length / 2)
+                                     , SA.cy <| Num 0
+                                     , SA.r <| Num (tickW * 2)
+                                     ]
+                                        ++ Interact.draggableEvents (handle True)
+                                    )
+                                    []
+                                ]
+
+                            Nothing ->
+                                []
 
                     _ ->
                         []
@@ -293,81 +369,30 @@ view w pos length style id uid =
         )
 
 
-drawSimple : Wheel -> Vec2 -> Float -> Svg msg
-drawSimple w pos length =
-    let
-        tickH =
-            length / 15
-
-        tickW =
-            length / 30
-    in
-    S.g [ SA.transform [ Translate (getX pos) (getY pos) ] ] <|
-        [ S.circle
-            [ SA.cx <| Num 0
-            , SA.cy <| Num 0
-            , SA.r <| Num (length / 2)
-            , SA.stroke Color.black
-            , SA.strokeWidth <| Num tickW
-            , SA.fill <|
-                if w.mute then
-                    Fill Color.white
-
-                else
-                    Fill w.color
-            , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
-            ]
-            []
-        , S.rect
-            [ SA.width <| Num tickW
-            , SA.height <| Num tickH
-            , SA.x <| Num (tickW / -2)
-            , SA.y <| Num (tickH / -2)
-            , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) - (tickH / 2)) ]
-            ]
-            []
-        ]
-            ++ (let
-                    symSize =
-                        length / 4
-                in
-                case w.content of
-                    C (Content.M _) ->
-                        [ S.line
-                            [ SA.x1 <| Num -symSize
-                            , SA.y1 <| Num -symSize
-                            , SA.x2 <| Num symSize
-                            , SA.y2 <| Num symSize
-                            , SA.stroke Color.grey
-                            , SA.strokeWidth <| Num tickW
-                            ]
-                            []
-                        , S.line
-                            [ SA.x1 <| Num -symSize
-                            , SA.y1 <| Num symSize
-                            , SA.x2 <| Num symSize
-                            , SA.y2 <| Num -symSize
-                            , SA.stroke Color.grey
-                            , SA.strokeWidth <| Num tickW
-                            ]
-                            []
-                        ]
-
-                    C (Content.C _) ->
-                        [ S.line
-                            [ SA.x1 <| Num -symSize
-                            , SA.y1 <| Num 0
-                            , SA.x2 <| Num symSize
-                            , SA.y2 <| Num 0
-                            , SA.stroke Color.grey
-                            , SA.strokeWidth <| Num tickW
-                            ]
-                            []
-                        ]
-
-                    _ ->
-                        []
-               )
+insideCollarView :
+    Content.Collar Wheel
+    -> Maybe ( List Int -> inter, List Int )
+    -> String
+    -> List (Svg (Interact.Msg inter x))
+insideCollarView collar mayWheelInter parentUid =
+    Tuple.first <|
+        List.foldl
+            (\b ( res, ( p, i ) ) ->
+                ( view b.wheel
+                    (vec2 (p + b.length / 2) 0)
+                    b.length
+                    defaultStyle
+                    (Maybe.map (\( inter, l ) -> ( inter, l ++ [ i ] )) mayWheelInter)
+                    Nothing
+                    (parentUid ++ String.fromInt i)
+                    :: res
+                , ( p + b.length
+                  , i + 1
+                  )
+                )
+            )
+            ( [], ( 0, 0 ) )
+            (Content.getBeads collar)
 
 
 encoder : Wheel -> List ( String, E.Value )
@@ -377,6 +402,7 @@ encoder w =
     , ( "volume", E.float w.volume )
     , ( "mute", E.bool w.mute )
     , ( "color", colorEncoder w.color )
+    , ( "viewContent", E.bool w.viewContent )
     , case w.content of
         C c ->
             Content.encoder encoder c
@@ -388,24 +414,27 @@ decoder =
     Content.decoder (D.lazy (\_ -> decoder)) default
         |> D.andThen
             (\content ->
-                Field.attempt "name" D.string <|
-                    \name ->
-                        Field.require "startPercent" D.float <|
-                            \startPercent ->
-                                Field.require "volume" D.float <|
-                                    \volume ->
-                                        Field.require "mute" D.bool <|
-                                            \mute ->
-                                                Field.attempt "color" colorDecoder <|
-                                                    \color ->
-                                                        D.succeed
-                                                            { name = Maybe.withDefault "" name
-                                                            , startPercent = startPercent
-                                                            , volume = volume
-                                                            , content = C content
-                                                            , mute = mute
-                                                            , color = Maybe.withDefault Color.black color
-                                                            }
+                Field.attempt "viewContent" D.bool <|
+                    \viewContent ->
+                        Field.attempt "name" D.string <|
+                            \name ->
+                                Field.require "startPercent" D.float <|
+                                    \startPercent ->
+                                        Field.require "volume" D.float <|
+                                            \volume ->
+                                                Field.require "mute" D.bool <|
+                                                    \mute ->
+                                                        Field.attempt "color" colorDecoder <|
+                                                            \color ->
+                                                                D.succeed
+                                                                    { name = Maybe.withDefault "" name
+                                                                    , startPercent = startPercent
+                                                                    , volume = volume
+                                                                    , content = C content
+                                                                    , viewContent = Maybe.withDefault True viewContent
+                                                                    , mute = mute
+                                                                    , color = Maybe.withDefault Color.black color
+                                                                    }
             )
 
 

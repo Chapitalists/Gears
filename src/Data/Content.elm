@@ -41,6 +41,16 @@ type alias Mobile item =
     { motor : Id (Gear item), gears : Coll (Gear item) }
 
 
+getGear : Id (Gear item) -> Mobile item -> Gear item
+getGear id m =
+    Coll.get id m.gears
+
+
+updateGear : Id (Gear item) -> (Gear item -> Gear item) -> Mobile item -> Mobile item
+updateGear id f m =
+    { m | gears = Coll.update id f m.gears }
+
+
 mobileEncoder : (item -> List ( String, E.Value )) -> Mobile item -> E.Value
 mobileEncoder wheelEncoder m =
     E.object
@@ -93,9 +103,49 @@ getBeads c =
     c.head :: c.beads
 
 
+
+-- TODO if i >= length, get differs from update, bug, see Common.deleteWheel, updates the got bead
+
+
+getBead : Int -> Collar item -> Bead item
+getBead i c =
+    case List.head <| List.drop i <| getBeads c of
+        Just b ->
+            b
+
+        Nothing ->
+            Debug.log ("Cannot get Bead " ++ String.fromInt i) <| c.head
+
+
+updateBead : Int -> (Bead item -> Bead item) -> Collar item -> Collar item
+updateBead i f c =
+    if i <= 0 then
+        { c | head = f c.head }
+
+    else
+        { c
+            | beads =
+                List.concat
+                    [ List.take (i - 1) c.beads
+                    , case List.head <| List.drop (i - 1) c.beads of
+                        Nothing ->
+                            []
+
+                        Just b ->
+                            [ f b ]
+                    , List.drop i c.beads
+                    ]
+        }
+
+
 getCumulLengthAt : Int -> Collar item -> Float
 getCumulLengthAt i c =
     List.foldl (\b sum -> sum + b.length) 0 <| List.take i <| getBeads c
+
+
+getMatriceLength : Collar item -> Float
+getMatriceLength c =
+    getCumulLengthAt c.matrice c
 
 
 collarEncoder : (item -> List ( String, E.Value )) -> Collar item -> E.Value

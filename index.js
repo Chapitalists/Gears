@@ -4,6 +4,7 @@ Copyright ou © ou Copr. Clément Bossut, (2018)
 */
 
 const fs = require('fs')
+    , readdirRec = require('fs-readdir-recursive')
     , staticRoute = require('static-route')
     , formidable = require('formidable')
     , port = 12345
@@ -39,10 +40,10 @@ const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
     , dynamicCallbacks = {
       
         soundList : (req, res) => {
-            res.end(fs.readdirSync(soundPath)
+            res.end(readdirRec(soundPath)
                 .filter(hidedFileFilter)
                 .filter(soundExtensionFilter)
-                .join('\\'))
+                .join('\0'))
         }
 
         , savesList : (req, res) => {

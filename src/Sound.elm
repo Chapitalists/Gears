@@ -34,6 +34,11 @@ toString (S { path }) =
     path
 
 
+chgPath : Sound -> String -> Sound
+chgPath (S s) p =
+    S { s | path = p }
+
+
 decoder : D.Decoder Sound
 decoder =
     Field.require "path" D.string <|

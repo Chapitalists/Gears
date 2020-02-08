@@ -3,14 +3,15 @@ port module Editor.Mobile exposing (..)
 import Coll exposing (Coll, Id)
 import Color
 import Data.Collar as Collar
-import Data.Common as CommonData
+import Data.Common as CommonData exposing (Identifier)
 import Data.Content as Content exposing (Content)
 import Data.Gear as Gear
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
-import Data.Wheel as Wheel exposing (Wheel)
-import Editor.Common exposing (..)
+import Data.Wheel as Wheel exposing (Conteet, Wheel)
+import Editor.Interacting exposing (Interactable(..), Zone(..))
 import Element exposing (..)
 import Element.Background as Bg
+import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
 import Engine exposing (Engine)
@@ -22,16 +23,18 @@ import Interact exposing (Interact)
 import Json.Decode as D
 import Json.Encode as E
 import Link exposing (Link)
-import Math.Vector2 as Vec exposing (Vec2, vec2)
+import Math.Vector2 as Vec exposing (Vec2, getX, getY, vec2)
 import Motor
+import Pack exposing (Pack, Packed)
 import PanSvg
 import Random
 import Round
-import Sound
+import Sound exposing (Sound)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
-import TypedSvg.Types exposing (Length(..), Opacity(..))
+import TypedSvg.Types exposing (Fill(..), Length(..), Opacity(..), Transform(..))
+import Waveform exposing (Waveform)
 
 
 port toggleRecord : Bool -> Cmd msg
@@ -40,14 +43,26 @@ port toggleRecord : Bool -> Cmd msg
 port gotRecord : (D.Value -> msg) -> Sub msg
 
 
+
+-- TODO Maybe delegate Coll dependence to Data.Mobile (except Id)
+
+
+svgId : String
+svgId =
+    "svg"
+
+
 type alias Model =
     { dragging : Dragging
     , tool : Tool
     , mode : Mode
+    , edit : List (Id Geer)
+    , cursor : Int
     , link : Maybe LinkInfo
     , engine : Engine
     , interact : Interact.State Interactable
-    , common : CommonModel
+    , pack : Pack
+    , wave : ( Waveform, Maybe Sound ) -- TODO Second source of truth with edit? Could be just Bool
     , svg : PanSvg.Model
     }
 
@@ -68,7 +83,10 @@ type Tool
 
 
 type Mode
-    = CommonMode CommonMode
+    = Normal
+    | Nav
+    | ChangeSound (Id Geer)
+    | SupprMode
     | Move
     | SelectMotor
 
@@ -76,6 +94,9 @@ type Mode
 keyCodeToMode : List ( String, Mode )
 keyCodeToMode =
     [ ( "KeyD", Move )
+    , ( "KeyV", Nav )
+    , ( "Delete", SupprMode )
+    , ( "Backspace", SupprMode )
     ]
 
 
@@ -102,7 +123,12 @@ type Dragging
     | ChgContent (Id Geer) Dragging
 
 
-init : Maybe Mobeel -> Maybe ( CommonModel, PanSvg.Model ) -> Model
+getShared : Model -> ( Pack, PanSvg.Model )
+getShared { pack, svg } =
+    ( pack, svg )
+
+
+init : Maybe Mobeel -> Maybe ( Pack, PanSvg.Model ) -> Model
 init mayMobile mayShared =
     let
         base =
@@ -114,11 +140,14 @@ init mayMobile mayShared =
     in
     { dragging = NoDrag
     , tool = Play False False
-    , mode = CommonMode Normal
+    , mode = Normal
+    , edit = []
+    , cursor = 0
     , link = Nothing
     , engine = Engine.init
     , interact = Interact.init
-    , common = commonUpdate (PrepareZoom svg) <| commonInit <| Maybe.map Tuple.first mayShared
+    , pack = Pack.update (Pack.PrepareZoom svg) <| Maybe.withDefault Pack.init <| Maybe.map Tuple.first mayShared
+    , wave = ( Waveform.init, Nothing )
     , svg = svg
     }
 
@@ -132,11 +161,16 @@ type Msg
     | StopGear (Id Geer)
     | ToggleRecord Bool
     | GotRecord (Result D.Error String)
+      -- COLLAR EDIT
+    | CursorRight
+    | CursorLeft
+    | NewBead Conteet
+    | UnpackBead ( Wheel, Float ) Bool
       --
     | CopyGear (Id Geer)
     | CopyContent Wheel
-    | NewGear Vec2 (Content Wheel)
-    | DeleteGear (Id Geer)
+    | NewGear Vec2 Conteet
+    | DeleteWheel Identifier
     | EnteredFract Bool String -- True for Numerator
     | AppliedFract (Link Geer) Fraction
     | EnteredTextFract String
@@ -145,13 +179,16 @@ type Msg
     | ResizeToContent (Id Geer)
     | Capsuled (List (Id Geer))
     | Collared (Id Geer)
+    | UnCollar (Id Geer)
     | InteractMsg (Interact.Msg Interactable Zone)
     | SvgMsg PanSvg.Msg
     | SVGSize (Result D.Error PanSvg.Size)
-    | WheelMsgs (List ( Id Geer, Wheel.Msg ))
+    | WheelMsgs (List ( Identifier, Wheel.Msg ))
     | GearMsg ( Id Geer, Gear.Msg )
-    | CommonMsg CommonMsg
+    | PackMsg Pack.Msg
+    | WaveMsg Waveform.Msg
     | OutMsg DocMsg
+    | NoMsg
 
 
 type alias Return =
@@ -162,6 +199,17 @@ type alias Return =
     , outMsg : Maybe DocMsg
     , cmd : Cmd Msg
     }
+
+
+type DocMsg
+    = Inside Identifier
+
+
+type ToUndo
+    = Do
+    | Group
+    | Cancel
+    | NOOP
 
 
 update : Msg -> ( Model, Mobeel ) -> Return
@@ -252,13 +300,91 @@ update msg ( model, mobile ) =
         StopGear id ->
             { return | model = { model | engine = Engine.init }, toEngine = Just Engine.stop }
 
+        CursorRight ->
+            case model.edit of
+                [ id ] ->
+                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                        Content.C col ->
+                            { return | model = { model | cursor = min (model.cursor + 1) <| Collar.length col } }
+
+                        _ ->
+                            return
+
+                _ ->
+                    return
+
+        CursorLeft ->
+            case model.edit of
+                [ id ] ->
+                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                        Content.C _ ->
+                            { return | model = { model | cursor = max (model.cursor - 1) 0 } }
+
+                        _ ->
+                            return
+
+                _ ->
+                    return
+
+        NewBead c ->
+            case model.edit of
+                [ id ] ->
+                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                        Content.C col ->
+                            { return
+                                | mobile =
+                                    CommonData.updateWheel ( id, [] )
+                                        (Wheel.ChangeContent <| Content.C <| Collar.add model.cursor (Collar.beadFromContent c) col)
+                                        mobile
+                                , toUndo = Group
+                                , model = { model | cursor = model.cursor + 1 }
+                                , cmd = Random.generate (\color -> WheelMsgs [ ( ( id, [ model.cursor ] ), Wheel.ChangeColor color ) ]) colorGen
+                            }
+
+                        _ ->
+                            return
+
+                _ ->
+                    return
+
+        UnpackBead ( w, l ) new ->
+            case model.edit of
+                [ id ] ->
+                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                        Content.C col ->
+                            if new then
+                                { return
+                                    | mobile =
+                                        CommonData.updateWheel ( id, [] )
+                                            (Wheel.ChangeContent <| Content.C <| Collar.add model.cursor { wheel = w, length = l } col)
+                                            mobile
+                                    , toUndo = Do
+                                    , model = { model | cursor = model.cursor + 1 }
+                                }
+
+                            else
+                                Debug.todo "ChangeContent of bead, has to select bead"
+
+                        {- case model.common.edit of
+                           [ B i ] ->
+                               update (WheelMsg ( i, Wheel.ChangeContent <| Wheel.getContent { wheel = w } )) ( model, collar )
+
+                           _ ->
+                               return
+                        -}
+                        _ ->
+                            return
+
+                _ ->
+                    return
+
         CopyGear id ->
             { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
         CopyContent w ->
-            case model.common.edit of
-                [ G id ] ->
-                    doChangeContent id (Wheel.getContent { wheel = w }) (Just w.color) model mobile
+            case model.edit of
+                [ id ] ->
+                    doChangeContent id (Wheel.getWheelContent w) (Just w.color) model mobile
 
                 _ ->
                     return
@@ -274,49 +400,46 @@ update msg ( model, mobile ) =
             { return
                 | mobile = { mobile | gears = gears }
                 , toUndo = Group
-                , model = { model | svg = svg, common = commonUpdate (PrepareZoom svg) model.common }
-                , cmd = Random.generate (\color -> WheelMsgs [ ( id, Wheel.ChangeColor color ) ]) colorGen
+                , model = { model | svg = svg, pack = Pack.update (Pack.PrepareZoom svg) model.pack }
+                , cmd = Random.generate (\color -> WheelMsgs [ ( ( id, [] ), Wheel.ChangeColor color ) ]) colorGen
             }
 
-        DeleteGear id ->
-            if id == mobile.motor then
-                return
+        DeleteWheel ( id, l ) ->
+            { return
+                | model =
+                    { model
+                        | edit =
+                            if l == [] && id /= mobile.motor then
+                                List.filter ((/=) id) model.edit
 
-            else
-                let
-                    gears =
-                        Motor.clean id mobile.gears
+                            else
+                                model.edit
+                        , cursor =
+                            if model.edit == [ id ] then
+                                case l of
+                                    [ i ] ->
+                                        case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                                            Content.C _ ->
+                                                if model.cursor > i then
+                                                    model.cursor - 1
 
-                    harmo =
-                        (Coll.get id gears).harmony
-                in
-                -- TODO check and use harmo clean
-                if Harmo.hasHarmonics harmo then
-                    -- TODO delete base ?
-                    Debug.log "TODO delete base" return
+                                                else
+                                                    model.cursor
 
-                else
-                    { return
-                        | model =
-                            { model
-                                | common = commonUpdate (Delete <| G id) model.common
-                                , engine = Engine.init
-                            }
-                        , toUndo = Do
-                        , toEngine = Just Engine.stop
-                        , mobile =
-                            case Harmo.getBaseId harmo of
-                                Nothing ->
-                                    { mobile | gears = Coll.remove id gears }
+                                            _ ->
+                                                model.cursor
 
-                                Just baseId ->
-                                    { mobile
-                                        | gears =
-                                            gears
-                                                |> Coll.update baseId (Harmo.remove id)
-                                                |> Coll.remove id
-                                    }
+                                    _ ->
+                                        model.cursor
+
+                            else
+                                model.cursor
+                        , engine = Engine.init
                     }
+                , toUndo = Do
+                , toEngine = Just Engine.stop
+                , mobile = CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
+            }
 
         EnteredFract isNumerator str ->
             Maybe.map2 Tuple.pair model.link (String.toInt str)
@@ -500,6 +623,16 @@ update msg ( model, mobile ) =
                 , toUndo = Do
             }
 
+        {- TODO ResizeToContent bead, has to select bead}
+           ResizeToContent i ->
+               { return
+                   | collar =
+                       Collar.updateBead i
+                           (\b -> { b | length = CommonData.getContentLength <| Wheel.getContent <| Collar.get i collar })
+                           collar
+                   , toUndo = Do
+               }
+        -}
         Capsuled [] ->
             return
 
@@ -553,16 +686,28 @@ update msg ( model, mobile ) =
                 , toUndo = Do
             }
 
+        UnCollar id ->
+            let
+                g =
+                    Coll.get id mobile.gears
+            in
+            case Wheel.getContent g of
+                Content.C col ->
+                    { return
+                        | mobile = Mobile.updateGear id (Wheel.setContent <| Wheel.getContent col.head) mobile
+                        , toUndo = Do
+                    }
+
+                _ ->
+                    return
+
         WheelMsgs msgs ->
             { return
                 | mobile =
-                    { mobile
-                        | gears =
-                            List.foldl
-                                (\( id, subMsg ) gears -> Coll.update id (Wheel.update subMsg) gears)
-                                mobile.gears
-                                msgs
-                    }
+                    List.foldl
+                        (\( id, subMsg ) gears -> CommonData.updateWheel id subMsg gears)
+                        mobile
+                        msgs
                 , toUndo = Do
             }
 
@@ -572,12 +717,15 @@ update msg ( model, mobile ) =
         OutMsg subMsg ->
             { return | outMsg = Just subMsg }
 
+        NoMsg ->
+            return
+
         SvgMsg subMsg ->
             let
                 svg =
                     PanSvg.update subMsg model.svg
             in
-            { return | model = { model | svg = svg, common = commonUpdate (PrepareZoom svg) model.common } }
+            { return | model = { model | svg = svg, pack = Pack.update (Pack.PrepareZoom svg) model.pack } }
 
         SVGSize res ->
             case res of
@@ -585,18 +733,32 @@ update msg ( model, mobile ) =
                     Debug.log (D.errorToString e) return
 
                 Result.Ok s ->
+                    let
+                        ( wave, cmd ) =
+                            Waveform.update (Waveform.GotSize <| floor s.width) <| Tuple.first model.wave
+                    in
                     { return
                         | model =
                             { model
                                 | svg = PanSvg.update (PanSvg.ScaleSize 1 s) model.svg
-                                , common = commonUpdate (PackSvgMsg <| PanSvg.ScaleSize model.common.packScale s) model.common
+                                , pack = Pack.update (Pack.SvgMsg <| PanSvg.ScaleSize model.pack.scale s) model.pack
+                                , wave = Tuple.mapFirst (always wave) model.wave
                             }
+                        , cmd = Cmd.map WaveMsg cmd
                     }
 
-        CommonMsg subMsg ->
-            { return | model = { model | common = commonUpdate subMsg model.common } }
+        PackMsg subMsg ->
+            { return | model = { model | pack = Pack.update subMsg model.pack } }
+
+        WaveMsg subMsg ->
+            let
+                ( wave, cmd ) =
+                    Waveform.update subMsg <| Tuple.first model.wave
+            in
+            { return | model = { model | wave = Tuple.mapFirst (always wave) model.wave }, cmd = Cmd.map WaveMsg cmd }
 
         -- TODO use some pattern like outMessage package? or elm-state? elm-return?
+        -- TODO move all that in Editor.Interacting, and manage then
         InteractMsg subMsg ->
             let
                 ( interact, event ) =
@@ -626,7 +788,7 @@ update msg ( model, mobile ) =
                                                             newModel.svg
 
                                                         ZPack ->
-                                                            newModel.common.packSvg
+                                                            newModel.pack.svg
                                             in
                                             { e
                                                 | action =
@@ -646,6 +808,7 @@ update msg ( model, mobile ) =
 subs : Model -> List (Sub Msg)
 subs { interact } =
     PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
+        :: Sub.map WaveMsg Waveform.sub
         :: (gotRecord <| (GotRecord << D.decodeValue D.string))
         :: (List.map (Sub.map InteractMsg) <| Interact.subs interact)
 
@@ -709,17 +872,36 @@ viewExtraTools model =
 viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
+        ( wavePercent, percentMsg, viewContentEdit ) =
+            case model.edit of
+                [ id ] ->
+                    ( (Coll.get id mobile.gears).wheel.startPercent
+                    , \f -> WheelMsgs [ ( ( id, [] ), Wheel.ChangeStart f ) ]
+                    , (Coll.get id mobile.gears).wheel.viewContent
+                    )
+
+                _ ->
+                    ( 0, always NoMsg, False )
+
+        viewWave =
+            case ( Tuple.second model.wave, (Tuple.first model.wave).drawn ) of
+                ( Just s1, Waveform.SoundDrawn s2 ) ->
+                    s1 == s2 && model.tool == Edit && viewContentEdit
+
+                _ ->
+                    False
+
         getMod : Id Geer -> Wheel.Mod
         getMod id =
-            if model.tool == Edit && List.member (G id) model.common.edit then
+            if model.tool == Edit && List.member id model.edit then
                 Wheel.Selected <|
-                    (List.length model.common.edit > 1)
-                        && ((List.head <| List.reverse model.common.edit) == Just (G id))
+                    (List.length model.edit > 1)
+                        && ((List.head <| List.reverse model.edit) == Just id)
 
             else
                 case Interact.getInteract model.interact of
-                    Just ( IWheel iid, mode ) ->
-                        if iid /= G id then
+                    Just ( IWheel ( iid, [] ), mode ) ->
+                        if iid /= id then
                             Wheel.None
 
                         else
@@ -734,7 +916,7 @@ viewContent ( model, mobile ) =
                                     Wheel.None
 
                     Just ( IResizeHandle iid _, mode ) ->
-                        if iid /= G id then
+                        if iid /= id then
                             Wheel.None
 
                         else
@@ -742,145 +924,264 @@ viewContent ( model, mobile ) =
 
                     _ ->
                         Wheel.None
+
+        {--TODO bead mod inside collar (Wheel.view, viewContent)
+        getMod : Int -> Wheel.Mod
+        getMod i =
+            if model.tool == Edit && model.common.edit == [ B i ] then
+                Wheel.Selected False
+
+            else
+                case Interact.getInteract model.interact of
+                    Just ( IWheel j, Interact.Hover ) ->
+                        if B i == j then
+                            Wheel.Selectable
+
+                        else
+                            Wheel.None
+
+                    _ ->
+                        Wheel.None
+-}
     in
-    Element.html <|
-        S.svg
-            (List.map (Html.Attributes.map SvgMsg) (PanSvg.svgAttributes model.svg)
-                ++ (List.map (Html.Attributes.map InteractMsg) <|
-                        Interact.dragSpaceEvents model.interact ZSurface
-                            ++ Interact.draggableEvents ISurface
-                   )
-            )
-        <|
-            List.map (Svg.map InteractMsg) <|
-                (List.map
-                    (\( id, g ) ->
-                        Wheel.view g.wheel
-                            g.pos
-                            (Harmo.getLength g.harmony mobile.gears)
-                            { mod = getMod id
-                            , motor = id == mobile.motor
-                            , dashed = Harmo.hasHarmonics g.harmony
-                            , baseColor =
-                                Maybe.map (\bId -> (Coll.get bId mobile.gears).wheel.color) <|
-                                    Harmo.getBaseId g.harmony
-                            }
-                            (G id)
-                            (Gear.toUID id)
-                            |> Svg.map (Interact.map fromWheelInteractable)
-                    )
-                 <|
-                    Coll.toList mobile.gears
+    Element.el
+        [ Element.width Element.fill
+        , Element.height Element.fill
+        , Element.inFront <|
+            Pack.view model.pack
+                (List.map (Html.Attributes.map InteractMsg) <|
+                    Interact.dragSpaceEvents model.interact ZPack
                 )
-                    ++ (case model.dragging of
-                            HalfLink ( id, pos ) ->
-                                let
-                                    g =
-                                        Coll.get id mobile.gears
-                                in
-                                case model.tool of
-                                    Play _ _ ->
-                                        let
-                                            length =
-                                                Harmo.getLength g.harmony mobile.gears
-                                        in
-                                        [ Link.drawMotorLink ( ( g.pos, length ), ( pos, length ) ) ]
+                PackMsg
+                IPack
+                InteractMsg
+        , Element.inFront <| Waveform.view viewWave (Tuple.first model.wave) wavePercent percentMsg
+        ]
+    <|
+        Element.html <|
+            S.svg
+                (List.map (Html.Attributes.map SvgMsg) (PanSvg.svgAttributes model.svg)
+                    ++ (List.map (Html.Attributes.map InteractMsg) <|
+                            Interact.dragSpaceEvents model.interact ZSurface
+                                ++ Interact.draggableEvents ISurface
+                       )
+                )
+            <|
+                List.map (Svg.map InteractMsg) <|
+                    (List.map
+                        (\( id, g ) ->
+                            Wheel.view g.wheel
+                                g.pos
+                                (Harmo.getLength g.harmony mobile.gears)
+                                { mod = getMod id
+                                , motor = id == mobile.motor
+                                , dashed = Harmo.hasHarmonics g.harmony
+                                , baseColor =
+                                    Maybe.map (\bId -> (Coll.get bId mobile.gears).wheel.color) <|
+                                        Harmo.getBaseId g.harmony
+                                }
+                                (Just ( IWheel << Tuple.pair id, [] ))
+                                (Just <| IResizeHandle id)
+                                (Gear.toUID id)
+                        )
+                     <|
+                        Coll.toList mobile.gears
+                    )
+                        ++ (case model.dragging of
+                                HalfLink ( id, pos ) ->
+                                    let
+                                        g =
+                                            Coll.get id mobile.gears
+                                    in
+                                    case model.tool of
+                                        Play _ _ ->
+                                            let
+                                                length =
+                                                    Harmo.getLength g.harmony mobile.gears
+                                            in
+                                            [ Link.drawMotorLink ( ( g.pos, length ), ( pos, length ) ) ]
 
-                                    Harmonize ->
-                                        [ Link.drawRawLink
-                                            ( g.pos, pos )
-                                            (Harmo.getLength g.harmony mobile.gears)
+                                        Harmonize ->
+                                            [ Link.drawRawLink
+                                                ( g.pos, pos )
+                                                (Harmo.getLength g.harmony mobile.gears)
+                                            ]
+
+                                        _ ->
+                                            []
+
+                                CompleteLink l ->
+                                    case model.tool of
+                                        Play _ _ ->
+                                            Link.viewMotorLink False <| Gear.toDrawLink mobile.gears l
+
+                                        Harmonize ->
+                                            Link.viewFractLink <| Gear.toDrawLink mobile.gears l
+
+                                        _ ->
+                                            []
+
+                                Cut seg _ ->
+                                    [ Link.drawCut seg <| PanSvg.getScale model.svg ]
+
+                                Content ( p, l ) ->
+                                    [ S.circle
+                                        [ SA.cx <| Num <| Vec.getX p
+                                        , SA.cy <| Num <| Vec.getY p
+                                        , SA.r <| Num (l / 2)
+                                        , SA.strokeWidth <| Num <| l / 30
+                                        , SA.stroke Color.black
+                                        , SA.strokeOpacity <| Opacity 0.5
+                                        , SA.fillOpacity <| Opacity 0
                                         ]
-
-                                    _ ->
                                         []
-
-                            CompleteLink l ->
-                                case model.tool of
-                                    Play _ _ ->
-                                        Link.viewMotorLink False <| Gear.toDrawLink mobile.gears l
-
-                                    Harmonize ->
-                                        Link.viewFractLink <| Gear.toDrawLink mobile.gears l
-
-                                    _ ->
-                                        []
-
-                            Cut seg _ ->
-                                [ Link.drawCut seg <| PanSvg.getScale model.svg ]
-
-                            Content ( p, l ) ->
-                                [ S.circle
-                                    [ SA.cx <| Num <| Vec.getX p
-                                    , SA.cy <| Num <| Vec.getY p
-                                    , SA.r <| Num (l / 2)
-                                    , SA.strokeWidth <| Num <| l / 30
-                                    , SA.stroke Color.black
-                                    , SA.strokeOpacity <| Opacity 0.5
-                                    , SA.fillOpacity <| Opacity 0
                                     ]
+
+                                Packed pos id ->
+                                    let
+                                        p =
+                                            Coll.get id model.pack.wheels
+                                    in
+                                    [ Wheel.view p.wheel pos p.length Wheel.defaultStyle Nothing Nothing "" ]
+
+                                _ ->
                                     []
-                                ]
+                           )
+                        ++ (case model.tool of
+                                Play _ _ ->
+                                    let
+                                        cuts =
+                                            case model.dragging of
+                                                Cut _ c ->
+                                                    c
 
-                            Packed pos id ->
-                                let
-                                    p =
-                                        Coll.get id model.common.pack
-                                in
-                                [ Wheel.drawSimple p.wheel pos p.length ]
+                                                _ ->
+                                                    []
+                                    in
+                                    List.concatMap
+                                        (\l ->
+                                            Link.viewMotorLink (List.any (Link.equal l) cuts) <|
+                                                Gear.toDrawLink mobile.gears l
+                                        )
+                                    <|
+                                        Motor.getAllLinks mobile.gears
 
-                            _ ->
-                                []
-                       )
-                    ++ (case model.tool of
-                            Play _ _ ->
-                                let
-                                    cuts =
-                                        case model.dragging of
-                                            Cut _ c ->
-                                                c
-
-                                            _ ->
-                                                []
-                                in
-                                List.concatMap
-                                    (\l ->
-                                        Link.viewMotorLink (List.any (Link.equal l) cuts) <|
-                                            Gear.toDrawLink mobile.gears l
+                                Harmonize ->
+                                    (List.concatMap (Link.viewFractLink << Gear.toDrawLink mobile.gears) <|
+                                        List.concatMap (.harmony >> Harmo.getLinks) <|
+                                            Coll.values mobile.gears
                                     )
-                                <|
-                                    Motor.getAllLinks mobile.gears
+                                        ++ (case model.link of
+                                                Just { link } ->
+                                                    Link.viewSelectedLink <| Gear.toDrawLink mobile.gears link
 
-                            Harmonize ->
-                                (List.concatMap (Link.viewFractLink << Gear.toDrawLink mobile.gears) <|
-                                    List.concatMap (.harmony >> Harmo.getLinks) <|
-                                        Coll.values mobile.gears
-                                )
-                                    ++ (case model.link of
-                                            Just { link } ->
-                                                Link.viewSelectedLink <| Gear.toDrawLink mobile.gears link
+                                                _ ->
+                                                    []
+                                           )
 
-                                            _ ->
-                                                []
-                                       )
+                                Edit ->
+                                    case model.edit of
+                                        [ id ] ->
+                                            let
+                                                g =
+                                                    Coll.get id mobile.gears
 
-                            _ ->
-                                []
-                       )
+                                                length =
+                                                    Harmo.getLength g.harmony mobile.gears
+
+                                                pos =
+                                                    g.pos
+
+                                                w =
+                                                    g.wheel
+                                            in
+                                            case Wheel.getWheelContent w of
+                                                Content.C col ->
+                                                    let
+                                                        medLength =
+                                                            Collar.getMinLength col + Collar.getMaxLength col / 2
+
+                                                        cursorW =
+                                                            medLength / 15
+
+                                                        cursorH =
+                                                            medLength * 2
+
+                                                        scale =
+                                                            length / Content.getMatriceLength col
+                                                    in
+                                                    [ S.rect
+                                                        [ SA.transform [ Translate (getX pos) (getY pos), Translate (-length / 2) 0, Scale scale scale ]
+                                                        , SA.x <| Num <| Collar.getCumulLengthAt model.cursor col - cursorW / 2
+                                                        , SA.y <| Num <| -cursorH / 2
+                                                        , SA.width <| Num cursorW
+                                                        , SA.height <| Num cursorH
+                                                        , SA.fill <| Fill Color.lightBlue
+                                                        ]
+                                                        []
+                                                    ]
+
+                                                _ ->
+                                                    []
+
+                                        _ ->
+                                            []
+                           )
+
+
+
+-- TODO duplicate with Gear.getName and Common.getName
+
+
+getNameWithDefault : Id Geer -> Mobeel -> String
+getNameWithDefault id mobile =
+    let
+        w =
+            (Coll.get id mobile.gears).wheel
+    in
+    if String.isEmpty w.name then
+        Gear.toUID id
+
+    else
+        w.name
+
+
+
+-- TODO split in functions for each component, and maybe move to another file, like Interacting, or good old common
+
+
+viewDetailsColumn : Color -> List (Element msg) -> Element msg
+viewDetailsColumn bg =
+    column
+        [ height fill
+        , Bg.color bg
+        , Font.color (rgb 1 1 1)
+        , Font.size 16
+        , spacing 20
+        , padding 10
+        ]
 
 
 viewDetails : Model -> Mobeel -> List (Element Msg)
 viewDetails model mobile =
     case model.mode of
-        CommonMode (ChangeSound id) ->
-            viewDetailChangingSound id (Content.M mobile) <| ChangedMode <| CommonMode Normal
+        ChangeSound id ->
+            [ viewDetailsColumn (rgb 0.5 0.2 0) <|
+                [ text <| getNameWithDefault id mobile
+                , text "Choisir un son chargé"
+                , Input.button []
+                    { label = text "Annuler"
+                    , onPress = Just <| ChangedMode Normal
+                    }
+                ]
+            ]
 
         SelectMotor ->
-            [ column [ height fill, Bg.color (rgb 0.5 0.2 0), Font.color (rgb 1 1 1), spacing 20, padding 10 ] <|
+            [ viewDetailsColumn (rgb 0.5 0.2 0) <|
                 [ text "Choisir nouvelle Motrice"
                 , Input.button []
                     { label = text "Annuler"
-                    , onPress = Just <| ChangedMode <| CommonMode Normal
+                    , onPress = Just <| ChangedMode Normal
                     }
                 ]
             ]
@@ -899,17 +1200,72 @@ viewDetails model mobile =
 
 viewEditDetails : Model -> Mobeel -> List (Element Msg)
 viewEditDetails model mobile =
-    case model.common.edit of
-        [ G id ] ->
+    case model.edit of
+        [ id ] ->
             let
                 g =
                     Coll.get id mobile.gears
+
+                wId =
+                    ( id, [] )
             in
-            [ viewDetailsColumn <|
-                [ viewNameInput g (Gear.toUID id) <| \str -> WheelMsgs [ ( id, Wheel.Named str ) ]
-                , viewContentButton g <| OutMsg <| Inside <| G id
+            [ viewDetailsColumn (rgb 0.5 0.5 0.5) <|
+                [ Input.text [ Font.color (rgb 0 0 0) ]
+                    { label = Input.labelAbove [] <| text "Roue :"
+                    , text = g.wheel.name
+                    , placeholder = Just <| Input.placeholder [] <| text <| Gear.toUID id
+                    , onChange = \str -> WheelMsgs [ ( wId, Wheel.Named str ) ]
+                    }
+                , case Wheel.getContent g of
+                    Content.S s ->
+                        Input.button []
+                            { label =
+                                text <|
+                                    if g.wheel.viewContent then
+                                        "Ranger " ++ Sound.toString s
+
+                                    else
+                                        "Voir " ++ Sound.toString s
+                            , onPress = Just <| WheelMsgs [ ( wId, Wheel.ToggleContentView ) ]
+                            }
+
+                    Content.M _ ->
+                        Input.button []
+                            { label = text "Voir Mobile"
+                            , onPress = Just <| OutMsg <| Inside wId
+                            }
+
+                    Content.C _ ->
+                        Input.button []
+                            { label =
+                                text <|
+                                    if g.wheel.viewContent then
+                                        "Replier Collier"
+
+                                    else
+                                        "Déplier Collier"
+                            , onPress = Just <| WheelMsgs [ ( wId, Wheel.ToggleContentView ) ]
+                            }
                 , column [ width fill, scrollbarY, spacing 20, padding 10 ] <|
-                    [ viewVolumeSlider g <| \f -> WheelMsgs [ ( id, Wheel.ChangeVolume f ) ]
+                    [ Input.slider
+                        [ behindContent <|
+                            el
+                                [ width fill
+                                , height <| px 2
+                                , centerY
+                                , Bg.color <| rgb 0 0 0
+                                , Border.rounded 2
+                                ]
+                                Element.none
+                        ]
+                        { label = Input.labelAbove [] <| text "Volume"
+                        , onChange = \f -> WheelMsgs [ ( wId, Wheel.ChangeVolume f ) ]
+                        , value = g.wheel.volume
+                        , min = 0
+                        , max = 1
+                        , step = Just 0.01
+                        , thumb = Input.defaultThumb
+                        }
                     , row [ spacing 16 ] <|
                         text "x"
                             :: List.map
@@ -930,16 +1286,37 @@ viewEditDetails model mobile =
                                         }
                                 )
                                 [ 2, 3, 5, 7 ]
-                    , viewResizeToInsideLength <| ResizeToContent id
-                    , viewChangeContent <| ChangedMode <| CommonMode <| ChangeSound <| G id
+                    , Input.button []
+                        { label = text "Taille Originale"
+                        , onPress = Just <| ResizeToContent id
+                        }
+                    , Input.button []
+                        { label = text "Changer son"
+                        , onPress = Just <| ChangedMode <| ChangeSound id
+                        }
                     , Input.button []
                         { label = text "Encapsuler"
                         , onPress = Just <| Capsuled [ id ]
                         }
-                    , Input.button []
-                        { label = text "Collier"
-                        , onPress = Just <| Collared id
-                        }
+                    , case Wheel.getContent g of
+                        Content.C col ->
+                            if List.length col.beads == 0 then
+                                Input.button []
+                                    { label = text "Décollier"
+                                    , onPress = Just <| UnCollar id
+                                    }
+
+                            else
+                                Input.button []
+                                    { label = text "Collier"
+                                    , onPress = Just <| Collared id
+                                    }
+
+                        _ ->
+                            Input.button []
+                                { label = text "Collier"
+                                , onPress = Just <| Collared id
+                                }
                     , if id == mobile.motor then
                         Input.button []
                             { onPress = Just <| ChangedMode SelectMotor
@@ -947,44 +1324,55 @@ viewEditDetails model mobile =
                             }
 
                       else
-                        viewDeleteButton <| DeleteGear id
+                        Input.button []
+                            { onPress = Just <| DeleteWheel ( id, [] )
+                            , label = text "Supprimer"
+                            }
                     ]
-                        ++ viewPackButtons model.common (Content.M mobile) CopyContent CommonMsg
-                        ++ [ text <|
-                                "Durée : "
-                                    ++ Harmo.view id
-                                        mobile.gears
-                                        (\rId ->
-                                            getNameFromContent (G rId) <| Content.M mobile
-                                        )
-                           , text <| "( " ++ (Round.round 2 <| Harmo.getLengthId id mobile.gears) ++ " )"
-                           , text <|
-                                "Contenu : "
-                                    ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)
+                        ++ (List.map (Element.map PackMsg) <| Pack.viewPackButtons model.pack)
+                        ++ [ Input.button []
+                                { label = text "Copier Contenu"
+                                , onPress =
+                                    Maybe.map (\i -> PackMsg <| Pack.Packontent <| (Coll.get i mobile.gears).wheel) <|
+                                        case model.edit of
+                                            [ one ] ->
+                                                Just one
+
+                                            _ ->
+                                                Nothing
+                                }
                            ]
+                        ++ (case model.pack.content of
+                                Just w ->
+                                    [ Input.button []
+                                        { label = text <| "Coller Contenu"
+                                        , onPress = Just <| CopyContent w
+                                        }
+                                    ]
+
+                                Nothing ->
+                                    []
+                           )
+                , text <|
+                    "Durée : "
+                        ++ Harmo.view id
+                            mobile.gears
+                            (\rId ->
+                                getNameWithDefault rId mobile
+                            )
+                , text <| "( " ++ (Round.round 2 <| Harmo.getLengthId id mobile.gears) ++ " )"
+                , text <|
+                    "Contenu : "
+                        ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)
                 ]
             ]
 
         _ :: _ ->
-            [ viewDetailsColumn <|
-                (List.map (\id -> text <| getNameFromContent id <| Content.M mobile) <| List.reverse model.common.edit)
+            [ viewDetailsColumn (rgb 0.5 0.5 0.5) <|
+                (List.map (\id -> text <| getNameWithDefault id mobile) <| List.reverse model.edit)
                     ++ [ Input.button []
                             { label = text "Encapsuler"
-                            , onPress =
-                                Just <|
-                                    Capsuled <|
-                                        List.filterMap
-                                            (\id ->
-                                                case id of
-                                                    G i ->
-                                                        Just i
-
-                                                    _ ->
-                                                        Nothing
-                                            )
-                                        <|
-                                            List.reverse
-                                                model.common.edit
+                            , onPress = Just <| Capsuled <| List.reverse model.edit
                             }
                        ]
             ]
@@ -997,7 +1385,7 @@ viewHarmonizeDetails : Model -> Mobeel -> List (Element Msg)
 viewHarmonizeDetails model mobile =
     case model.link of
         Just { link, fractInput } ->
-            [ viewDetailsColumn
+            [ viewDetailsColumn (rgb 0.5 0.5 0.5)
                 ([ text <| (Gear.toUID <| Tuple.first link) ++ (Gear.toUID <| Tuple.second link) ]
                     ++ (case fractInput of
                             FractionInput fract ->
@@ -1103,7 +1491,7 @@ doLinked l gears =
 
 
 doVolumeChange :
-    Id Geer
+    Identifier
     -> Vec2
     -> Vec2
     -> Float
@@ -1112,19 +1500,13 @@ doVolumeChange :
     -> { mobile : Mobeel, toUndo : ToUndo, toEngine : Maybe E.Value }
 doVolumeChange id oldPos newPos scale mobile engine =
     let
-        gears =
-            mobile.gears
-
-        wheel =
-            (Coll.get id gears).wheel
-
         volume =
-            wheel.volume + (Vec.getY oldPos - Vec.getY newPos) / scale / 100
-
-        newGears =
-            Coll.update id (Wheel.update <| Wheel.ChangeVolume volume) gears
+            (CommonData.getWheel id mobile).volume + (Vec.getY oldPos - Vec.getY newPos) / scale / 100
     in
-    { mobile = { mobile | gears = newGears }, toUndo = Group, toEngine = Engine.volumeChanged id volume engine }
+    { mobile = CommonData.updateWheel id (Wheel.ChangeVolume volume) mobile
+    , toUndo = Group
+    , toEngine = Engine.volumeChanged id volume engine
+    }
 
 
 doResize : Id Geer -> Vec2 -> Vec2 -> Bool -> Mobeel -> Mobeel
@@ -1152,7 +1534,7 @@ doResize id oldPos newPos add mobile =
     { mobile | gears = Harmo.resizeFree id newSize gears }
 
 
-doChangeContent : Id Geer -> Content Wheel -> Maybe Color.Color -> Model -> Mobeel -> Return
+doChangeContent : Id Geer -> Conteet -> Maybe Color.Color -> Model -> Mobeel -> Return
 doChangeContent id c mayColor model mobile =
     let
         return =
@@ -1174,7 +1556,7 @@ doChangeContent id c mayColor model mobile =
             List.foldl (\el -> Coll.update el chSound) mobile.gears group
 
         newModel =
-            { model | mode = CommonMode Normal }
+            { model | mode = Normal }
     in
     case mayColor of
         Just color ->
@@ -1191,7 +1573,7 @@ doChangeContent id c mayColor model mobile =
         Nothing ->
             let
                 colorToMsgs color =
-                    List.map (\el -> ( el, Wheel.ChangeColor color )) group
+                    List.map (\el -> ( ( el, [] ), Wheel.ChangeColor color )) group
             in
             { return
                 | mobile = { mobile | gears = gears }
@@ -1205,6 +1587,10 @@ computeCuts : ( Vec2, Vec2 ) -> Coll Geer -> List (Link Geer)
 computeCuts cut gears =
     Motor.getAllLinks gears
         |> List.filter (Link.cuts cut << Link.toSegment << Gear.toDrawLink gears)
+
+
+
+-- TODO Maybe forward straight away to Pack if event.item is IPack ?
 
 
 manageInteractEvent : Interact.Event Interactable Zone -> Model -> Mobeel -> Return
@@ -1221,8 +1607,18 @@ manageInteractEvent event model mobile =
     in
     -- TODO Find good pattern for big mess there
     case model.mode of
-        CommonMode Nav ->
-            { return | outMsg = interactNav event <| Content.M mobile }
+        Nav ->
+            case ( event.item, event.action ) of
+                ( IWheel id, Interact.Clicked _ ) ->
+                    case Wheel.getWheelContent <| CommonData.getWheel id mobile of
+                        Content.M _ ->
+                            { return | outMsg = Just <| Inside id }
+
+                        _ ->
+                            update (WheelMsgs [ ( id, Wheel.ToggleContentView ) ]) ( model, mobile )
+
+                _ ->
+                    return
 
         Move ->
             case interactMove event model mobile of
@@ -1234,9 +1630,9 @@ manageInteractEvent event model mobile =
 
         SelectMotor ->
             case ( event.item, event.action ) of
-                ( IWheel (G id), Interact.Clicked _ ) ->
+                ( IWheel ( id, [] ), Interact.Clicked _ ) ->
                     { return
-                        | model = { model | mode = CommonMode Normal }
+                        | model = { model | mode = Normal }
                         , mobile = { mobile | motor = id }
                         , toUndo = Do
                     }
@@ -1244,29 +1640,45 @@ manageInteractEvent event model mobile =
                 _ ->
                     return
 
-        CommonMode (ChangeSound (G id)) ->
+        ChangeSound id ->
             case ( event.item, event.action ) of
                 ( ISound s, Interact.Clicked _ ) ->
+                    -- TODO Should change mode to Normal here instead of if doChangeContent?
                     doChangeContent id (Content.S s) Nothing model mobile
 
                 _ ->
                     return
 
-        CommonMode SupprMode ->
+        SupprMode ->
             case ( event.item, event.action ) of
-                ( IWheel (G id), Interact.Clicked _ ) ->
-                    update (DeleteGear id) ( model, mobile )
+                ( IWheel id, Interact.Clicked _ ) ->
+                    update (DeleteWheel id) ( model, mobile )
 
-                ( IWheel (P id), Interact.Clicked _ ) ->
-                    update (CommonMsg <| Unpack id) ( model, mobile )
+                ( IPack id, Interact.Clicked _ ) ->
+                    update (PackMsg <| Pack.Unpack id) ( model, mobile )
 
                 _ ->
                     return
 
-        CommonMode Normal ->
+        Normal ->
             case ( event.item, event.action, model.dragging ) of
+                -- FROM SOUNDLIST
                 ( ISound s, Interact.Clicked _, _ ) ->
-                    update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
+                    case model.edit of
+                        [ id ] ->
+                            case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                                Content.C _ ->
+                                    if model.tool == Edit then
+                                        update (NewBead <| Content.S s) ( model, mobile )
+
+                                    else
+                                        update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
+
+                                _ ->
+                                    update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
+
+                        _ ->
+                            update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
 
                 ( ISound s, Interact.Dragged _ p _ ZSurface, _ ) ->
                     { return
@@ -1276,22 +1688,44 @@ manageInteractEvent event model mobile =
                 ( ISound s, Interact.DragEnded True, Content ( p, _ ) ) ->
                     update (NewGear p <| Content.S s) ( { model | dragging = NoDrag }, mobile )
 
-                ( IWheel (P id), Interact.Dragged _ p _ ZPack, _ ) ->
+                -- FROM PACK
+                ( IPack pId, Interact.Clicked _, _ ) ->
+                    case model.edit of
+                        [ id ] ->
+                            case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                                Content.C _ ->
+                                    if model.tool == Edit then
+                                        let
+                                            p =
+                                                Coll.get pId model.pack.wheels
+                                        in
+                                        update (UnpackBead ( p.wheel, p.length ) True) ( model, mobile )
+
+                                    else
+                                        return
+
+                                _ ->
+                                    return
+
+                        _ ->
+                            return
+
+                ( IPack id, Interact.Dragged _ p _ ZPack, _ ) ->
                     { return
                         | model =
-                            { model | dragging = NoDrag, common = commonUpdate (DragFrom id p) model.common }
+                            { model | dragging = NoDrag, pack = Pack.update (Pack.DragFrom id p) model.pack }
                     }
 
-                ( IWheel (P id), Interact.Dragged _ p _ ZSurface, _ ) ->
+                ( IPack id, Interact.Dragged _ p _ ZSurface, _ ) ->
                     { return
                         | model =
-                            { model | dragging = Packed p id, common = commonUpdate (InitDrag id) model.common }
+                            { model | dragging = Packed p id, pack = Pack.update (Pack.InitDrag id) model.pack }
                     }
 
-                ( IWheel (P id), Interact.DragEnded True, Packed pos _ ) ->
+                ( IPack id, Interact.DragEnded True, Packed pos _ ) ->
                     let
                         p =
-                            Coll.get id model.common.pack
+                            Coll.get id model.pack.wheels
                     in
                     { return
                         | model = { model | dragging = NoDrag }
@@ -1317,10 +1751,11 @@ manageInteractEvent event model mobile =
                                     { return | model = ret.model, mobile = ret.mobile, toUndo = ret.toUndo }
 
                                 _ ->
-                                    { return | model = { model | common = interactSelectEdit event model.common } }
-
-        _ ->
-            return
+                                    let
+                                        ( newModel, cmd ) =
+                                            interactSelectEdit event mobile model
+                                    in
+                                    { return | model = newModel, cmd = cmd }
 
 
 interactPlay : Bool -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
@@ -1340,24 +1775,15 @@ interactPlay on event model mobile =
     in
     case ( event.item, event.action, model.dragging ) of
         -- MUTE
-        ( IWheel (G id), Interact.Clicked _, _ ) ->
+        ( IWheel id, Interact.Clicked _, _ ) ->
             let
-                w =
-                    (Coll.get id mobile.gears).wheel
-
-                newMute =
-                    not w.mute
+                newMobile =
+                    CommonData.updateWheel id Wheel.ToggleMute mobile
             in
             { return
-                | mobile =
-                    { mobile
-                        | gears =
-                            Coll.update id
-                                (\g -> { g | wheel = { w | mute = newMute } })
-                                mobile.gears
-                    }
+                | mobile = newMobile
                 , toUndo = Do
-                , toEngine = Engine.muted id newMute model.engine
+                , toEngine = Engine.muted id (CommonData.getWheel id newMobile).mute model.engine
             }
 
         -- CUT
@@ -1383,7 +1809,7 @@ interactPlay on event model mobile =
             }
 
         -- VOLUME
-        ( IWheel (G id), Interact.Dragged oldPos newPos ( True, _, _ ) ZSurface, NoDrag ) ->
+        ( IWheel id, Interact.Dragged oldPos newPos ( True, _, _ ) ZSurface, NoDrag ) ->
             let
                 res =
                     doVolumeChange id oldPos newPos scale mobile model.engine
@@ -1395,7 +1821,7 @@ interactPlay on event model mobile =
                 , toEngine = res.toEngine
             }
 
-        ( IWheel (G id), Interact.Dragged oldPos newPos _ ZSurface, VolumeChange ) ->
+        ( IWheel id, Interact.Dragged oldPos newPos _ ZSurface, VolumeChange ) ->
             let
                 res =
                     doVolumeChange id oldPos newPos scale mobile model.engine
@@ -1406,24 +1832,24 @@ interactPlay on event model mobile =
             { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
         -- LINK -> MOTOR
-        ( IWheel _, Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
+        ( IWheel ( _, [] ), Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
             -- If ConpleteLink, don’t move
             return
 
-        ( IWheel (G id), Interact.Dragged _ pos _ ZSurface, _ ) ->
+        ( IWheel ( id, [] ), Interact.Dragged _ pos _ ZSurface, _ ) ->
             { return | model = { model | dragging = HalfLink ( id, pos ) } }
 
-        ( IWheel (G to), Interact.DragIn, HalfLink ( from, _ ) ) ->
+        ( IWheel ( to, [] ), Interact.DragIn, HalfLink ( from, _ ) ) ->
             { return | model = { model | dragging = CompleteLink ( from, to ) } }
 
-        ( IWheel (G to), Interact.DragOut, CompleteLink ( from, _ ) ) ->
+        ( IWheel ( to, [] ), Interact.DragOut, CompleteLink ( from, _ ) ) ->
             let
                 toCenter =
                     (Coll.get to mobile.gears).pos
             in
             { return | model = { model | dragging = HalfLink ( from, toCenter ) } }
 
-        ( IWheel _, Interact.DragEnded True, CompleteLink l ) ->
+        ( IWheel ( _, [] ), Interact.DragEnded True, CompleteLink l ) ->
             let
                 ( gears, toPlay ) =
                     Motor.add l mobile.gears <| Engine.playingIds model.engine
@@ -1460,42 +1886,42 @@ interactHarmonize event model mobile =
     in
     case ( event.item, event.action, model.dragging ) of
         -- COPY
-        ( IWheel (G id), Interact.Clicked _, _ ) ->
+        ( IWheel ( id, [] ), Interact.Clicked _, _ ) ->
             { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
         -- RESIZE
-        ( IResizeHandle (G id) add, Interact.Dragged oldPos newPos _ ZSurface, NoDrag ) ->
+        ( IResizeHandle id add, Interact.Dragged oldPos newPos _ ZSurface, NoDrag ) ->
             { return
                 | model = { model | dragging = SizeChange }
                 , mobile = doResize id oldPos newPos add mobile
                 , toUndo = Group
             }
 
-        ( IResizeHandle (G id) add, Interact.Dragged oldPos newPos _ ZSurface, SizeChange ) ->
+        ( IResizeHandle id add, Interact.Dragged oldPos newPos _ ZSurface, SizeChange ) ->
             { return | mobile = doResize id oldPos newPos add mobile, toUndo = Group }
 
         ( _, Interact.DragEnded _, SizeChange ) ->
             { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
         -- LINK -> HARMO
-        ( IWheel _, Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
+        ( IWheel ( _, [] ), Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
             -- If Complete Link, don’t move
             return
 
-        ( IWheel (G id), Interact.Dragged _ pos _ ZSurface, _ ) ->
+        ( IWheel ( id, [] ), Interact.Dragged _ pos _ ZSurface, _ ) ->
             { return | model = { model | dragging = HalfLink ( id, pos ) } }
 
-        ( IWheel (G to), Interact.DragIn, HalfLink ( from, _ ) ) ->
+        ( IWheel ( to, [] ), Interact.DragIn, HalfLink ( from, _ ) ) ->
             { return | model = { model | dragging = CompleteLink ( from, to ) } }
 
-        ( IWheel (G to), Interact.DragOut, CompleteLink ( from, _ ) ) ->
+        ( IWheel ( to, [] ), Interact.DragOut, CompleteLink ( from, _ ) ) ->
             let
                 toCenter =
                     (Coll.get to mobile.gears).pos
             in
             { return | model = { model | dragging = HalfLink ( from, toCenter ) } }
 
-        ( IWheel _, Interact.DragEnded True, CompleteLink l ) ->
+        ( IWheel ( _, [] ), Interact.DragEnded True, CompleteLink l ) ->
             let
                 ( newGears, mayFract ) =
                     doLinked l mobile.gears
@@ -1523,6 +1949,28 @@ interactHarmonize event model mobile =
             return
 
 
+interactSelectEdit : Interact.Event Interactable Zone -> Mobeel -> Model -> ( Model, Cmd Msg )
+interactSelectEdit event mobile model =
+    case ( event.item, event.action ) of
+        ( IWheel ( id, _ ), Interact.Clicked ( _, False, False ) ) ->
+            case Wheel.getContent <| Coll.get id mobile.gears of
+                Content.S s ->
+                    let
+                        ( wave, cmd ) =
+                            Waveform.update (Waveform.ChgSound s) <| Tuple.first model.wave
+                    in
+                    ( { model | edit = [ id ], wave = ( wave, Just s ) }, Cmd.map WaveMsg cmd )
+
+                _ ->
+                    ( { model | edit = [ id ], wave = Tuple.mapSecond (always Nothing) model.wave }, Cmd.none )
+
+        ( IWheel ( id, _ ), Interact.Clicked _ ) ->
+            ( { model | edit = id :: model.edit }, Cmd.none )
+
+        _ ->
+            ( model, Cmd.none )
+
+
 interactMove :
     Interact.Event Interactable Zone
     -> Model
@@ -1530,13 +1978,13 @@ interactMove :
     -> Maybe { model : Model, mobile : Mobeel, toUndo : ToUndo }
 interactMove event model mobile =
     case ( event.item, event.action, model.dragging ) of
-        ( IWheel (G id), Interact.Dragged _ pos _ ZSurface, _ ) ->
+        ( IWheel ( id, [] ), Interact.Dragged _ pos _ ZSurface, _ ) ->
             let
                 gearUp =
                     Gear.update <| Gear.NewPos pos
             in
             Just
-                { model = { model | dragging = Moving }
+                { model = { model | dragging = Moving, pack = Pack.update (Pack.DragTo Nothing) model.pack }
                 , mobile = { mobile | gears = Coll.update id gearUp mobile.gears }
                 , toUndo = Group
                 }
@@ -1544,30 +1992,31 @@ interactMove event model mobile =
         ( _, Interact.DragEnded _, Moving ) ->
             Just { model = { model | dragging = NoDrag }, mobile = mobile, toUndo = Do }
 
-        ( IWheel (G id), Interact.Dragged _ pos _ ZPack, _ ) ->
+        ( IWheel ( id, [] ), Interact.Dragged _ pos _ ZPack, _ ) ->
             Just
                 { mobile = mobile
                 , toUndo = Cancel
                 , model =
                     { model
                         | dragging = Packing
-                        , common =
-                            commonUpdate
-                                (DragTo
-                                    { pos = pos
-                                    , length = Harmo.getLengthId id mobile.gears
-                                    , wheel = (Coll.get id mobile.gears).wheel
-                                    }
+                        , pack =
+                            Pack.update
+                                (Pack.DragTo <|
+                                    Just
+                                        { pos = pos
+                                        , length = Harmo.getLengthId id mobile.gears
+                                        , wheel = (Coll.get id mobile.gears).wheel
+                                        }
                                 )
-                                model.common
+                                model.pack
                     }
                 }
 
-        ( IWheel (G id), Interact.DragEnded True, Packing ) ->
+        ( IWheel ( id, [] ), Interact.DragEnded True, Packing ) ->
             Just
                 { mobile = mobile
                 , toUndo = Cancel
-                , model = { model | dragging = NoDrag, common = commonUpdate Pack model.common }
+                , model = { model | dragging = NoDrag, pack = Pack.update Pack.PackIt model.pack }
                 }
 
         _ ->
