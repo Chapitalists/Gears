@@ -154,15 +154,22 @@ view :
     -> Maybe (Bool -> inter)
     -> String
     -> Svg (Interact.Msg inter x)
-view w pos length style mayWheelInter mayHandleInter uid =
+view w pos lengthTmp style mayWheelInter mayHandleInter uid =
     let
-        viewContent =
+        ( viewContent, bigger ) =
             case w.content of
-                C (Content.C _) ->
-                    w.viewContent
+                C (Content.C col) ->
+                    ( w.viewContent, w.viewContent && List.length col.beads == 0 )
 
                 _ ->
-                    False
+                    ( False, False )
+
+        length =
+            if bigger then
+                lengthTmp * 1.2
+
+            else
+                lengthTmp
 
         tickH =
             length / 15
@@ -254,9 +261,9 @@ view w pos length style mayWheelInter mayHandleInter uid =
                             C (Content.C collar) ->
                                 let
                                     scale =
-                                        length / Content.getMatriceLength collar
+                                        lengthTmp / Content.getMatriceLength collar
                                 in
-                                [ S.g [ SA.transform [ Translate (-length / 2) 0, Scale scale scale ] ] <|
+                                [ S.g [ SA.transform [ Translate (-lengthTmp / 2) 0, Scale scale scale ] ] <|
                                     insideCollarView collar mayWheelInter uid
                                 ]
 

@@ -179,6 +179,7 @@ type Msg
     | ResizeToContent (Id Geer)
     | Capsuled (List (Id Geer))
     | Collared (Id Geer)
+    | UnCollar (Id Geer)
     | InteractMsg (Interact.Msg Interactable Zone)
     | SvgMsg PanSvg.Msg
     | SVGSize (Result D.Error PanSvg.Size)
@@ -684,6 +685,21 @@ update msg ( model, mobile ) =
                 | mobile = { mobile | gears = Coll.update id (Wheel.setContent <| Content.C collar) mobile.gears }
                 , toUndo = Do
             }
+
+        UnCollar id ->
+            let
+                g =
+                    Coll.get id mobile.gears
+            in
+            case Wheel.getContent g of
+                Content.C col ->
+                    { return
+                        | mobile = Mobile.updateGear id (Wheel.setContent <| Wheel.getContent col.head) mobile
+                        , toUndo = Do
+                    }
+
+                _ ->
+                    return
 
         WheelMsgs msgs ->
             { return
@@ -1276,10 +1292,25 @@ viewEditDetails model mobile =
                         { label = text "Encapsuler"
                         , onPress = Just <| Capsuled [ id ]
                         }
-                    , Input.button []
-                        { label = text "Collier"
-                        , onPress = Just <| Collared id
-                        }
+                    , case Wheel.getContent g of
+                        Content.C col ->
+                            if List.length col.beads == 0 then
+                                Input.button []
+                                    { label = text "Décollier"
+                                    , onPress = Just <| UnCollar id
+                                    }
+
+                            else
+                                Input.button []
+                                    { label = text "Collier"
+                                    , onPress = Just <| Collared id
+                                    }
+
+                        _ ->
+                            Input.button []
+                                { label = text "Collier"
+                                , onPress = Just <| Collared id
+                                }
                     , if id == mobile.motor then
                         Input.button []
                             { onPress = Just <| ChangedMode SelectMotor
