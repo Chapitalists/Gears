@@ -872,24 +872,21 @@ viewExtraTools model =
 viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
-        ( wavePercent, percentMsg ) =
+        ( wavePercent, percentMsg, viewContentEdit ) =
             case model.edit of
                 [ id ] ->
                     ( (Coll.get id mobile.gears).wheel.startPercent
                     , \f -> WheelMsgs [ ( ( id, [] ), Wheel.ChangeStart f ) ]
+                    , (Coll.get id mobile.gears).wheel.viewContent
                     )
 
                 _ ->
-                    ( 0, always NoMsg )
+                    ( 0, always NoMsg, False )
 
         viewWave =
             case ( Tuple.second model.wave, (Tuple.first model.wave).drawn ) of
                 ( Just s1, Waveform.SoundDrawn s2 ) ->
-                    if s1 == s2 && model.tool == Edit then
-                        True
-
-                    else
-                        False
+                    s1 == s2 && model.tool == Edit && viewContentEdit
 
                 _ ->
                     False
@@ -1221,7 +1218,16 @@ viewEditDetails model mobile =
                     }
                 , case Wheel.getContent g of
                     Content.S s ->
-                        text <| Sound.toString s
+                        Input.button []
+                            { label =
+                                text <|
+                                    if g.wheel.viewContent then
+                                        "Ranger " ++ Sound.toString s
+
+                                    else
+                                        "Voir " ++ Sound.toString s
+                            , onPress = Just <| WheelMsgs [ ( wId, Wheel.ToggleContentView ) ]
+                            }
 
                     Content.M _ ->
                         Input.button []
@@ -1608,11 +1614,8 @@ manageInteractEvent event model mobile =
                         Content.M _ ->
                             { return | outMsg = Just <| Inside id }
 
-                        Content.C _ ->
-                            update (WheelMsgs [ ( id, Wheel.ToggleContentView ) ]) ( model, mobile )
-
                         _ ->
-                            return
+                            update (WheelMsgs [ ( id, Wheel.ToggleContentView ) ]) ( model, mobile )
 
                 _ ->
                     return
