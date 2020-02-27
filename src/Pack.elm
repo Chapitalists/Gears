@@ -165,9 +165,10 @@ view :
     -> List (Html.Attribute msg)
     -> (Msg -> msg)
     -> (Id Packed -> inter)
+    -> inter
     -> (Interact.Msg inter zone -> msg)
     -> Element msg
-view pack events wrap interactable wrapInteract =
+view pack events wrap interactable surfaceInter wrapInteract =
     if pack.visible then
         el
             ([ Border.color <| rgb 0 0 0
@@ -184,7 +185,11 @@ view pack events wrap interactable wrapInteract =
             )
         <|
             html <|
-                S.svg (List.map (Html.Attributes.map (wrap << SvgMsg)) <| PanSvg.svgAttributes pack.svg) <|
+                S.svg
+                    ((List.map (Html.Attributes.map (wrap << SvgMsg)) <| PanSvg.svgAttributes pack.svg)
+                        ++ (List.map (Html.Attributes.map wrapInteract) <| Interact.draggableEvents surfaceInter)
+                    )
+                <|
                     List.map
                         (\( id, p ) ->
                             Svg.map wrapInteract <|

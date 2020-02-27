@@ -9,9 +9,10 @@ import Sound exposing (Sound)
 
 type Interactable
     = ISurface
+    | IPack
     | IWheel Identifier
     | IResizeHandle (Id Geer) Bool -- True = right
-    | IPack (Id Packed)
+    | IPacked (Id Packed)
     | ISound Sound
 
 

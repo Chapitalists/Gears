@@ -60,7 +60,7 @@ type alias Model =
     , cursor : Int
     , link : Maybe LinkInfo
     , engine : Engine
-    , interact : Interact.State Interactable
+    , interact : Interact.State Interactable Zone
     , pack : Pack
     , wave : ( Waveform, Maybe Sound ) -- TODO Second source of truth with edit? Could be just Bool
     , svg : PanSvg.Model
@@ -778,25 +778,35 @@ update msg ( model, mobile ) =
 
                         _ ->
                             let
+                                svgFromZone z =
+                                    case z of
+                                        ZSurface ->
+                                            newModel.svg
+
+                                        ZPack ->
+                                            newModel.pack.svg
+
+                                toInPos z p =
+                                    PanSvg.mapIn p <| svgFromZone z
+
                                 inEvent =
                                     case e.action of
-                                        Interact.Dragged pos1 pos2 k zone ->
+                                        Interact.Dragged info dragZone k ->
                                             let
-                                                svg =
-                                                    case zone of
-                                                        ZSurface ->
-                                                            newModel.svg
-
-                                                        ZPack ->
-                                                            newModel.pack.svg
+                                                startZone =
+                                                    Tuple.second info.init
                                             in
                                             { e
                                                 | action =
                                                     Interact.Dragged
-                                                        (PanSvg.mapIn pos1 svg)
-                                                        (PanSvg.mapIn pos2 svg)
+                                                        { info
+                                                            | init = Tuple.mapFirst (toInPos <| Tuple.second info.init) info.init
+                                                            , oldPos = toInPos dragZone info.oldPos
+                                                            , newPos = toInPos dragZone info.newPos
+                                                            , startD = Vec.scale (PanSvg.getScale <| svgFromZone <| Tuple.second info.init) info.startD
+                                                        }
+                                                        dragZone
                                                         k
-                                                        zone
                                             }
 
                                         _ ->
@@ -953,6 +963,7 @@ viewContent ( model, mobile ) =
                     Interact.dragSpaceEvents model.interact ZPack
                 )
                 PackMsg
+                IPacked
                 IPack
                 InteractMsg
         , Element.inFront <| Waveform.view viewWave (Tuple.first model.wave) wavePercent percentMsg
@@ -1493,15 +1504,13 @@ doLinked l gears =
 doVolumeChange :
     Identifier
     -> Vec2
-    -> Vec2
-    -> Float
     -> Mobeel
     -> Engine
     -> { mobile : Mobeel, toUndo : ToUndo, toEngine : Maybe E.Value }
-doVolumeChange id oldPos newPos scale mobile engine =
+doVolumeChange id absD mobile engine =
     let
         volume =
-            (CommonData.getWheel id mobile).volume + (Vec.getY oldPos - Vec.getY newPos) / scale / 100
+            (CommonData.getWheel id mobile).volume + Vec.getY absD / 100
     in
     { mobile = CommonData.updateWheel id (Wheel.ChangeVolume volume) mobile
     , toUndo = Group
@@ -1509,8 +1518,8 @@ doVolumeChange id oldPos newPos scale mobile engine =
     }
 
 
-doResize : Id Geer -> Vec2 -> Vec2 -> Bool -> Mobeel -> Mobeel
-doResize id oldPos newPos add mobile =
+doResize : Id Geer -> Vec2 -> Bool -> Mobeel -> Mobeel
+doResize id d add mobile =
     let
         gears =
             mobile.gears
@@ -1518,15 +1527,12 @@ doResize id oldPos newPos add mobile =
         length =
             Harmo.getLengthId id gears
 
-        d =
-            Vec.getX newPos - Vec.getX oldPos
-
         dd =
             if add then
-                d
+                Vec.getX d
 
             else
-                -d
+                -1 * Vec.getX d
 
         newSize =
             abs <| dd * 2 + length
@@ -1654,7 +1660,7 @@ manageInteractEvent event model mobile =
                 ( IWheel id, Interact.Clicked _ ) ->
                     update (DeleteWheel id) ( model, mobile )
 
-                ( IPack id, Interact.Clicked _ ) ->
+                ( IPacked id, Interact.Clicked _ ) ->
                     update (PackMsg <| Pack.Unpack id) ( model, mobile )
 
                 _ ->
@@ -1680,16 +1686,16 @@ manageInteractEvent event model mobile =
                         _ ->
                             update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
 
-                ( ISound s, Interact.Dragged _ p _ ZSurface, _ ) ->
+                ( ISound s, Interact.Dragged { newPos } ZSurface _, _ ) ->
                     { return
-                        | model = { model | dragging = Content ( p, Sound.length s ) }
+                        | model = { model | dragging = Content ( newPos, Sound.length s ) }
                     }
 
                 ( ISound s, Interact.DragEnded True, Content ( p, _ ) ) ->
                     update (NewGear p <| Content.S s) ( { model | dragging = NoDrag }, mobile )
 
                 -- FROM PACK
-                ( IPack pId, Interact.Clicked _, _ ) ->
+                ( IPacked pId, Interact.Clicked _, _ ) ->
                     case model.edit of
                         [ id ] ->
                             case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
@@ -1710,19 +1716,19 @@ manageInteractEvent event model mobile =
                         _ ->
                             return
 
-                ( IPack id, Interact.Dragged _ p _ ZPack, _ ) ->
+                ( IPacked id, Interact.Dragged { newPos } ZPack _, _ ) ->
                     { return
                         | model =
-                            { model | dragging = NoDrag, pack = Pack.update (Pack.DragFrom id p) model.pack }
+                            { model | dragging = NoDrag, pack = Pack.update (Pack.DragFrom id newPos) model.pack }
                     }
 
-                ( IPack id, Interact.Dragged _ p _ ZSurface, _ ) ->
+                ( IPacked id, Interact.Dragged { newPos } ZSurface _, _ ) ->
                     { return
                         | model =
-                            { model | dragging = Packed p id, pack = Pack.update (Pack.InitDrag id) model.pack }
+                            { model | dragging = Packed newPos id, pack = Pack.update (Pack.InitDrag id) model.pack }
                     }
 
-                ( IPack id, Interact.DragEnded True, Packed pos _ ) ->
+                ( IPacked id, Interact.DragEnded True, Packed pos _ ) ->
                     let
                         p =
                             Coll.get id model.pack.wheels
@@ -1732,6 +1738,15 @@ manageInteractEvent event model mobile =
                         , mobile =
                             { mobile | gears = Coll.insert (Mobile.newSizedGear pos p.length p.wheel) mobile.gears }
                         , toUndo = Do
+                    }
+
+                -- Pack Surface
+                ( IPack, Interact.Dragged { startD } _ _, _ ) ->
+                    { return
+                        | model =
+                            { model
+                                | pack = Pack.update (Pack.SvgMsg <| PanSvg.Move startD) model.pack
+                            }
                     }
 
                 _ ->
@@ -1769,9 +1784,6 @@ interactPlay on event model mobile =
             , outMsg = Nothing
             , cmd = Cmd.none
             }
-
-        scale =
-            PanSvg.getScale model.svg
     in
     case ( event.item, event.action, model.dragging ) of
         -- MUTE
@@ -1787,11 +1799,11 @@ interactPlay on event model mobile =
             }
 
         -- CUT
-        ( ISurface, Interact.Dragged p1 p2 _ ZSurface, NoDrag ) ->
-            { return | model = { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears } }
+        ( ISurface, Interact.Dragged { oldPos, newPos } ZSurface _, NoDrag ) ->
+            { return | model = { model | dragging = Cut ( oldPos, newPos ) <| computeCuts ( oldPos, newPos ) mobile.gears } }
 
-        ( ISurface, Interact.Dragged _ p2 _ ZSurface, Cut ( p1, _ ) _ ) ->
-            { return | model = { model | dragging = Cut ( p1, p2 ) <| computeCuts ( p1, p2 ) mobile.gears } }
+        ( ISurface, Interact.Dragged { newPos } ZSurface _, Cut ( p1, _ ) _ ) ->
+            { return | model = { model | dragging = Cut ( p1, newPos ) <| computeCuts ( p1, newPos ) mobile.gears } }
 
         ( ISurface, Interact.DragEnded True, Cut _ cuts ) ->
             let
@@ -1809,10 +1821,10 @@ interactPlay on event model mobile =
             }
 
         -- VOLUME
-        ( IWheel id, Interact.Dragged oldPos newPos ( True, _, _ ) ZSurface, NoDrag ) ->
+        ( IWheel id, Interact.Dragged { absD } _ ( True, _, _ ), NoDrag ) ->
             let
                 res =
-                    doVolumeChange id oldPos newPos scale mobile model.engine
+                    doVolumeChange id absD mobile model.engine
             in
             { return
                 | model = { model | dragging = VolumeChange }
@@ -1821,10 +1833,10 @@ interactPlay on event model mobile =
                 , toEngine = res.toEngine
             }
 
-        ( IWheel id, Interact.Dragged oldPos newPos _ ZSurface, VolumeChange ) ->
+        ( IWheel id, Interact.Dragged { absD } _ _, VolumeChange ) ->
             let
                 res =
-                    doVolumeChange id oldPos newPos scale mobile model.engine
+                    doVolumeChange id absD mobile model.engine
             in
             { return | mobile = res.mobile, toUndo = res.toUndo, toEngine = res.toEngine }
 
@@ -1832,12 +1844,12 @@ interactPlay on event model mobile =
             { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
         -- LINK -> MOTOR
-        ( IWheel ( _, [] ), Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
+        ( IWheel ( _, [] ), Interact.Dragged _ ZSurface _, CompleteLink _ ) ->
             -- If ConpleteLink, don’t move
             return
 
-        ( IWheel ( id, [] ), Interact.Dragged _ pos _ ZSurface, _ ) ->
-            { return | model = { model | dragging = HalfLink ( id, pos ) } }
+        ( IWheel ( id, [] ), Interact.Dragged { newPos } ZSurface _, _ ) ->
+            { return | model = { model | dragging = HalfLink ( id, newPos ) } }
 
         ( IWheel ( to, [] ), Interact.DragIn, HalfLink ( from, _ ) ) ->
             { return | model = { model | dragging = CompleteLink ( from, to ) } }
@@ -1890,26 +1902,26 @@ interactHarmonize event model mobile =
             { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
         -- RESIZE
-        ( IResizeHandle id add, Interact.Dragged oldPos newPos _ ZSurface, NoDrag ) ->
+        ( IResizeHandle id add, Interact.Dragged { startD } _ _, NoDrag ) ->
             { return
                 | model = { model | dragging = SizeChange }
-                , mobile = doResize id oldPos newPos add mobile
+                , mobile = doResize id startD add mobile
                 , toUndo = Group
             }
 
-        ( IResizeHandle id add, Interact.Dragged oldPos newPos _ ZSurface, SizeChange ) ->
-            { return | mobile = doResize id oldPos newPos add mobile, toUndo = Group }
+        ( IResizeHandle id add, Interact.Dragged { startD } _ _, SizeChange ) ->
+            { return | mobile = doResize id startD add mobile, toUndo = Group }
 
         ( _, Interact.DragEnded _, SizeChange ) ->
             { return | model = { model | dragging = NoDrag }, toUndo = Do }
 
         -- LINK -> HARMO
-        ( IWheel ( _, [] ), Interact.Dragged _ _ _ ZSurface, CompleteLink _ ) ->
+        ( IWheel ( _, [] ), Interact.Dragged _ ZSurface _, CompleteLink _ ) ->
             -- If Complete Link, don’t move
             return
 
-        ( IWheel ( id, [] ), Interact.Dragged _ pos _ ZSurface, _ ) ->
-            { return | model = { model | dragging = HalfLink ( id, pos ) } }
+        ( IWheel ( id, [] ), Interact.Dragged { newPos } ZSurface _, _ ) ->
+            { return | model = { model | dragging = HalfLink ( id, newPos ) } }
 
         ( IWheel ( to, [] ), Interact.DragIn, HalfLink ( from, _ ) ) ->
             { return | model = { model | dragging = CompleteLink ( from, to ) } }
@@ -1978,10 +1990,10 @@ interactMove :
     -> Maybe { model : Model, mobile : Mobeel, toUndo : ToUndo }
 interactMove event model mobile =
     case ( event.item, event.action, model.dragging ) of
-        ( IWheel ( id, [] ), Interact.Dragged _ pos _ ZSurface, _ ) ->
+        ( IWheel ( id, [] ), Interact.Dragged { newPos } ZSurface _, _ ) ->
             let
                 gearUp =
-                    Gear.update <| Gear.NewPos pos
+                    Gear.update <| Gear.NewPos newPos
             in
             Just
                 { model = { model | dragging = Moving, pack = Pack.update (Pack.DragTo Nothing) model.pack }
@@ -1992,7 +2004,7 @@ interactMove event model mobile =
         ( _, Interact.DragEnded _, Moving ) ->
             Just { model = { model | dragging = NoDrag }, mobile = mobile, toUndo = Do }
 
-        ( IWheel ( id, [] ), Interact.Dragged _ pos _ ZPack, _ ) ->
+        ( IWheel ( id, [] ), Interact.Dragged { newPos } ZPack _, _ ) ->
             Just
                 { mobile = mobile
                 , toUndo = Cancel
@@ -2003,7 +2015,7 @@ interactMove event model mobile =
                             Pack.update
                                 (Pack.DragTo <|
                                     Just
-                                        { pos = pos
+                                        { pos = newPos
                                         , length = Harmo.getLengthId id mobile.gears
                                         , wheel = (Coll.get id mobile.gears).wheel
                                         }

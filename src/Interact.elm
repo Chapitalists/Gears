@@ -4,11 +4,7 @@ import Browser.Events as BE
 import Html
 import Html.Events.Extra.Mouse as Mouse
 import Json.Decode as D
-import Math.Vector2 exposing (Vec2, vec2)
-
-
-
--- TODO Remove OldPos from Drag, but keep track on initPos, and make it a record
+import Math.Vector2 as Vec exposing (Vec2, vec2)
 
 
 type alias Interact item =
@@ -21,39 +17,41 @@ type Mode
     | Drag
 
 
-getInteract : State item -> Interact item
+getInteract : State item zone -> Interact item
 getInteract (S state) =
     case ( state.hover, state.click ) of
         ( Just item, Nothing ) ->
             Just ( item, Hover )
 
         ( _, Just { item, moved } ) ->
-            if moved then
-                Just ( item, Drag )
+            case moved of
+                Just _ ->
+                    Just ( item, Drag )
 
-            else
-                Just ( item, Click )
+                Nothing ->
+                    Just ( item, Click )
 
         _ ->
             Nothing
 
 
-type State item
+type State item zone
     = S
         { hover : Maybe item
-        , click : Maybe (ClickState item)
+        , click : Maybe (ClickState item zone)
         }
 
 
-type alias ClickState item =
+type alias ClickState item zone =
     { item : item
     , pos : Vec2
-    , moved : Bool
+    , abs : Vec2
+    , moved : Maybe ( Vec2, zone )
     , keys : Mouse.Keys
     }
 
 
-init : State item
+init : State item zone
 init =
     S
         { hover = Nothing
@@ -64,8 +62,8 @@ init =
 type Msg item zone
     = HoverIn item
     | HoverOut
-    | StartClick item Vec2 Mouse.Keys
-    | ClickMove zone Vec2
+    | StartClick item Vec2 Vec2 Mouse.Keys -- offsetPos clientPos
+    | ClickMove zone Vec2 Vec2
     | EndClick
     | AbortClick
     | NOOP
@@ -77,14 +75,14 @@ map f m =
         HoverIn a ->
             HoverIn (f a)
 
-        StartClick a v k ->
-            StartClick (f a) v k
+        StartClick a v c k ->
+            StartClick (f a) v c k
 
         HoverOut ->
             HoverOut
 
-        ClickMove z v ->
-            ClickMove z v
+        ClickMove z v c ->
+            ClickMove z v c
 
         EndClick ->
             EndClick
@@ -104,13 +102,22 @@ type alias Event item zone =
 
 type Action zone
     = Clicked ( Bool, Bool, Bool )
-    | Dragged Vec2 Vec2 ( Bool, Bool, Bool ) zone -- oldPos newPos
+    | Dragged (DragInfo zone) zone ( Bool, Bool, Bool ) -- Shift Ctrl Alt
     | DragIn
     | DragOut
     | DragEnded Bool -- True for Up, False for Abort
 
 
-update : Msg item zone -> State item -> ( State item, Maybe (Event item zone) )
+type alias DragInfo zone =
+    { init : ( Vec2, zone )
+    , oldPos : Vec2
+    , newPos : Vec2
+    , startD : Vec2
+    , absD : Vec2
+    }
+
+
+update : Msg item zone -> State item zone -> ( State item zone, Maybe (Event item zone) )
 update msg (S state) =
     case msg of
         HoverIn id ->
@@ -128,14 +135,35 @@ update msg (S state) =
                 Nothing ->
                     ( S state, Nothing )
 
-        StartClick id pos keys ->
-            ( S { state | click = Just <| ClickState id pos False keys }, Nothing )
+        StartClick id pos abs keys ->
+            ( S { state | click = Just <| ClickState id pos abs Nothing keys }, Nothing )
 
-        ClickMove zone pos ->
+        ClickMove zone pos abs ->
             case state.click of
                 Just click ->
-                    ( S { state | click = Just { click | pos = pos, moved = True } }
-                    , Just <| Event (Dragged click.pos pos (tupleFromKeys click.keys) zone) click.item
+                    let
+                        dragInit =
+                            Maybe.withDefault ( click.pos, zone ) click.moved
+                    in
+                    ( S
+                        { state
+                            | click =
+                                Just { click | pos = pos, abs = abs, moved = Just dragInit }
+                        }
+                    , Just <|
+                        Event
+                            (Dragged
+                                { init = dragInit
+                                , oldPos = click.pos
+                                , newPos = pos
+                                , startD = Vec.sub abs click.abs
+                                , absD = Vec.sub abs click.abs
+                                }
+                                zone
+                             <|
+                                tupleFromKeys click.keys
+                            )
+                            click.item
                     )
 
                 _ ->
@@ -145,11 +173,12 @@ update msg (S state) =
             case state.click of
                 Just { item, moved, keys } ->
                     ( S { state | click = Nothing }
-                    , if moved then
-                        Just <| Event (DragEnded True) item
+                    , case moved of
+                        Just _ ->
+                            Just <| Event (DragEnded True) item
 
-                      else
-                        Just <| Event (Clicked <| tupleFromKeys keys) item
+                        Nothing ->
+                            Just <| Event (Clicked <| tupleFromKeys keys) item
                     )
 
                 _ ->
@@ -159,11 +188,12 @@ update msg (S state) =
             case state.click of
                 Just { item, moved, keys } ->
                     ( S { state | click = Nothing }
-                    , if moved then
-                        Just <| Event (DragEnded False) item
+                    , case moved of
+                        Just _ ->
+                            Just <| Event (DragEnded False) item
 
-                      else
-                        Nothing
+                        Nothing ->
+                            Nothing
                     )
 
                 _ ->
@@ -173,7 +203,7 @@ update msg (S state) =
             ( S state, Nothing )
 
 
-subs : State item -> List (Sub (Msg item zone))
+subs : State item zone -> List (Sub (Msg item zone))
 subs (S { click }) =
     case click of
         Nothing ->
@@ -194,14 +224,14 @@ subs (S { click }) =
             ]
 
 
-dragSpaceEvents : State item -> zone -> List (Html.Attribute (Msg item zone))
+dragSpaceEvents : State item zone -> zone -> List (Html.Attribute (Msg item zone))
 dragSpaceEvents (S { click }) zone =
     case click of
         Nothing ->
             []
 
         Just _ ->
-            [ Mouse.onMove <| ClickMove zone << vecFromTuple << .offsetPos ]
+            [ Mouse.onMove <| \{ offsetPos, clientPos } -> ClickMove zone (vecFromTuple offsetPos) (vecFromTuple clientPos) ]
 
 
 hoverEvents : item -> List (Html.Attribute (Msg item zone))
@@ -214,7 +244,7 @@ hoverEvents id =
 draggableEvents : item -> List (Html.Attribute (Msg item zone))
 draggableEvents id =
     [ Mouse.onWithOptions "mousedown" { stopPropagation = True, preventDefault = False } <|
-        \e -> StartClick id (vecFromTuple e.offsetPos) e.keys
+        \e -> StartClick id (vecFromTuple e.offsetPos) (vecFromTuple e.clientPos) e.keys
     ]
 
 

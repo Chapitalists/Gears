@@ -77,6 +77,7 @@ type Msg
     | SetSmallestSize Float
     | ZoomPoint Float ( Float, Float )
     | Pan Direction
+    | Move Vec2
 
 
 type Direction
@@ -144,6 +145,13 @@ update msg model =
                                         vec2 0 d
                     }
             }
+
+        Move d ->
+            let
+                viewPos =
+                    model.viewPos
+            in
+            { model | viewPos = { viewPos | c = Vec.sub viewPos.c d } }
 
 
 svgAttributes : Model -> List (Svg.Attribute Msg)
