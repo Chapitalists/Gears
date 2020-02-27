@@ -1632,7 +1632,12 @@ manageInteractEvent event model mobile =
                     { return | model = ret.model, mobile = ret.mobile, toUndo = ret.toUndo }
 
                 _ ->
-                    return
+                    case ( event.item, event.action ) of
+                        ( ISurface, Interact.Dragged { startD } _ _ ) ->
+                            { return | model = { model | svg = PanSvg.update (PanSvg.Move startD) model.svg } }
+
+                        _ ->
+                            return
 
         SelectMotor ->
             case ( event.item, event.action ) of
