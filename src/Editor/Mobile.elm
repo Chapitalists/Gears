@@ -990,6 +990,13 @@ viewContent ( model, mobile ) =
                                 , baseColor =
                                     Maybe.map (\bId -> (Coll.get bId mobile.gears).wheel.color) <|
                                         Harmo.getBaseId g.harmony
+                                , named =
+                                    case Interact.getInteract model.interact of
+                                        Just ( IWheel idd, _ ) ->
+                                            id == Tuple.first idd
+
+                                        _ ->
+                                            False
                                 }
                                 (Just ( IWheel << Tuple.pair id, [] ))
                                 (Just <| IResizeHandle id)
