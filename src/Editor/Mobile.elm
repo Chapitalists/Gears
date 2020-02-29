@@ -1023,6 +1023,7 @@ viewContent ( model, mobile ) =
                                             [ Link.drawRawLink
                                                 ( g.pos, pos )
                                                 (Harmo.getLength g.harmony mobile.gears)
+                                                Link.baseColor
                                             ]
 
                                         _ ->
@@ -1034,7 +1035,7 @@ viewContent ( model, mobile ) =
                                             Link.viewMotorLink False <| Gear.toDrawLink mobile.gears l
 
                                         Harmonize ->
-                                            Link.viewFractLink <| Gear.toDrawLink mobile.gears l
+                                            Link.viewFractLink (Gear.toDrawLink mobile.gears l) <| ILink l
 
                                         _ ->
                                             []
@@ -1085,13 +1086,34 @@ viewContent ( model, mobile ) =
                                         Motor.getAllLinks mobile.gears
 
                                 Harmonize ->
-                                    (List.concatMap (Link.viewFractLink << Gear.toDrawLink mobile.gears) <|
-                                        List.concatMap (.harmony >> Harmo.getLinks) <|
-                                            Coll.values mobile.gears
+                                    (case Interact.getInteract model.interact of
+                                        Just ( ILink l, _ ) ->
+                                            Link.viewFractOnLink (Gear.toDrawLink mobile.gears l) <|
+                                                Fract.simplify <|
+                                                    Fract.division
+                                                        (Coll.get (Tuple.second l) mobile.gears).harmony.fract
+                                                        (Coll.get (Tuple.first l) mobile.gears).harmony.fract
+
+                                        _ ->
+                                            []
                                     )
+                                        ++ (List.concatMap (\l -> Link.viewFractLink (Gear.toDrawLink mobile.gears l) (ILink l)) <|
+                                                List.concatMap (.harmony >> Harmo.getLinks) <|
+                                                    Coll.values mobile.gears
+                                           )
                                         ++ (case model.link of
-                                                Just { link } ->
-                                                    Link.viewSelectedLink <| Gear.toDrawLink mobile.gears link
+                                                Just { link, fractInput } ->
+                                                    Link.viewSelectedLink (Gear.toDrawLink mobile.gears link) <|
+                                                        case fractInput of
+                                                            FractionInput _ ->
+                                                                Just <|
+                                                                    Fract.simplify <|
+                                                                        Fract.division
+                                                                            (Coll.get (Tuple.second link) mobile.gears).harmony.fract
+                                                                            (Coll.get (Tuple.first link) mobile.gears).harmony.fract
+
+                                                            TextInput _ ->
+                                                                Nothing
 
                                                 _ ->
                                                     []
