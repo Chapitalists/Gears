@@ -1539,7 +1539,7 @@ doVolumeChange :
 doVolumeChange id absD mobile engine =
     let
         volume =
-            (CommonData.getWheel id mobile).volume + Vec.getY absD / 100
+            (CommonData.getWheel id mobile).volume - Vec.getY absD / 100
     in
     { mobile = CommonData.updateWheel id (Wheel.ChangeVolume volume) mobile
     , toUndo = Group
