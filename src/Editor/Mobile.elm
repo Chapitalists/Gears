@@ -30,6 +30,7 @@ import PanSvg
 import Random
 import Round
 import Sound exposing (Sound)
+import Time
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
@@ -50,6 +51,16 @@ port gotRecord : (D.Value -> msg) -> Sub msg
 svgId : String
 svgId =
     "svg"
+
+
+blinkOnTime : Float
+blinkOnTime =
+    800
+
+
+blinkOffTime : Float
+blinkOffTime =
+    200
 
 
 type alias Model =
@@ -89,6 +100,7 @@ type Mode
     | SupprMode
     | Move
     | SelectMotor
+    | Alternate
 
 
 keyCodeToMode : List ( String, Mode )
@@ -97,6 +109,7 @@ keyCodeToMode =
     , ( "KeyV", Nav )
     , ( "Delete", SupprMode )
     , ( "Backspace", SupprMode )
+    , ( "KeyQ", Alternate )
     ]
 
 
@@ -114,6 +127,7 @@ type Dragging
     | HalfLink ( Id Geer, Vec2 )
     | CompleteLink (Link Geer)
     | Cut ( Vec2, Vec2 ) (List (Link Geer))
+    | Alterning Identifier (Maybe Identifier) BlinkState
     | VolumeChange
     | SizeChange
     | Moving
@@ -121,6 +135,10 @@ type Dragging
     | Packed Vec2 (Id Packed)
     | Content ( Vec2, Float )
     | ChgContent (Id Geer) Dragging
+
+
+type alias BlinkState =
+    ( Bool, Float )
 
 
 getShared : Model -> ( Pack, PanSvg.Model )
@@ -180,6 +198,7 @@ type Msg
     | Capsuled (List (Id Geer))
     | Collared (Id Geer)
     | UnCollar (Id Geer)
+    | Blink
     | InteractMsg (Interact.Msg Interactable Zone)
     | SvgMsg PanSvg.Msg
     | SVGSize (Result D.Error PanSvg.Size)
@@ -701,6 +720,27 @@ update msg ( model, mobile ) =
                 _ ->
                     return
 
+        Blink ->
+            case model.dragging of
+                Alterning x y ( b, _ ) ->
+                    { return
+                        | model =
+                            { model
+                                | dragging =
+                                    Alterning x y <|
+                                        ( not b
+                                        , if b then
+                                            blinkOffTime
+
+                                          else
+                                            blinkOnTime
+                                        )
+                            }
+                    }
+
+                _ ->
+                    return
+
         WheelMsgs msgs ->
             { return
                 | mobile =
@@ -816,11 +856,18 @@ update msg ( model, mobile ) =
 
 
 subs : Model -> List (Sub Msg)
-subs { interact } =
+subs { interact, dragging } =
     PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
         :: Sub.map WaveMsg Waveform.sub
         :: (gotRecord <| (GotRecord << D.decodeValue D.string))
         :: (List.map (Sub.map InteractMsg) <| Interact.subs interact)
+        ++ (case dragging of
+                Alterning _ _ ( _, t ) ->
+                    [ Time.every t <| always <| Blink ]
+
+                _ ->
+                    []
+           )
 
 
 viewTools : Model -> Element Msg
@@ -981,7 +1028,33 @@ viewContent ( model, mobile ) =
                 List.map (Svg.map InteractMsg) <|
                     (List.map
                         (\( id, g ) ->
-                            Wheel.view g.wheel
+                            let
+                                -- TODO should blink also if bead
+                                wheel =
+                                    g.wheel
+
+                                w =
+                                    case model.dragging of
+                                        Alterning ( idd, [] ) mayId ( b, _ ) ->
+                                            if not b && id == idd then
+                                                { wheel | mute = not wheel.mute }
+
+                                            else
+                                                case mayId of
+                                                    Just ( iid, [] ) ->
+                                                        if not b && id == iid then
+                                                            { wheel | mute = not wheel.mute }
+
+                                                        else
+                                                            wheel
+
+                                                    _ ->
+                                                        wheel
+
+                                        _ ->
+                                            wheel
+                            in
+                            Wheel.view w
                                 g.pos
                                 (Harmo.getLength g.harmony mobile.gears)
                                 { mod = getMod id
@@ -1696,6 +1769,44 @@ manageInteractEvent event model mobile =
 
                 ( IPacked id, Interact.Clicked _ ) ->
                     update (PackMsg <| Pack.Unpack id) ( model, mobile )
+
+                _ ->
+                    return
+
+        Alternate ->
+            case model.tool of
+                Play _ _ ->
+                    case ( event.item, event.action, model.dragging ) of
+                        ( IWheel id, Interact.Dragged _ _ _, NoDrag ) ->
+                            { return | model = { model | dragging = Alterning id Nothing ( False, blinkOffTime ) } }
+
+                        ( IWheel id, Interact.DragIn, Alterning other _ b ) ->
+                            { return | model = { model | dragging = Alterning other (Just id) b } }
+
+                        ( IWheel _, Interact.DragOut, Alterning other _ b ) ->
+                            { return
+                                | model =
+                                    { model
+                                        | dragging = Alterning other Nothing b
+                                    }
+                            }
+
+                        ( _, Interact.DragEnded True, Alterning id1 (Just id2) _ ) ->
+                            { return
+                                | model = { model | dragging = NoDrag }
+                                , mobile =
+                                    List.foldl
+                                        (\id mob -> CommonData.updateWheel id Wheel.ToggleMute mob)
+                                        mobile
+                                        [ id1, id2 ]
+                                , toUndo = Do
+                            }
+
+                        ( _, Interact.DragEnded _, _ ) ->
+                            { return | model = { model | dragging = NoDrag } }
+
+                        _ ->
+                            return
 
                 _ ->
                     return
