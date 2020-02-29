@@ -214,23 +214,23 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                             [ Html.Attributes.id uid ] ++ dragAttrs
                         )
                         ([ S.circle
-                            [ SA.cx <| Num 0
-                            , SA.cy <| Num 0
-                            , SA.r <| Num (length / 2)
-                            , SA.stroke <|
+                            ([ SA.cx <| Num 0
+                             , SA.cy <| Num 0
+                             , SA.r <| Num (length / 2)
+                             , SA.stroke <|
                                 if style.motor then
                                     Color.red
 
                                 else
                                     Color.black
-                            , SA.strokeWidth <|
+                             , SA.strokeWidth <|
                                 Num <|
                                     if style.mod == Selectable then
                                         tickW * 2
 
                                     else
                                         tickW
-                            , SA.strokeDasharray <|
+                             , SA.strokeDasharray <|
                                 if style.dashed then
                                     String.fromFloat (circum / 40 * 3 / 4)
                                         ++ ","
@@ -238,14 +238,16 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
 
                                 else
                                     ""
-                            , SA.fill <|
-                                if w.mute then
-                                    Fill Color.white
+                             ]
+                                ++ (if w.mute then
+                                        [ SA.fill <| Fill Color.white ]
 
-                                else
-                                    Fill w.color
-                            , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
-                            ]
+                                    else
+                                        [ SA.fill <| Fill w.color
+                                        , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
+                                        ]
+                                   )
+                            )
                             []
                          , S.rect
                             [ SA.width <| Num tickW
