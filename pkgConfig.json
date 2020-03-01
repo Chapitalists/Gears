@@ -6,6 +6,7 @@
     , "ports.html"
     , "ports.js"
     , "elmApp.js"
+    , "lib/recorder.js"
     , "lib/svg.js"
     , "lib/Tone.js"
     , "LICENSE.md"

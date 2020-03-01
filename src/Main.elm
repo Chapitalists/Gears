@@ -845,14 +845,16 @@ viewDirInLib : Model -> String -> List String -> Dict String SoundListType -> Bo
 viewDirInLib model str id dict opened =
     Input.button [ Font.color <| rgb 1 1 1 ]
         { label =
-            text <|
-                (if opened then
-                    "▽"
+            el [ Font.bold ] <|
+                text <|
+                    (if opened then
+                        "▽"
 
-                 else
-                    "◿"
-                )
-                    ++ str
+                     else
+                        "◿"
+                    )
+                        ++ " "
+                        ++ str
         , onPress = Just <| ExpandDir id
         }
         :: (if opened then

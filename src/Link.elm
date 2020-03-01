@@ -1,16 +1,22 @@
 module Link exposing (..)
 
 import Coll exposing (Coll, Id)
-import Color
-import Fraction as Fract exposing (Fraction)
+import Color exposing (Color)
+import Fraction exposing (Fraction)
+import Interact
 import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Encode as E
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
-import TypedSvg.Core exposing (Svg)
-import TypedSvg.Types exposing (Length(..), Transform(..))
+import TypedSvg.Core as Svg exposing (Svg)
+import TypedSvg.Types exposing (AnchorAlignment(..), DominantBaseline(..), Length(..), Opacity(..), Transform(..))
+
+
+baseColor : Color
+baseColor =
+    Color.brown
 
 
 type alias Link item =
@@ -30,11 +36,64 @@ type alias DrawLink =
     ( Circle, Circle )
 
 
-viewFractLink : DrawLink -> List (Svg msg)
-viewFractLink ( e, f ) =
-    [ drawRawLink ( e.c, f.c ) <|
-        ((e.d + f.d) / 2)
+viewFractLink : DrawLink -> inter -> List (Svg (Interact.Msg inter zone))
+viewFractLink ( e, f ) inter =
+    [ drawRawLink ( e.c, f.c ) ((e.d + f.d) / 2) baseColor
+    , S.polyline
+        (Interact.hoverEvents inter
+            ++ [ SA.points [ tupleFromVec e.c, tupleFromVec f.c ]
+               , SA.strokeWidth <| Num ((e.d + f.d) / 15)
+               , SA.strokeOpacity <| Opacity 0
+               , SA.stroke Color.black
+               ]
+        )
+        []
     ]
+
+
+viewFractOnLink : DrawLink -> Fraction -> List (Svg msg)
+viewFractOnLink ( e, f ) { num, den } =
+    let
+        dir =
+            Vec.normalize <| Vec.sub f.c e.c
+
+        center =
+            Vec.scale 0.5 <| Vec.add (Vec.add e.c <| Vec.scale (e.d / 2) dir) (Vec.sub f.c <| Vec.scale (f.d / 2) dir)
+
+        d =
+            Vec.normalize <|
+                rotate90 (Vec.sub e.c f.c) <|
+                    not <|
+                        Vec.getX e.c
+                            < Vec.getX f.c
+                            || (Vec.getX e.c == Vec.getX f.c && Vec.getY e.c < Vec.getY f.c)
+
+        size =
+            (e.d + f.d) / 10
+
+        txt mult i =
+            let
+                p =
+                    Vec.add center <| Vec.scale (mult * size / 2) d
+            in
+            S.text_
+                [ SA.x <| Num <| Vec.getX p
+                , SA.y <| Num <| Vec.getY p
+                , SA.fontSize <| Num size
+                , SA.textAnchor AnchorMiddle
+                , SA.dominantBaseline DominantBaselineCentral
+                , SA.stroke Color.white
+                , SA.strokeWidth <| Num (size / 40)
+                ]
+                [ Svg.text <| String.fromInt i ]
+    in
+    [ txt 1 num, txt -1 den ]
+
+
+viewSelectedLink : DrawLink -> Maybe Fraction -> List (Svg msg)
+viewSelectedLink ( e, f ) mayFract =
+    drawRawLink ( e.c, f.c ) ((e.d + f.d) / 2) Color.red
+        :: (Maybe.withDefault [] <| Maybe.map (viewFractOnLink ( e, f )) mayFract)
 
 
 viewMotorLink : Bool -> DrawLink -> List (Svg msg)
@@ -56,22 +115,6 @@ viewMotorLink cutting ( e, f ) =
     ]
 
 
-viewSelectedLink : DrawLink -> List (Svg msg)
-viewSelectedLink ( e, f ) =
-    let
-        w =
-            (e.d + f.d) / 30
-    in
-    [ S.polyline
-        [ SA.points [ tupleFromVec <| e.c, tupleFromVec <| f.c ]
-        , SA.stroke Color.red
-        , SA.strokeWidth <| Num w
-        , SA.strokeLinecap TypedSvg.Types.StrokeLinecapRound
-        ]
-        []
-    ]
-
-
 drawMotorLink : ( ( Vec2, Float ), ( Vec2, Float ) ) -> Svg msg
 drawMotorLink ( ( p1, d1 ), ( p2, d2 ) ) =
     let
@@ -86,16 +129,16 @@ drawMotorLink ( ( p1, d1 ), ( p2, d2 ) ) =
             d1 + d2 / 2
     in
     S.g []
-        [ drawRawLink ( contactPoint p1 d1 True, contactPoint p2 d2 True ) gearL
-        , drawRawLink ( contactPoint p1 d1 False, contactPoint p2 d2 False ) gearL
+        [ drawRawLink ( contactPoint p1 d1 True, contactPoint p2 d2 True ) gearL baseColor
+        , drawRawLink ( contactPoint p1 d1 False, contactPoint p2 d2 False ) gearL baseColor
         ]
 
 
-drawRawLink : ( Vec2, Vec2 ) -> Float -> Svg msg
-drawRawLink ( p1, p2 ) gearL =
+drawRawLink : ( Vec2, Vec2 ) -> Float -> Color -> Svg msg
+drawRawLink ( p1, p2 ) gearL c =
     S.polyline
         [ SA.points [ tupleFromVec p1, tupleFromVec p2 ]
-        , SA.stroke Color.brown
+        , SA.stroke c
         , SA.strokeWidth <| Num (gearL / 30)
         , SA.strokeLinecap TypedSvg.Types.StrokeLinecapRound
         ]
