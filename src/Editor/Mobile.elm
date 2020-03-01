@@ -8,6 +8,7 @@ import Data.Content as Content exposing (Content)
 import Data.Gear as Gear
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
 import Data.Wheel as Wheel exposing (Conteet, Wheel)
+import Dict
 import Editor.Interacting exposing (Interactable(..), Zone(..))
 import Element exposing (..)
 import Element.Background as Bg
@@ -18,7 +19,9 @@ import Engine exposing (Engine)
 import File.Download as DL
 import Fraction as Fract exposing (Fraction)
 import Harmony as Harmo
+import Html
 import Html.Attributes
+import Html.Events
 import Interact exposing (Interact)
 import Json.Decode as D
 import Json.Encode as E
@@ -1468,6 +1471,32 @@ viewEditDetails model mobile =
                                 Nothing ->
                                     []
                            )
+                        ++ [ row []
+                                [ text "Couleur : "
+                                , html <|
+                                    Html.input
+                                        [ Html.Attributes.type_ "color"
+                                        , Html.Attributes.value <| colorToString g.wheel.color
+                                        , Html.Events.onInput
+                                            (\str ->
+                                                WheelMsgs
+                                                    [ ( wId
+                                                      , Wheel.ChangeColor <|
+                                                            Color.fromRgba
+                                                                { red = hexToFloat <| String.slice 1 3 str
+                                                                , green = hexToFloat <| String.slice 3 5 str
+                                                                , blue = hexToFloat <| String.slice 5 7 str
+                                                                , alpha = 1
+                                                                }
+                                                      )
+                                                    ]
+                                            )
+
+                                        -- TODO should Group undo with onChange event as final Do
+                                        ]
+                                        []
+                                ]
+                           ]
                 , text <|
                     "Durée : "
                         ++ Harmo.view id
@@ -2210,3 +2239,41 @@ interactMove event model mobile =
 colorGen : Random.Generator Color.Color
 colorGen =
     Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
+
+
+colorToString : Color.Color -> String
+colorToString c =
+    let
+        { red, blue, green } =
+            Color.toRgba c
+    in
+    "#" ++ floatToHex red ++ floatToHex green ++ floatToHex blue
+
+
+hexDigits : List String
+hexDigits =
+    [ "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f" ]
+
+
+intToHex : Int -> String
+intToHex i =
+    Maybe.withDefault "0" <| Dict.get i <| Dict.fromList <| List.indexedMap Tuple.pair hexDigits
+
+
+floatToHex : Float -> String
+floatToHex f =
+    let
+        i =
+            round (f * 255)
+    in
+    intToHex (i // 16) ++ intToHex (modBy 16 i)
+
+
+hexToInt : String -> Int
+hexToInt s =
+    Maybe.withDefault 0 <| Dict.get s <| Dict.fromList <| List.indexedMap (\i c -> ( c, i )) hexDigits
+
+
+hexToFloat : String -> Float
+hexToFloat s =
+    toFloat (hexToInt (String.slice 0 1 s) * 16 + (hexToInt <| String.slice 1 2 s)) / 255
