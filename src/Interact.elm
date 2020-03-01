@@ -5,6 +5,12 @@ import Html
 import Html.Events.Extra.Mouse as Mouse
 import Json.Decode as D
 import Math.Vector2 as Vec exposing (Vec2, vec2)
+import Time
+
+
+holdTime : Float
+holdTime =
+    500
 
 
 type alias Interact item =
@@ -14,21 +20,25 @@ type alias Interact item =
 type Mode
     = Hover
     | Click
+    | Hold
     | Drag
 
 
 getInteract : State item zone -> Interact item
-getInteract (S state) =
-    case ( state.hover, state.click ) of
+getInteract (S s) =
+    case ( s.hover, s.click ) of
         ( Just item, Nothing ) ->
             Just ( item, Hover )
 
-        ( _, Just { item, moved } ) ->
-            case moved of
-                Just _ ->
+        ( _, Just { item, hold } ) ->
+            case hold of
+                Moving _ ->
                     Just ( item, Drag )
 
-                Nothing ->
+                Holding ->
+                    Just ( item, Hold )
+
+                Clicking ->
                     Just ( item, Click )
 
         _ ->
@@ -46,9 +56,15 @@ type alias ClickState item zone =
     { item : item
     , pos : Vec2
     , abs : Vec2
-    , moved : Maybe ( Vec2, zone )
+    , hold : HoldState zone
     , keys : Mouse.Keys
     }
+
+
+type HoldState zone
+    = Clicking
+    | Holding
+    | Moving ( Vec2, zone )
 
 
 init : State item zone
@@ -64,6 +80,7 @@ type Msg item zone
     | HoverOut
     | StartClick item Vec2 Vec2 Mouse.Keys -- offsetPos clientPos
     | ClickMove zone Vec2 Vec2
+    | ClickHold
     | EndClick
     | AbortClick
     | NOOP
@@ -83,6 +100,9 @@ map f m =
 
         ClickMove z v c ->
             ClickMove z v c
+
+        ClickHold ->
+            ClickHold
 
         EndClick ->
             EndClick
@@ -106,6 +126,8 @@ type Action zone
     | DragIn
     | DragOut
     | DragEnded Bool -- True for Up, False for Abort
+    | Holded
+    | HoldEnded
 
 
 type alias DragInfo zone =
@@ -136,19 +158,24 @@ update msg (S state) =
                     ( S state, Nothing )
 
         StartClick id pos abs keys ->
-            ( S { state | click = Just <| ClickState id pos abs Nothing keys }, Nothing )
+            ( S { state | click = Just <| ClickState id pos abs Clicking keys }, Nothing )
 
         ClickMove zone pos abs ->
             case state.click of
                 Just click ->
                     let
                         dragInit =
-                            Maybe.withDefault ( click.pos, zone ) click.moved
+                            case click.hold of
+                                Moving res ->
+                                    res
+
+                                _ ->
+                                    ( click.pos, zone )
                     in
                     ( S
                         { state
                             | click =
-                                Just { click | pos = pos, abs = abs, moved = Just dragInit }
+                                Just { click | pos = pos, abs = abs, hold = Moving dragInit }
                         }
                     , Just <|
                         Event
@@ -169,15 +196,28 @@ update msg (S state) =
                 _ ->
                     ( S state, Nothing )
 
+        ClickHold ->
+            case state.click of
+                Just click ->
+                    ( S { state | click = Just { click | hold = Holding } }
+                    , Just <| Event Holded click.item
+                    )
+
+                _ ->
+                    ( S state, Nothing )
+
         EndClick ->
             case state.click of
-                Just { item, moved, keys } ->
+                Just { item, hold, keys } ->
                     ( S { state | click = Nothing }
-                    , case moved of
-                        Just _ ->
+                    , case hold of
+                        Moving _ ->
                             Just <| Event (DragEnded True) item
 
-                        Nothing ->
+                        Holding ->
+                            Just <| Event HoldEnded item
+
+                        Clicking ->
                             Just <| Event (Clicked <| tupleFromKeys keys) item
                     )
 
@@ -186,13 +226,16 @@ update msg (S state) =
 
         AbortClick ->
             case state.click of
-                Just { item, moved, keys } ->
+                Just { item, hold, keys } ->
                     ( S { state | click = Nothing }
-                    , case moved of
-                        Just _ ->
+                    , case hold of
+                        Moving _ ->
                             Just <| Event (DragEnded False) item
 
-                        Nothing ->
+                        Holding ->
+                            Just <| Event HoldEnded item
+
+                        Clicking ->
                             Nothing
                     )
 
@@ -209,7 +252,7 @@ subs (S { click }) =
         Nothing ->
             []
 
-        Just _ ->
+        Just { hold } ->
             [ BE.onMouseUp <| D.succeed <| EndClick
             , BE.onVisibilityChange
                 (\v ->
@@ -222,6 +265,13 @@ subs (S { click }) =
                                 NOOP
                 )
             ]
+                ++ (case hold of
+                        Clicking ->
+                            [ Time.every holdTime <| always ClickHold ]
+
+                        _ ->
+                            []
+                   )
 
 
 dragSpaceEvents : State item zone -> zone -> List (Html.Attribute (Msg item zone))

@@ -101,6 +101,7 @@ type Mode
     | Move
     | SelectMotor
     | Alternate
+    | Solo
 
 
 keyCodeToMode : List ( String, Mode )
@@ -110,6 +111,7 @@ keyCodeToMode =
     , ( "Delete", SupprMode )
     , ( "Backspace", SupprMode )
     , ( "KeyQ", Alternate )
+    , ( "KeyS", Solo )
     ]
 
 
@@ -1769,6 +1771,31 @@ manageInteractEvent event model mobile =
 
                 ( IPacked id, Interact.Clicked _ ) ->
                     update (PackMsg <| Pack.Unpack id) ( model, mobile )
+
+                _ ->
+                    return
+
+        Solo ->
+            case model.tool of
+                Play _ _ ->
+                    case ( event.item, event.action ) of
+                        ( IWheel ( id, [] ), Interact.Holded ) ->
+                            -- TODO should work also for beads (not []), Mobile.mapWheels ?
+                            { return
+                                | mobile =
+                                    List.foldl
+                                        (\( idd, g ) -> CommonData.updateWheel ( idd, [] ) <| (Wheel.Mute <| idd /= id))
+                                        mobile
+                                    <|
+                                        Coll.toList mobile.gears
+                                , toUndo = Group
+                            }
+
+                        ( IWheel ( id, [] ), Interact.HoldEnded ) ->
+                            { return | toUndo = Cancel }
+
+                        _ ->
+                            return
 
                 _ ->
                     return

@@ -108,6 +108,7 @@ type Msg
     = ChangeContent Conteet
     | ChangeVolume Float
     | ToggleMute
+    | Mute Bool
     | ChangeStart Float
     | Named String
     | ChangeColor Color
@@ -129,6 +130,9 @@ update msg g =
 
         ToggleMute ->
             { g | wheel = { wheel | mute = not wheel.mute } }
+
+        Mute b ->
+            { g | wheel = { wheel | mute = b } }
 
         ChangeStart percent ->
             { g | wheel = { wheel | startPercent = percent } }
