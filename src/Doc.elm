@@ -213,11 +213,11 @@ update msg doc =
                         )
             in
             ( finalDoc
-            , Cmd.batch
+            , Cmd.batch <|
                 [ Cmd.map MobileMsg res.cmd
-                , Maybe.withDefault Cmd.none <| Maybe.map toEngine res.toEngine
                 , cmd
                 ]
+                    ++ List.map toEngine res.toEngine
             )
 
         InteractMsg subMsg ->

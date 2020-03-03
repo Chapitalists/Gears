@@ -42,25 +42,25 @@ playingIds (E e) =
     e
 
 
-setPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, Maybe E.Value )
+setPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
 setPlaying l coll (E e) =
     ( E l
     , if List.isEmpty l then
-        Nothing
+        []
 
       else
-        Just <| playPause coll <| List.filter (\el -> not <| List.member el l) e
+        [ playPause coll <| List.filter (\el -> not <| List.member el l) e ]
     )
 
 
-addPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, Maybe E.Value )
+addPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
 addPlaying l coll (E e) =
     ( E (e ++ l)
     , if List.isEmpty l then
-        Nothing
+        []
 
       else
-        Just <| playPause coll l
+        [ playPause coll l ]
     )
 
 
@@ -77,34 +77,34 @@ stop =
     E.object [ ( "action", E.string "stopReset" ) ]
 
 
-muted : Identifier -> Bool -> Engine -> Maybe E.Value
+muted : Identifier -> Bool -> Engine -> List E.Value
 muted ( id, list ) mute e =
     if isPlaying id e then
-        Just <|
-            E.object
-                [ ( "action", E.string "mute" )
-                , ( "id", E.string <| Gear.toUID id )
-                , ( "beadIndexes", E.list E.int list )
-                , ( "value", E.bool mute )
-                ]
+        [ E.object
+            [ ( "action", E.string "mute" )
+            , ( "id", E.string <| Gear.toUID id )
+            , ( "beadIndexes", E.list E.int list )
+            , ( "value", E.bool mute )
+            ]
+        ]
 
     else
-        Nothing
+        []
 
 
-volumeChanged : Identifier -> Float -> Engine -> Maybe E.Value
+volumeChanged : Identifier -> Float -> Engine -> List E.Value
 volumeChanged ( id, list ) volume e =
     if isPlaying id e then
-        Just <|
-            E.object
-                [ ( "action", E.string "volume" )
-                , ( "id", E.string <| Gear.toUID id )
-                , ( "beadIndexes", E.list E.int list )
-                , ( "value", E.float <| clamp 0 1 volume )
-                ]
+        [ E.object
+            [ ( "action", E.string "volume" )
+            , ( "id", E.string <| Gear.toUID id )
+            , ( "beadIndexes", E.list E.int list )
+            , ( "value", E.float <| clamp 0 1 volume )
+            ]
+        ]
 
     else
-        Nothing
+        []
 
 
 encodeWheel : Wheel -> Bool -> List ( String, E.Value )

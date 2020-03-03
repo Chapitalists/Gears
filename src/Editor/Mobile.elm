@@ -219,7 +219,7 @@ type alias Return =
     { model : Model
     , mobile : Mobeel
     , toUndo : ToUndo
-    , toEngine : Maybe E.Value
+    , toEngine : List E.Value
     , outMsg : Maybe DocMsg
     , cmd : Cmd Msg
     }
@@ -243,7 +243,7 @@ update msg ( model, mobile ) =
             { model = model
             , mobile = mobile
             , toUndo = NOOP
-            , toEngine = Nothing
+            , toEngine = []
             , outMsg = Nothing
             , cmd = Cmd.none
             }
@@ -267,7 +267,7 @@ update msg ( model, mobile ) =
                                         model.dragging
                         , engine = Engine.init
                     }
-                , toEngine = Just Engine.stop
+                , toEngine = [ Engine.stop ]
             }
 
         ChangedMode mode ->
@@ -282,7 +282,7 @@ update msg ( model, mobile ) =
                     Play True r ->
                         { return
                             | model = { model | tool = Play False r, engine = Engine.init }
-                            , toEngine = Just Engine.stop
+                            , toEngine = [ Engine.stop ]
                         }
 
                     Play False r ->
@@ -322,7 +322,7 @@ update msg ( model, mobile ) =
             { return | model = { model | engine = engine }, toEngine = v }
 
         StopGear id ->
-            { return | model = { model | engine = Engine.init }, toEngine = Just Engine.stop }
+            { return | model = { model | engine = Engine.init }, toEngine = [ Engine.stop ] }
 
         CursorRight ->
             case model.edit of
@@ -461,7 +461,7 @@ update msg ( model, mobile ) =
                         , engine = Engine.init
                     }
                 , toUndo = Do
-                , toEngine = Just Engine.stop
+                , toEngine = [ Engine.stop ]
                 , mobile = CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
             }
 
@@ -1639,7 +1639,7 @@ doVolumeChange :
     -> Vec2
     -> Mobeel
     -> Engine
-    -> { mobile : Mobeel, toUndo : ToUndo, toEngine : Maybe E.Value }
+    -> { mobile : Mobeel, toUndo : ToUndo, toEngine : List E.Value }
 doVolumeChange id absD mobile engine =
     let
         volume =
@@ -1680,7 +1680,7 @@ doChangeContent id c mayColor model mobile =
             { model = model
             , mobile = mobile
             , toUndo = NOOP
-            , toEngine = Nothing
+            , toEngine = []
             , outMsg = Nothing
             , cmd = Cmd.none
             }
@@ -1739,7 +1739,7 @@ manageInteractEvent event model mobile =
             { model = model
             , mobile = mobile
             , toUndo = NOOP
-            , toEngine = Nothing
+            , toEngine = []
             , outMsg = Nothing
             , cmd = Cmd.none
             }
@@ -1981,7 +1981,7 @@ interactPlay on event model mobile =
             { model = model
             , mobile = mobile
             , toUndo = NOOP
-            , toEngine = Nothing
+            , toEngine = []
             , outMsg = Nothing
             , cmd = Cmd.none
             }
@@ -2092,7 +2092,7 @@ interactHarmonize event model mobile =
             { model = model
             , mobile = mobile
             , toUndo = NOOP
-            , toEngine = Nothing
+            , toEngine = []
             , outMsg = Nothing
             , cmd = Cmd.none
             }
