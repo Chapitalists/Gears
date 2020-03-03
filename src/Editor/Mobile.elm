@@ -1848,14 +1848,23 @@ manageInteractEvent event model mobile =
                             }
 
                         ( _, Interact.DragEnded True, Alterning id1 (Just id2) _ ) ->
-                            { return
-                                | model = { model | dragging = NoDrag }
-                                , mobile =
+                            let
+                                newMobile =
                                     List.foldl
                                         (\id mob -> CommonData.updateWheel id Wheel.ToggleMute mob)
                                         mobile
                                         [ id1, id2 ]
+                            in
+                            { return
+                                | model = { model | dragging = NoDrag }
+                                , mobile = newMobile
                                 , toUndo = Do
+                                , toEngine =
+                                    List.concatMap
+                                        (\id ->
+                                            Engine.muted id (CommonData.getWheel id newMobile).mute model.engine
+                                        )
+                                        [ id1, id2 ]
                             }
 
                         ( _, Interact.DragEnded _, _ ) ->
