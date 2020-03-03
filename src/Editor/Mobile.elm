@@ -839,16 +839,16 @@ update msg ( model, mobile ) =
                                         Interact.Dragged info dragZone k ->
                                             let
                                                 startZone =
-                                                    Tuple.second info.init
+                                                    Tuple.second info.start
                                             in
                                             { e
                                                 | action =
                                                     Interact.Dragged
                                                         { info
-                                                            | init = Tuple.mapFirst (toInPos <| Tuple.second info.init) info.init
+                                                            | start = Tuple.mapFirst (toInPos startZone) info.start
                                                             , oldPos = toInPos dragZone info.oldPos
                                                             , newPos = toInPos dragZone info.newPos
-                                                            , startD = Vec.scale (PanSvg.getScale <| svgFromZone <| Tuple.second info.init) info.startD
+                                                            , startD = Vec.scale (PanSvg.getScale <| svgFromZone startZone) info.startD
                                                         }
                                                         dragZone
                                                         k

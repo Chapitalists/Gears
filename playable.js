@@ -1,9 +1,11 @@
 // TODO clean changeVolume, use Tone.Draw
 
+// pauseOffset = sound time after the start point = position of the animation in sound time
+// startTime = date of the corresponding start = date of the last 0% of the animation
+
 function prepare(model, rate = 1) {
     model.paused = true
     model.pauseOffset = 0
-    model.length = model.length
     if (model.view && model.id) {
         model.view = SVG.adopt(document.getElementById(model.id))
        /* model.once
