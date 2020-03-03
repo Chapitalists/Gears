@@ -116,7 +116,9 @@ encodeWheel w hasView =
     ]
         ++ (case Wheel.getWheelContent w of
                 Content.S s ->
-                    [ ( "soundName", E.string <| Sound.toString s ) ]
+                    [ ( "soundName", E.string <| Sound.toString s )
+                    , ( "loopPoints", E.list E.float <| Sound.getLoopPoints s )
+                    ]
 
                 Content.M m ->
                     [ ( "mobile", encodeMobile m False ) ]

@@ -13,8 +13,9 @@ function prepare(model, rate = 1) {
     if (model.soundName) {
         model.player = new Tone.Player(buffers[model.soundName]).toMaster()
         setVolume(model)
-        model.duration = model.player.buffer.duration
+        model.duration = model.loopPoints[1] - model.loopPoints[0]
         model.player.playbackRate = model.rate = rate * model.duration / model.length
+        model.player.setLoopPoints.apply(model.player, model.loopPoints)
         model.player.loop = true
     }
     if (model.mobile) {
@@ -60,7 +61,7 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
     }
     if (model.soundName && model.player.output) {
         setVolume(model, volume, mute)
-        model.player.start(t, model.pauseOffset + (model.startPercent * model.length))
+        model.player.start(t, model.pauseOffset + (model.startPercent * model.duration) + model.loopPoints[0])
     }
     if (model.mobile) {
         model.gears.map((v,i) => play(v, t, model.gears[i], model.volume * volume, model.mute || mute))
@@ -87,7 +88,7 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
 function pause(model, t, force = false, clocked = false) {
     if (model.paused && !force) return;
     model.paused = true
-    model.pauseOffset = ((t - model.startTime) * model.rate)
+    model.pauseOffset = ((t - model.startTime) * model.rate) % model.duration
     if (model.view){//} && !clocked) {
         Tone.Draw.schedule(() => model.view.animate().pause().at((model.pauseOffset/model.length/model.rate) % 1), t)
     }
