@@ -206,7 +206,8 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
             ]
 
          else
-            []
+            [ S.text_ [] [] ]
+         -- Because rotating g cannot be Keyed in TypedSvg, trick to prevent recreation
         )
             ++ [ S.g hoverAttrs <|
                     ([ S.g
