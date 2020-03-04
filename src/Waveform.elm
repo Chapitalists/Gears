@@ -7,7 +7,6 @@ import Element.Input as Input
 import Html exposing (canvas)
 import Html.Attributes as Attr
 import Json.Decode as D
-import Sound exposing (Sound)
 
 
 
@@ -33,8 +32,8 @@ type alias Waveform =
 
 type Drawing
     = None
-    | SoundDrawn Sound
-    | Pending Sound
+    | SoundDrawn String
+    | Pending String
 
 
 init : Waveform
@@ -46,7 +45,7 @@ init =
 
 type Msg
     = GotSize Int
-    | ChgSound Sound
+    | ChgSound String
     | GotDrawn (Result D.Error String)
 
 
@@ -57,7 +56,7 @@ update msg wave =
             ( { wave | size = size }
             , case wave.drawn of
                 SoundDrawn s ->
-                    requestSoundDraw <| Sound.toString s
+                    requestSoundDraw s
 
                 _ ->
                     Cmd.none
@@ -68,18 +67,18 @@ update msg wave =
                 ( wave, Cmd.none )
 
             else
-                ( { wave | drawn = Pending s }, requestSoundDraw <| Sound.toString s )
+                ( { wave | drawn = Pending s }, requestSoundDraw s )
 
         GotDrawn res ->
             case res of
                 Ok str ->
                     case wave.drawn of
                         Pending s ->
-                            if Sound.toString s == str then
+                            if s == str then
                                 ( { wave | drawn = SoundDrawn s }, Cmd.none )
 
                             else
-                                ( wave, requestSoundDraw <| Sound.toString s )
+                                ( wave, requestSoundDraw s )
 
                         _ ->
                             ( wave, Cmd.none )

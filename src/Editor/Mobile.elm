@@ -76,7 +76,7 @@ type alias Model =
     , engine : Engine
     , interact : Interact.State Interactable Zone
     , pack : Pack
-    , wave : ( Waveform, Maybe Sound ) -- TODO Second source of truth with edit? Could be just Bool
+    , wave : Waveform
     , svg : PanSvg.Model
     }
 
@@ -170,7 +170,7 @@ init mayMobile mayShared =
     , engine = Engine.init
     , interact = Interact.init
     , pack = Pack.update (Pack.PrepareZoom svg) <| Maybe.withDefault Pack.init <| Maybe.map Tuple.first mayShared
-    , wave = ( Waveform.init, Nothing )
+    , wave = Waveform.init
     , svg = svg
     }
 
@@ -780,14 +780,14 @@ update msg ( model, mobile ) =
                 Result.Ok s ->
                     let
                         ( wave, cmd ) =
-                            Waveform.update (Waveform.GotSize <| floor s.width) <| Tuple.first model.wave
+                            Waveform.update (Waveform.GotSize <| floor s.width) model.wave
                     in
                     { return
                         | model =
                             { model
                                 | svg = PanSvg.update (PanSvg.ScaleSize 1 s) model.svg
                                 , pack = Pack.update (Pack.SvgMsg <| PanSvg.ScaleSize model.pack.scale s) model.pack
-                                , wave = Tuple.mapFirst (always wave) model.wave
+                                , wave = wave
                             }
                         , cmd = Cmd.map WaveMsg cmd
                     }
@@ -798,9 +798,9 @@ update msg ( model, mobile ) =
         WaveMsg subMsg ->
             let
                 ( wave, cmd ) =
-                    Waveform.update subMsg <| Tuple.first model.wave
+                    Waveform.update subMsg model.wave
             in
-            { return | model = { model | wave = Tuple.mapFirst (always wave) model.wave }, cmd = Cmd.map WaveMsg cmd }
+            { return | model = { model | wave = wave }, cmd = Cmd.map WaveMsg cmd }
 
         -- TODO use some pattern like outMessage package? or elm-state? elm-return?
         -- TODO move all that in Editor.Interacting, and manage then
@@ -934,24 +934,27 @@ viewExtraTools model =
 viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
-        ( wavePercent, percentMsg, viewContentEdit ) =
+        ( wavePercent, percentMsg, viewWave ) =
             case model.edit of
                 [ id ] ->
-                    ( (Coll.get id mobile.gears).wheel.startPercent
+                    let
+                        g =
+                            Coll.get id mobile.gears
+                    in
+                    ( g.wheel.startPercent
                     , \f -> WheelMsgs [ ( ( id, [] ), Wheel.ChangeStart f ) ]
-                    , (Coll.get id mobile.gears).wheel.viewContent
+                    , case Wheel.getContent g of
+                        Content.S s ->
+                            (model.wave.drawn == (Waveform.SoundDrawn <| Sound.toString s))
+                                && g.wheel.viewContent
+                                && (model.tool == Edit)
+
+                        _ ->
+                            False
                     )
 
                 _ ->
                     ( 0, always NoMsg, False )
-
-        viewWave =
-            case ( Tuple.second model.wave, (Tuple.first model.wave).drawn ) of
-                ( Just s1, Waveform.SoundDrawn s2 ) ->
-                    s1 == s2 && model.tool == Edit && viewContentEdit
-
-                _ ->
-                    False
 
         getMod : Id Geer -> Wheel.Mod
         getMod id =
@@ -1018,7 +1021,7 @@ viewContent ( model, mobile ) =
                 IPacked
                 IPack
                 InteractMsg
-        , Element.inFront <| Waveform.view viewWave (Tuple.first model.wave) wavePercent percentMsg
+        , Element.inFront <| Waveform.view viewWave model.wave wavePercent percentMsg
         ]
     <|
         Element.html <|
@@ -2179,12 +2182,12 @@ interactSelectEdit event mobile model =
                 Content.S s ->
                     let
                         ( wave, cmd ) =
-                            Waveform.update (Waveform.ChgSound s) <| Tuple.first model.wave
+                            Waveform.update (Waveform.ChgSound <| Sound.toString s) model.wave
                     in
-                    ( { model | edit = [ id ], wave = ( wave, Just s ) }, Cmd.map WaveMsg cmd )
+                    ( { model | edit = [ id ], wave = wave }, Cmd.map WaveMsg cmd )
 
                 _ ->
-                    ( { model | edit = [ id ], wave = Tuple.mapSecond (always Nothing) model.wave }, Cmd.none )
+                    ( { model | edit = [ id ] }, Cmd.none )
 
         ( IWheel ( id, _ ), Interact.Clicked _ ) ->
             ( { model | edit = id :: model.edit }, Cmd.none )
