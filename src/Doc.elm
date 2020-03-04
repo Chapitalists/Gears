@@ -160,7 +160,18 @@ update msg doc =
                             ( doc, Cmd.none )
 
                 Play ->
-                    update (MobileMsg <| Editor.ToggleEngine) doc
+                    case doc.editor.tool of
+                        Editor.Play _ _ ->
+                            update (MobileMsg <| Editor.ToggleEngine) doc
+
+                        Editor.Edit True ->
+                            update (MobileMsg <| Editor.StopGear) doc
+
+                        Editor.Edit False ->
+                            update (MobileMsg <| Editor.PlayGear) doc
+
+                        _ ->
+                            ( doc, Cmd.none )
 
                 Suppr ->
                     case ( doc.editor.edit, doc.editor.tool ) of

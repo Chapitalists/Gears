@@ -181,7 +181,7 @@ type Msg
     | ChangedMode Mode
       -- TODO EngineMsg ?
     | ToggleEngine
-    | PlayGear (Id Geer)
+    | PlayGear
     | StopGear
     | ToggleRecord Bool
     | GotRecord (Result D.Error String)
@@ -321,12 +321,12 @@ update msg ( model, mobile ) =
                 Err err ->
                     Debug.log (D.errorToString err) return
 
-        PlayGear id ->
+        PlayGear ->
             case model.tool of
                 Edit _ ->
                     let
                         ( engine, v ) =
-                            Engine.addPlaying [ id ] mobile.gears model.engine
+                            Engine.addPlaying model.edit mobile.gears model.engine
                     in
                     { return | model = { model | engine = engine, tool = Edit True }, toEngine = v }
 
@@ -947,27 +947,26 @@ viewExtraTools model =
                 ]
 
             Edit play ->
-                case model.edit of
-                    [ id ] ->
-                        [ Input.button [ centerX ]
-                            { label =
+                if not <| List.isEmpty model.edit then
+                    [ Input.button [ centerX ]
+                        { label =
+                            if play then
+                                text "Stop"
+
+                            else
+                                text "Entendre"
+                        , onPress =
+                            Just <|
                                 if play then
-                                    text "Stop"
+                                    StopGear
 
                                 else
-                                    text "Entendre"
-                            , onPress =
-                                Just <|
-                                    if play then
-                                        StopGear
+                                    PlayGear
+                        }
+                    ]
 
-                                    else
-                                        PlayGear id
-                            }
-                        ]
-
-                    _ ->
-                        []
+                else
+                    []
 
             _ ->
                 []
@@ -2049,7 +2048,7 @@ manageInteractEvent event model mobile =
                                                 ret =
                                                     update StopGear ( newModel, mobile )
                                             in
-                                            { ret | model = newModel, cmd = Cmd.batch [ cmd, ret.cmd ] }
+                                            { ret | cmd = Cmd.batch [ cmd, ret.cmd ] }
 
                                         Nothing ->
                                             case model.edit of
