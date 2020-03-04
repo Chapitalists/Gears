@@ -9,7 +9,7 @@ import Data.Gear as Gear
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
 import Data.Wheel as Wheel exposing (Conteet, Wheel)
 import Dict
-import Editor.Interacting exposing (Interactable(..), Zone(..))
+import Editor.Interacting exposing (..)
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Border as Border
@@ -831,6 +831,9 @@ update msg ( model, mobile ) =
                                         ZPack ->
                                             newModel.pack.svg
 
+                                        _ ->
+                                            Debug.todo "No pos map if Zone isn’t SVG"
+
                                 toInPos z p =
                                     PanSvg.mapIn p <| svgFromZone z
 
@@ -841,18 +844,22 @@ update msg ( model, mobile ) =
                                                 startZone =
                                                     Tuple.second info.start
                                             in
-                                            { e
-                                                | action =
-                                                    Interact.Dragged
-                                                        { info
-                                                            | start = Tuple.mapFirst (toInPos startZone) info.start
-                                                            , oldPos = toInPos dragZone info.oldPos
-                                                            , newPos = toInPos dragZone info.newPos
-                                                            , startD = Vec.scale (PanSvg.getScale <| svgFromZone startZone) info.startD
-                                                        }
-                                                        dragZone
-                                                        k
-                                            }
+                                            if startZone == ZWave then
+                                                e
+
+                                            else
+                                                { e
+                                                    | action =
+                                                        Interact.Dragged
+                                                            { info
+                                                                | start = Tuple.mapFirst (toInPos startZone) info.start
+                                                                , oldPos = toInPos dragZone info.oldPos
+                                                                , newPos = toInPos dragZone info.newPos
+                                                                , startD = Vec.scale (PanSvg.getScale <| svgFromZone startZone) info.startD
+                                                            }
+                                                            dragZone
+                                                            k
+                                                }
 
                                         _ ->
                                             e
@@ -934,15 +941,17 @@ viewExtraTools model =
 viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
-        ( wavePercent, percentMsg, viewWave ) =
+        ( wavePoints, viewWave ) =
             case model.edit of
                 [ id ] ->
                     let
                         g =
                             Coll.get id mobile.gears
+
+                        ( start, end ) =
+                            Wheel.getLoopPercents g
                     in
-                    ( g.wheel.startPercent
-                    , \f -> WheelMsgs [ ( ( id, [] ), Wheel.ChangeStart f ) ]
+                    ( { offset = g.wheel.startPercent, start = start, end = end }
                     , case Wheel.getContent g of
                         Content.S s ->
                             (model.wave.drawn == (Waveform.SoundDrawn <| Sound.toString s))
@@ -954,7 +963,7 @@ viewContent ( model, mobile ) =
                     )
 
                 _ ->
-                    ( 0, always NoMsg, False )
+                    ( { offset = 0, start = 0, end = 0 }, False )
 
         getMod : Id Geer -> Wheel.Mod
         getMod id =
@@ -1021,7 +1030,13 @@ viewContent ( model, mobile ) =
                 IPacked
                 IPack
                 InteractMsg
-        , Element.inFront <| Waveform.view viewWave model.wave wavePercent percentMsg
+        , Element.inFront <|
+            Waveform.view
+                viewWave
+                model.wave
+                wavePoints
+                model.interact
+                InteractMsg
         ]
     <|
         Element.html <|
@@ -1978,12 +1993,27 @@ manageInteractEvent event model mobile =
                                 Just ret ->
                                     { return | model = ret.model, mobile = ret.mobile, toUndo = ret.toUndo }
 
-                                _ ->
-                                    let
-                                        ( newModel, cmd ) =
-                                            interactSelectEdit event mobile model
-                                    in
-                                    { return | model = newModel, cmd = cmd }
+                                Nothing ->
+                                    case interactSelectEdit event mobile model of
+                                        Just ( newModel, cmd ) ->
+                                            { return | model = newModel, cmd = cmd }
+
+                                        Nothing ->
+                                            case model.edit of
+                                                [ id ] ->
+                                                    let
+                                                        g =
+                                                            Coll.get id mobile.gears
+                                                    in
+                                                    case interactWave g event model mobile of
+                                                        Just subMsg ->
+                                                            update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
+
+                                                        Nothing ->
+                                                            return
+
+                                                _ ->
+                                                    return
 
 
 interactPlay : Bool -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
@@ -2174,7 +2204,7 @@ interactHarmonize event model mobile =
             return
 
 
-interactSelectEdit : Interact.Event Interactable Zone -> Mobeel -> Model -> ( Model, Cmd Msg )
+interactSelectEdit : Interact.Event Interactable Zone -> Mobeel -> Model -> Maybe ( Model, Cmd Msg )
 interactSelectEdit event mobile model =
     case ( event.item, event.action ) of
         ( IWheel ( id, _ ), Interact.Clicked ( _, False, False ) ) ->
@@ -2184,16 +2214,16 @@ interactSelectEdit event mobile model =
                         ( wave, cmd ) =
                             Waveform.update (Waveform.ChgSound <| Sound.toString s) model.wave
                     in
-                    ( { model | edit = [ id ], wave = wave }, Cmd.map WaveMsg cmd )
+                    Just ( { model | edit = [ id ], wave = wave }, Cmd.map WaveMsg cmd )
 
                 _ ->
-                    ( { model | edit = [ id ] }, Cmd.none )
+                    Just ( { model | edit = [ id ] }, Cmd.none )
 
         ( IWheel ( id, _ ), Interact.Clicked _ ) ->
-            ( { model | edit = id :: model.edit }, Cmd.none )
+            Just ( { model | edit = id :: model.edit }, Cmd.none )
 
         _ ->
-            ( model, Cmd.none )
+            Nothing
 
 
 interactMove :
@@ -2243,6 +2273,43 @@ interactMove event model mobile =
                 , toUndo = Cancel
                 , model = { model | dragging = NoDrag, pack = Pack.update Pack.PackIt model.pack }
                 }
+
+        _ ->
+            Nothing
+
+
+interactWave : Geer -> Interact.Event Interactable Zone -> Model -> Mobeel -> Maybe Wheel.Msg
+interactWave g event model mobile =
+    let
+        move d val =
+            val + (Vec.getX d / toFloat model.wave.size)
+    in
+    case ( event.item, event.action ) of
+        ( IWaveCursor cur, Interact.Dragged { absD } _ _ ) ->
+            case cur of
+                LoopEnd ->
+                    Just <|
+                        Wheel.ChangeLoop
+                            ( Nothing
+                            , Just <| move absD <| Tuple.second <| Wheel.getLoopPercents g
+                            )
+
+                LoopStart ->
+                    Just <|
+                        Wheel.ChangeLoop
+                            ( Just <| move absD <| Tuple.first <| Wheel.getLoopPercents g
+                            , Nothing
+                            )
+
+                StartOffset ->
+                    Just <| Wheel.ChangeStart <| move absD <| g.wheel.startPercent
+
+        ( IWaveSel, Interact.Dragged { absD } _ _ ) ->
+            let
+                mv =
+                    Just << move absD
+            in
+            Just <| Wheel.ChangeLoop <| Tuple.mapBoth mv mv <| Wheel.getLoopPercents g
 
         _ ->
             Nothing

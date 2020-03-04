@@ -1,11 +1,12 @@
 port module Waveform exposing (..)
 
+import Editor.Interacting exposing (..)
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Border as Border
-import Element.Input as Input
 import Html exposing (canvas)
 import Html.Attributes as Attr
+import Interact
 import Json.Decode as D
 
 
@@ -22,6 +23,11 @@ port soundDrawn : (D.Value -> msg) -> Sub msg
 canvasId : String
 canvasId =
     "waveform"
+
+
+border : Int
+border =
+    2
 
 
 type alias Waveform =
@@ -53,7 +59,7 @@ update : Msg -> Waveform -> ( Waveform, Cmd Msg )
 update msg wave =
     case msg of
         GotSize size ->
-            ( { wave | size = size }
+            ( { wave | size = size - 2 * border }
             , case wave.drawn of
                 SoundDrawn s ->
                     requestSoundDraw s
@@ -92,34 +98,99 @@ sub =
     soundDrawn (GotDrawn << D.decodeValue D.string)
 
 
-view : Bool -> Waveform -> Float -> (Float -> msg) -> Element msg
-view visible { size } percent chg =
+view :
+    Bool
+    -> Waveform
+    -> { offset : Float, start : Float, end : Float }
+    -> Interact.State Interactable Zone
+    -> (Interact.Msg Interactable Zone -> msg)
+    -> Element msg
+view visible wf cursors interState wrapInter =
     let
-        border =
-            2
+        toPx =
+            round << ((*) <| toFloat wf.size)
     in
     el
-        [ htmlAttribute <| Attr.hidden <| not visible
-        , Border.color <| rgb 0 0 0
-        , Border.width border
-        , Bg.color <| rgb 1 1 1
-        , alignBottom
-        , inFront <|
-            Input.slider [ htmlAttribute <| Attr.hidden <| not visible, height fill ]
-                { label = Input.labelHidden "Point de départ"
-                , onChange = chg
-                , min = 0
-                , max = 1
-                , value = percent
-                , thumb = Input.thumb [ width <| minimum 4 shrink, height fill, Bg.color <| rgb 0.2 0.2 0.8 ]
-                , step = Nothing
-                }
-        ]
+        (if visible then
+            (List.map (htmlAttribute << Attr.map wrapInter) <| Interact.dragSpaceEvents interState ZWave)
+                ++ [ Border.color <| rgb 0 0 0
+                   , Border.width border
+                   , Bg.color <| rgb 1 1 1
+                   , alignBottom
+                   ]
+                ++ List.map (mapAttribute wrapInter)
+                    [ selection ( toPx 0, toPx cursors.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                    , selection ( toPx cursors.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                    , selection ( toPx cursors.start, toPx cursors.end ) (Just IWaveSel) <| rgba 0 0 0 0
+                    , cursor (toPx cursors.start) LoopStart
+                    , cursor (toPx cursors.end) LoopEnd
+                    , cursor (toPx cursors.offset) StartOffset
+                    ]
+
+         else
+            []
+        )
     <|
         html <|
             canvas
                 [ Attr.hidden <| not visible
                 , Attr.id canvasId
-                , Attr.width (size - 2 * border)
+                , Attr.width wf.size
                 ]
                 []
+
+
+cursor : Int -> Cursor -> Attribute (Interact.Msg Interactable zone)
+cursor pos cur =
+    inFront <|
+        el
+            ([ htmlAttribute <| Attr.style "cursor" "ew-resize"
+             , Border.width <| border
+             , height fill
+             , moveRight <| toFloat <| pos - border
+             , inFront <|
+                el
+                    ([ htmlAttribute <| Attr.style "cursor" "grab"
+                     , height <| px <| border * 8
+                     , width <| px <| border * 8
+                     , Border.rounded <| border * 4
+                     , Bg.color <| rgb 0 0 0
+                     , moveLeft <| toFloat <| border * 4
+                     ]
+                        ++ (case cur of
+                                LoopStart ->
+                                    [ alignTop, moveUp <| toFloat border ]
+
+                                LoopEnd ->
+                                    [ alignBottom, moveDown <| toFloat border ]
+
+                                StartOffset ->
+                                    [ centerY ]
+                           )
+                    )
+                    none
+             ]
+                ++ (List.map htmlAttribute <| Interact.draggableEvents <| IWaveCursor cur)
+            )
+            none
+
+
+selection : ( Int, Int ) -> Maybe Interactable -> Color -> Attribute (Interact.Msg Interactable zone)
+selection ( a, b ) mayInter color =
+    inFront <|
+        el
+            ([ Bg.color color
+             , width <| px (b - a + 1)
+             , height fill
+             , moveRight <| toFloat <| a
+             ]
+                ++ (Maybe.withDefault [] <|
+                        Maybe.map
+                            (List.map htmlAttribute
+                                << (::) (Attr.style "cursor" "move")
+                                << Interact.draggableEvents
+                            )
+                            mayInter
+                   )
+            )
+            none
