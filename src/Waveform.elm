@@ -33,6 +33,7 @@ border =
 type alias Waveform =
     { size : Int
     , drawn : Drawing
+    , sel : Maybe ( Int, Int )
     }
 
 
@@ -46,13 +47,26 @@ init : Waveform
 init =
     { size = 1000
     , drawn = None
+    , sel = Nothing
     }
+
+
+getSelPercents : Waveform -> Maybe ( Float, Float )
+getSelPercents { sel, size } =
+    let
+        toPercent px =
+            toFloat px / toFloat size
+    in
+    Maybe.map (Tuple.mapBoth toPercent toPercent) sel
 
 
 type Msg
     = GotSize Int
     | ChgSound String
     | GotDrawn (Result D.Error String)
+    | Select ( Float, Float )
+    | MoveSel Float
+    | CancelSel
 
 
 update : Msg -> Waveform -> ( Waveform, Cmd Msg )
@@ -92,6 +106,31 @@ update msg wave =
                 Err err ->
                     Debug.log ("Error while drawing " ++ D.errorToString err) ( wave, Cmd.none )
 
+        Select ( centerPx, percentLength ) ->
+            let
+                halfSel =
+                    round (percentLength * toFloat wave.size / 2)
+
+                safeCenter =
+                    clamp halfSel (wave.size - halfSel) <| round centerPx
+            in
+            ( { wave | sel = Just ( safeCenter - halfSel, safeCenter + halfSel ) }, Cmd.none )
+
+        MoveSel d ->
+            case wave.sel of
+                Just ( px1, px2 ) ->
+                    let
+                        move =
+                            (+) <| clamp -px1 (wave.size - px2) <| round d
+                    in
+                    ( { wave | sel = Just ( move px1, move px2 ) }, Cmd.none )
+
+                Nothing ->
+                    ( wave, Cmd.none )
+
+        CancelSel ->
+            ( { wave | sel = Nothing }, Cmd.none )
+
 
 sub : Sub Msg
 sub =
@@ -105,10 +144,10 @@ view :
     -> Interact.State Interactable Zone
     -> (Interact.Msg Interactable Zone -> msg)
     -> Element msg
-view visible wf cursors interState wrapInter =
+view visible wave cursors interState wrapInter =
     let
         toPx =
-            round << ((*) <| toFloat wf.size)
+            round << ((*) <| toFloat wave.size)
     in
     el
         (if visible then
@@ -119,13 +158,21 @@ view visible wf cursors interState wrapInter =
                    , alignBottom
                    ]
                 ++ List.map (mapAttribute wrapInter)
-                    [ selection ( toPx 0, toPx cursors.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                    , selection ( toPx cursors.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                    , selection ( toPx cursors.start, toPx cursors.end ) (Just IWaveSel) <| rgba 0 0 0 0
-                    , cursor (toPx cursors.start) LoopStart
-                    , cursor (toPx cursors.end) LoopEnd
-                    , cursor (toPx cursors.offset) StartOffset
-                    ]
+                    ([ selection ( toPx 0, toPx cursors.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                     , selection ( toPx cursors.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                     , selection ( toPx cursors.start, toPx cursors.end ) (Just IWaveSel) <| rgba 0 0 0 0
+                     , cursor (toPx cursors.start) LoopStart
+                     , cursor (toPx cursors.end) LoopEnd
+                     , cursor (toPx cursors.offset) StartOffset
+                     ]
+                        ++ (case wave.sel of
+                                Just points ->
+                                    [ selection points Nothing <| rgba 0.3 0.3 0.3 0.3 ]
+
+                                Nothing ->
+                                    []
+                           )
+                    )
 
          else
             []
@@ -135,7 +182,7 @@ view visible wf cursors interState wrapInter =
             canvas
                 [ Attr.hidden <| not visible
                 , Attr.id canvasId
-                , Attr.width wf.size
+                , Attr.width wave.size
                 ]
                 []
 

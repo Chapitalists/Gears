@@ -137,6 +137,7 @@ type Dragging
     | SizeChange
     | Moving
     | Packing
+    | Waving
     | Packed Vec2 (Id Packed)
     | Content ( Vec2, Float )
     | ChgContent (Id Geer) Dragging
@@ -844,7 +845,7 @@ update msg ( model, mobile ) =
                                                 startZone =
                                                     Tuple.second info.start
                                             in
-                                            if startZone == ZWave then
+                                            if startZone == ZWave || dragZone == ZWave then
                                                 e
 
                                             else
@@ -1713,6 +1714,7 @@ doChangeContent id c mayColor model mobile =
             List.foldl (\el -> Coll.update el chSound) mobile.gears group
 
         newModel =
+            -- TODO Why !!??
             { model | mode = Normal }
     in
     case mayColor of
@@ -1780,7 +1782,7 @@ manageInteractEvent event model mobile =
         Move ->
             case interactMove event model mobile of
                 Just ret ->
-                    { return | model = ret.model, mobile = ret.mobile, toUndo = ret.toUndo }
+                    ret
 
                 _ ->
                     case ( event.item, event.action ) of
@@ -1991,7 +1993,7 @@ manageInteractEvent event model mobile =
                         Edit ->
                             case interactMove event model mobile of
                                 Just ret ->
-                                    { return | model = ret.model, mobile = ret.mobile, toUndo = ret.toUndo }
+                                    ret
 
                                 Nothing ->
                                     case interactSelectEdit event mobile model of
@@ -2230,49 +2232,156 @@ interactMove :
     Interact.Event Interactable Zone
     -> Model
     -> Mobeel
-    -> Maybe { model : Model, mobile : Mobeel, toUndo : ToUndo }
+    -> Maybe Return
 interactMove event model mobile =
+    let
+        return =
+            { model = model
+            , mobile = mobile
+            , toUndo = NOOP
+            , cmd = Cmd.none
+            , toEngine = []
+            , outMsg = Nothing
+            }
+    in
     case ( event.item, event.action, model.dragging ) of
         ( IWheel ( id, [] ), Interact.Dragged { newPos } ZSurface _, _ ) ->
             let
                 gearUp =
                     Gear.update <| Gear.NewPos newPos
+
+                ( wave, cmd ) =
+                    Waveform.update Waveform.CancelSel model.wave
             in
             Just
-                { model = { model | dragging = Moving, pack = Pack.update (Pack.DragTo Nothing) model.pack }
-                , mobile = { mobile | gears = Coll.update id gearUp mobile.gears }
-                , toUndo = Group
+                { return
+                    | model =
+                        { model
+                            | dragging = Moving
+                            , pack = Pack.update (Pack.DragTo Nothing) model.pack
+                            , wave = wave
+                        }
+                    , mobile = { mobile | gears = Coll.update id gearUp mobile.gears }
+                    , toUndo = Group
+                    , cmd = Cmd.map WaveMsg cmd
                 }
 
         ( _, Interact.DragEnded _, Moving ) ->
-            Just { model = { model | dragging = NoDrag }, mobile = mobile, toUndo = Do }
+            Just { return | model = { model | dragging = NoDrag }, mobile = mobile, toUndo = Do }
 
         ( IWheel ( id, [] ), Interact.Dragged { newPos } ZPack _, _ ) ->
             Just
-                { mobile = mobile
-                , toUndo = Cancel
-                , model =
-                    { model
-                        | dragging = Packing
-                        , pack =
-                            Pack.update
-                                (Pack.DragTo <|
-                                    Just
-                                        { pos = newPos
-                                        , length = Harmo.getLengthId id mobile.gears
-                                        , wheel = (Coll.get id mobile.gears).wheel
-                                        }
-                                )
-                                model.pack
-                    }
+                { return
+                    | toUndo = Cancel
+                    , model =
+                        { model
+                            | dragging = Packing
+                            , pack =
+                                Pack.update
+                                    (Pack.DragTo <|
+                                        Just
+                                            { pos = newPos
+                                            , length = Harmo.getLengthId id mobile.gears
+                                            , wheel = (Coll.get id mobile.gears).wheel
+                                            }
+                                    )
+                                    model.pack
+                        }
                 }
 
         ( IWheel ( id, [] ), Interact.DragEnded True, Packing ) ->
             Just
-                { mobile = mobile
-                , toUndo = Cancel
-                , model = { model | dragging = NoDrag, pack = Pack.update Pack.PackIt model.pack }
+                { return
+                    | model = { model | dragging = NoDrag, pack = Pack.update Pack.PackIt model.pack }
                 }
+
+        ( IWheel _, Interact.Dragged { absD } ZWave _, Waving ) ->
+            let
+                ( wave, cmd ) =
+                    Waveform.update (Waveform.MoveSel <| Vec.getX absD) model.wave
+            in
+            Just
+                { return
+                    | toUndo = Cancel
+                    , model = { model | wave = wave }
+                    , cmd = Cmd.map WaveMsg cmd
+                }
+
+        ( IWheel ( id, [] ), Interact.Dragged { oldPos } ZWave _, _ ) ->
+            case model.edit of
+                [ waveId ] ->
+                    let
+                        waveG =
+                            Coll.get waveId mobile.gears
+
+                        ( start, end ) =
+                            Wheel.getLoopPercents waveG
+
+                        selPercentLength =
+                            Harmo.getLengthId id mobile.gears * (end - start) / Harmo.getLength waveG.harmony mobile.gears
+
+                        ( wave, cmd ) =
+                            Waveform.update (Waveform.Select ( Vec.getX oldPos, selPercentLength )) model.wave
+                    in
+                    Just
+                        { return
+                            | toUndo = Cancel
+                            , model =
+                                { model
+                                    | dragging = Waving
+                                    , wave = wave
+                                }
+                            , cmd = Cmd.map WaveMsg cmd
+                        }
+
+                _ ->
+                    Nothing
+
+        ( IWheel ( id, [] ), Interact.DragEnded True, Waving ) ->
+            case model.edit of
+                [ waveId ] ->
+                    let
+                        waveG =
+                            Coll.get waveId mobile.gears
+
+                        waveW =
+                            waveG.wheel
+
+                        mayLoop =
+                            Waveform.getSelPercents model.wave
+                    in
+                    case ( mayLoop, Wheel.getWheelContent waveW ) of
+                        ( Just ( start, end ), Content.S s ) ->
+                            let
+                                ( wave, cmd ) =
+                                    Waveform.update Waveform.CancelSel model.wave
+
+                                ret =
+                                    doChangeContent
+                                        id
+                                        (Content.S <| Sound.setLoop ( Just start, Just end ) s)
+                                        Nothing
+                                        model
+                                        mobile
+
+                                newModel =
+                                    ret.model
+
+                                newMobile =
+                                    ret.mobile
+                            in
+                            Just
+                                { ret
+                                    | model = { newModel | dragging = NoDrag, wave = wave, edit = [ id ] }
+                                    , mobile = CommonData.updateWheel ( id, [] ) (Wheel.ChangeStart start) newMobile
+                                    , cmd = Cmd.batch [ ret.cmd, Cmd.map WaveMsg cmd ]
+                                }
+
+                        _ ->
+                            Nothing
+
+                _ ->
+                    Nothing
 
         _ ->
             Nothing
