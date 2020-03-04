@@ -209,6 +209,14 @@ update msg doc =
                                                         ++ [ ( Common.getName id mobile, id ) ]
                                                 )
                                                 newDoc
+
+                                        Editor.UnSolo ->
+                                            ( newDoc
+                                            , Cmd.batch <|
+                                                List.map toEngine <|
+                                                    Editor.updateAllMuteToEngine newDoc.editor <|
+                                                        Data.current newDoc.data
+                                            )
                                 )
                         )
             in

@@ -228,6 +228,7 @@ type alias Return =
 
 type DocMsg
     = Inside Identifier
+    | UnSolo
 
 
 type ToUndo
@@ -272,7 +273,11 @@ update msg ( model, mobile ) =
             }
 
         ChangedMode mode ->
-            { return | model = { model | mode = mode } }
+            if model.mode == Solo && mode /= Solo then
+                { return | model = { model | mode = mode }, toUndo = Cancel, outMsg = Just UnSolo }
+
+            else
+                { return | model = { model | mode = mode } }
 
         ToggleEngine ->
             if Coll.maybeGet mobile.motor mobile.gears == Nothing then
@@ -1830,18 +1835,25 @@ manageInteractEvent event model mobile =
                     case ( event.item, event.action ) of
                         ( IWheel ( id, [] ), Interact.Holded ) ->
                             -- TODO should work also for beads (not []), Mobile.mapWheels ?
-                            { return
-                                | mobile =
+                            let
+                                newMobile =
                                     List.foldl
                                         (\( idd, g ) -> CommonData.updateWheel ( idd, [] ) <| (Wheel.Mute <| idd /= id))
                                         mobile
                                     <|
                                         Coll.toList mobile.gears
+                            in
+                            { return
+                                | mobile = newMobile
                                 , toUndo = Group
+                                , toEngine = updateAllMuteToEngine model newMobile
                             }
 
-                        ( IWheel ( id, [] ), Interact.HoldEnded ) ->
-                            { return | toUndo = Cancel }
+                        ( _, Interact.HoldEnded ) ->
+                            { return | toUndo = Cancel, outMsg = Just UnSolo }
+
+                        ( _, Interact.DragEnded _ ) ->
+                            { return | toUndo = Cancel, outMsg = Just UnSolo }
 
                         _ ->
                             return
@@ -2422,6 +2434,12 @@ interactWave g event model mobile =
 
         _ ->
             Nothing
+
+
+updateAllMuteToEngine : Model -> Mobeel -> List E.Value
+updateAllMuteToEngine model mobile =
+    List.concatMap (\( idd, g ) -> Engine.muted ( idd, [] ) g.wheel.mute model.engine) <|
+        Coll.toList mobile.gears
 
 
 colorGen : Random.Generator Color.Color
