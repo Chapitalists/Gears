@@ -154,7 +154,7 @@ update msg doc =
                             update (MobileMsg <| Editor.ChangedTool <| Editor.Harmonize) doc
 
                         3 ->
-                            update (MobileMsg <| Editor.ChangedTool <| Editor.Edit) doc
+                            update (MobileMsg <| Editor.ChangedTool <| Editor.Edit False) doc
 
                         _ ->
                             ( doc, Cmd.none )
@@ -164,7 +164,7 @@ update msg doc =
 
                 Suppr ->
                     case ( doc.editor.edit, doc.editor.tool ) of
-                        ( [ id ], Editor.Edit ) ->
+                        ( [ id ], Editor.Edit _ ) ->
                             update (MobileMsg <| Editor.DeleteWheel ( id, [] )) doc
 
                         _ ->

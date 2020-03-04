@@ -91,7 +91,7 @@ defaultAddPos =
 
 
 type Tool
-    = Edit
+    = Edit Bool -- Playing
     | Play Bool Bool -- Playing, Recording
     | Harmonize
 
@@ -182,7 +182,7 @@ type Msg
       -- TODO EngineMsg ?
     | ToggleEngine
     | PlayGear (Id Geer)
-    | StopGear (Id Geer)
+    | StopGear
     | ToggleRecord Bool
     | GotRecord (Result D.Error String)
       -- COLLAR EDIT
@@ -262,11 +262,12 @@ update msg ( model, mobile ) =
                                     NoDrag
 
                                 _ ->
-                                    if tool == Edit then
-                                        NoDrag
+                                    case tool of
+                                        Edit _ ->
+                                            NoDrag
 
-                                    else
-                                        model.dragging
+                                        _ ->
+                                            model.dragging
                         , engine = Engine.init
                     }
                 , toEngine = [ Engine.stop ]
@@ -321,14 +322,24 @@ update msg ( model, mobile ) =
                     Debug.log (D.errorToString err) return
 
         PlayGear id ->
-            let
-                ( engine, v ) =
-                    Engine.addPlaying [ id ] mobile.gears model.engine
-            in
-            { return | model = { model | engine = engine }, toEngine = v }
+            case model.tool of
+                Edit _ ->
+                    let
+                        ( engine, v ) =
+                            Engine.addPlaying [ id ] mobile.gears model.engine
+                    in
+                    { return | model = { model | engine = engine, tool = Edit True }, toEngine = v }
 
-        StopGear id ->
-            { return | model = { model | engine = Engine.init }, toEngine = [ Engine.stop ] }
+                _ ->
+                    return
+
+        StopGear ->
+            case model.tool of
+                Edit _ ->
+                    { return | model = { model | engine = Engine.init, tool = Edit False }, toEngine = [ Engine.stop ] }
+
+                _ ->
+                    return
 
         CursorRight ->
             case model.edit of
@@ -895,7 +906,7 @@ viewTools model =
         , options =
             [ Input.option (Play False False) <| text "Jeu (W)"
             , Input.option Harmonize <| text "Harmonie (X)"
-            , Input.option Edit <| text "Édition (C)"
+            , Input.option (Edit False) <| text "Édition (C)"
             ]
         , selected = Just model.tool
         , label = Input.labelHidden "Outils"
@@ -935,6 +946,29 @@ viewExtraTools model =
                     }
                 ]
 
+            Edit play ->
+                case model.edit of
+                    [ id ] ->
+                        [ Input.button [ centerX ]
+                            { label =
+                                if play then
+                                    text "Stop"
+
+                                else
+                                    text "Entendre"
+                            , onPress =
+                                Just <|
+                                    if play then
+                                        StopGear
+
+                                    else
+                                        PlayGear id
+                            }
+                        ]
+
+                    _ ->
+                        []
+
             _ ->
                 []
         )
@@ -958,11 +992,10 @@ viewContent ( model, mobile ) =
                             Wheel.getLoopPercents g
                     in
                     ( { offset = g.wheel.startPercent, start = start, end = end }
-                    , case Wheel.getContent g of
-                        Content.S s ->
+                    , case ( model.tool, Wheel.getContent g ) of
+                        ( Edit _, Content.S s ) ->
                             (model.wave.drawn == (Waveform.SoundDrawn <| Sound.toString s))
                                 && g.wheel.viewContent
-                                && (model.tool == Edit)
 
                         _ ->
                             False
@@ -973,7 +1006,7 @@ viewContent ( model, mobile ) =
 
         getMod : Id Geer -> Wheel.Mod
         getMod id =
-            if model.tool == Edit && List.member id model.edit then
+            if (model.tool == Edit False || model.tool == Edit True) && List.member id model.edit then
                 Wheel.Selected <|
                     (List.length model.edit > 1)
                         && ((List.head <| List.reverse model.edit) == Just id)
@@ -989,7 +1022,7 @@ viewContent ( model, mobile ) =
                                 ( Harmonize, Interact.Hover ) ->
                                     Wheel.Resizing
 
-                                ( Edit, Interact.Hover ) ->
+                                ( Edit _, Interact.Hover ) ->
                                     Wheel.Selectable
 
                                 _ ->
@@ -1221,7 +1254,7 @@ viewContent ( model, mobile ) =
                                                     []
                                            )
 
-                                Edit ->
+                                Edit _ ->
                                     case model.edit of
                                         [ id ] ->
                                             let
@@ -1330,7 +1363,7 @@ viewDetails model mobile =
 
         _ ->
             case model.tool of
-                Edit ->
+                Edit _ ->
                     viewEditDetails model mobile
 
                 Harmonize ->
@@ -1916,11 +1949,12 @@ manageInteractEvent event model mobile =
                         [ id ] ->
                             case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
                                 Content.C _ ->
-                                    if model.tool == Edit then
-                                        update (NewBead <| Content.S s) ( model, mobile )
+                                    case model.tool of
+                                        Edit _ ->
+                                            update (NewBead <| Content.S s) ( model, mobile )
 
-                                    else
-                                        update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
+                                        _ ->
+                                            update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
 
                                 _ ->
                                     update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
@@ -1942,15 +1976,16 @@ manageInteractEvent event model mobile =
                         [ id ] ->
                             case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
                                 Content.C _ ->
-                                    if model.tool == Edit then
-                                        let
-                                            p =
-                                                Coll.get pId model.pack.wheels
-                                        in
-                                        update (UnpackBead ( p.wheel, p.length ) True) ( model, mobile )
+                                    case model.tool of
+                                        Edit _ ->
+                                            let
+                                                p =
+                                                    Coll.get pId model.pack.wheels
+                                            in
+                                            update (UnpackBead ( p.wheel, p.length ) True) ( model, mobile )
 
-                                    else
-                                        return
+                                        _ ->
+                                            return
 
                                 _ ->
                                     return
@@ -2002,7 +2037,7 @@ manageInteractEvent event model mobile =
                             interactHarmonize event model mobile
 
                         -- EDIT --------
-                        Edit ->
+                        Edit _ ->
                             case interactMove event model mobile of
                                 Just ret ->
                                     ret
@@ -2010,7 +2045,11 @@ manageInteractEvent event model mobile =
                                 Nothing ->
                                     case interactSelectEdit event mobile model of
                                         Just ( newModel, cmd ) ->
-                                            { return | model = newModel, cmd = cmd }
+                                            let
+                                                ret =
+                                                    update StopGear ( newModel, mobile )
+                                            in
+                                            { ret | model = newModel, cmd = Cmd.batch [ cmd, ret.cmd ] }
 
                                         Nothing ->
                                             case model.edit of
