@@ -41,6 +41,31 @@ getLoopPoints (S { startPercent, endPercent, duration }) =
     [ startPercent * duration, endPercent * duration ]
 
 
+getLoopPercents : Sound -> ( Float, Float )
+getLoopPercents (S { startPercent, endPercent }) =
+    ( startPercent, endPercent )
+
+
+setLoop : ( Maybe Float, Maybe Float ) -> Sound -> Sound
+setLoop mays (S s) =
+    case mays of
+        ( Just start, Nothing ) ->
+            S { s | startPercent = clamp 0 s.endPercent start }
+
+        ( Nothing, Just end ) ->
+            S { s | endPercent = clamp s.startPercent 1 end }
+
+        ( Just start, Just end ) ->
+            let
+                safeStart =
+                    clamp 0 1 start
+            in
+            S { s | startPercent = safeStart, endPercent = clamp safeStart 1 end }
+
+        _ ->
+            S s
+
+
 chgPath : Sound -> String -> Sound
 chgPath (S s) p =
     S { s | path = p }

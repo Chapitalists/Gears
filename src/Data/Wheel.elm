@@ -52,6 +52,16 @@ getWheelContent { content } =
             c
 
 
+getLoopPercents : Wheeled g -> ( Float, Float )
+getLoopPercents { wheel } =
+    case wheel.content of
+        C (Content.S s) ->
+            Sound.getLoopPercents s
+
+        _ ->
+            ( 0, 1 )
+
+
 setContent : Conteet -> Wheeled g -> Wheeled g
 setContent c g =
     let
@@ -110,6 +120,7 @@ type Msg
     | ToggleMute
     | Mute Bool
     | ChangeStart Float
+    | ChangeLoop ( Maybe Float, Maybe Float )
     | Named String
     | ChangeColor Color
     | ToggleContentView
@@ -135,7 +146,37 @@ update msg g =
             { g | wheel = { wheel | mute = b } }
 
         ChangeStart percent ->
-            { g | wheel = { wheel | startPercent = percent } }
+            let
+                ( min, max ) =
+                    case wheel.content of
+                        C (Content.S s) ->
+                            Sound.getLoopPercents s
+
+                        _ ->
+                            ( 0, 1 )
+            in
+            { g | wheel = { wheel | startPercent = clamp min max percent } }
+
+        ChangeLoop mayPoints ->
+            case wheel.content of
+                C (Content.S s) ->
+                    let
+                        newSound =
+                            Sound.setLoop mayPoints s
+
+                        ( min, max ) =
+                            Sound.getLoopPercents newSound
+                    in
+                    { g
+                        | wheel =
+                            { wheel
+                                | content = C <| Content.S newSound
+                                , startPercent = clamp min max wheel.startPercent
+                            }
+                    }
+
+                _ ->
+                    g
 
         Named name ->
             if String.all (\c -> Char.isAlphaNum c || c == '-') name then
