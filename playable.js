@@ -2,6 +2,7 @@
 
 // pauseOffset = sound time after the start point = position of the animation in sound time
 // startTime = date of the corresponding start = date of the last 0% of the animation
+// startPercent = percent of the whole sound where to start
 
 function prepare(model, rate = 1) {
     model.paused = true
@@ -63,7 +64,7 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
     }
     if (model.soundName && model.player.output) {
         setVolume(model, volume, mute)
-        model.player.start(t, model.pauseOffset + (model.startPercent * model.duration) + model.loopPoints[0])
+        model.player.start(t, model.pauseOffset + (model.startPercent * model.player.buffer.duration))
     }
     if (model.mobile) {
         model.gears.map((v,i) => play(v, t, model.gears[i], model.volume * volume, model.mute || mute))

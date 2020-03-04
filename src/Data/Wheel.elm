@@ -21,7 +21,7 @@ type alias Wheeled a =
 
 type alias Wheel =
     { name : String
-    , startPercent : Float
+    , startPercent : Float -- Percent of whole sound, not just looped part
     , volume : Float
     , content : WheelContent
     , viewContent : Bool
@@ -227,6 +227,12 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
         circum =
             length * pi
 
+        ( loopStart, loopEnd ) =
+            getLoopPercents { wheel = w }
+
+        tickPercent =
+            (w.startPercent - loopStart) / (loopEnd - loopStart)
+
         ( hoverAttrs, dragAttrs ) =
             Maybe.withDefault ( [], [] ) <|
                 Maybe.map
@@ -300,7 +306,7 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                             , SA.height <| Num tickH
                             , SA.x <| Num (tickW / -2)
                             , SA.y <| Num (tickH / -2)
-                            , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) - (tickH / 2)) ]
+                            , SA.transform [ Rotate (tickPercent * 360) 0 0, Translate 0 ((length / -2) - (tickH / 2)) ]
                             ]
                             []
                          ]
