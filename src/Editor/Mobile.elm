@@ -1159,6 +1159,20 @@ viewContent ( model, mobile ) =
                                                 (Harmo.getLength g.harmony mobile.gears)
                                                 Link.baseColor
                                             ]
+                                                ++ [ S.g [ SA.opacity <| Opacity 0 ] <|
+                                                        List.map
+                                                            (\( idd, gg ) ->
+                                                                Wheel.view gg.wheel
+                                                                    gg.pos
+                                                                    (Harmo.getLength gg.harmony mobile.gears)
+                                                                    Wheel.defaultStyle
+                                                                    (Just ( IWheel << Tuple.pair idd, [] ))
+                                                                    Nothing
+                                                                    ("hoverArtefact-" ++ Gear.toUID idd)
+                                                            )
+                                                        <|
+                                                            Coll.toList mobile.gears
+                                                   ]
 
                                         _ ->
                                             []
