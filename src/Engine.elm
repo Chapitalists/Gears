@@ -79,17 +79,13 @@ stop =
 
 muted : Identifier -> Bool -> Engine -> List E.Value
 muted ( id, list ) mute e =
-    if isPlaying id e then
-        [ E.object
-            [ ( "action", E.string "mute" )
-            , ( "id", E.string <| Gear.toUID id )
-            , ( "beadIndexes", E.list E.int list )
-            , ( "value", E.bool mute )
-            ]
+    [ E.object
+        [ ( "action", E.string "mute" )
+        , ( "id", E.string <| Gear.toUID id )
+        , ( "beadIndexes", E.list E.int list )
+        , ( "value", E.bool mute )
         ]
-
-    else
-        []
+    ]
 
 
 volumeChanged : Identifier -> Float -> Engine -> List E.Value

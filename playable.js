@@ -15,7 +15,6 @@ function prepare(model, rate = 1) {
     }
     if (model.soundName) {
         model.player = new Tone.Player(buffers[model.soundName]).toMaster()
-        setVolume(model)
         model.duration = model.loopPoints[1] - model.loopPoints[0]
         model.player.playbackRate = model.rate = rate * model.duration / model.length
         model.player.setLoopPoints.apply(model.player, model.loopPoints)
@@ -50,6 +49,7 @@ function prepare(model, rate = 1) {
             }, 1/totalDur)
         })
     }
+    setVolume(model)
     return model
 }
 
@@ -63,7 +63,6 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
         Tone.Draw.schedule(() => model.view.animate().play(), t)
     }
     if (model.soundName && model.player.output) {
-        setVolume(model, volume, mute)
         model.player.start(t, model.pauseOffset + (model.startPercent * model.player.buffer.duration))
     }
     if (model.mobile) {
