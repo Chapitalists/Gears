@@ -2260,19 +2260,37 @@ interactSelectEdit : Interact.Event Interactable Zone -> Mobeel -> Model -> Mayb
 interactSelectEdit event mobile model =
     case ( event.item, event.action ) of
         ( IWheel ( id, _ ), Interact.Clicked ( _, False, False ) ) ->
-            case Wheel.getContent <| Coll.get id mobile.gears of
-                Content.S s ->
-                    let
-                        ( wave, cmd ) =
-                            Waveform.update (Waveform.ChgSound <| Sound.toString s) model.wave
-                    in
-                    Just ( { model | edit = [ id ], wave = wave }, Cmd.map WaveMsg cmd )
+            if model.edit == [ id ] then
+                Just ( { model | edit = [] }, Cmd.none )
 
-                _ ->
-                    Just ( { model | edit = [ id ] }, Cmd.none )
+            else
+                case Wheel.getContent <| Coll.get id mobile.gears of
+                    Content.S s ->
+                        let
+                            ( wave, cmd ) =
+                                Waveform.update (Waveform.ChgSound <| Sound.toString s) model.wave
+                        in
+                        Just ( { model | edit = [ id ], wave = wave }, Cmd.map WaveMsg cmd )
+
+                    _ ->
+                        Just ( { model | edit = [ id ] }, Cmd.none )
 
         ( IWheel ( id, _ ), Interact.Clicked _ ) ->
-            Just ( { model | edit = id :: model.edit }, Cmd.none )
+            let
+                already =
+                    List.foldl (\el -> (||) <| el == id) False model.edit
+            in
+            Just
+                ( { model
+                    | edit =
+                        if already then
+                            List.filter ((/=) id) model.edit
+
+                        else
+                            id :: model.edit
+                  }
+                , Cmd.none
+                )
 
         _ ->
             Nothing
