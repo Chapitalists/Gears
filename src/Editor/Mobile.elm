@@ -1546,18 +1546,20 @@ viewEditDetails model mobile =
                                 , html <|
                                     Html.input
                                         [ Html.Attributes.type_ "color"
-                                        , Html.Attributes.value <| colorToString g.wheel.color
+                                        , Html.Attributes.value <| colorToString <| Color.hsl g.wheel.color 1 0.5
                                         , Html.Events.onInput
                                             (\str ->
                                                 WheelMsgs
                                                     [ ( wId
                                                       , Wheel.ChangeColor <|
-                                                            Color.fromRgba
-                                                                { red = hexToFloat <| String.slice 1 3 str
-                                                                , green = hexToFloat <| String.slice 3 5 str
-                                                                , blue = hexToFloat <| String.slice 5 7 str
-                                                                , alpha = 1
-                                                                }
+                                                            (Color.toHsla <|
+                                                                Color.fromRgba
+                                                                    { red = hexToFloat <| String.slice 1 3 str
+                                                                    , green = hexToFloat <| String.slice 3 5 str
+                                                                    , blue = hexToFloat <| String.slice 5 7 str
+                                                                    , alpha = 1
+                                                                    }
+                                                            ).hue
                                                       )
                                                     ]
                                             )
@@ -1743,7 +1745,7 @@ doResize id d add mobile =
     { mobile | gears = Harmo.resizeFree id newSize gears }
 
 
-doChangeContent : Id Geer -> Conteet -> Maybe Color.Color -> Model -> Mobeel -> Return
+doChangeContent : Id Geer -> Conteet -> Maybe Float -> Model -> Mobeel -> Return
 doChangeContent id c mayColor model mobile =
     let
         return =
@@ -2512,9 +2514,9 @@ updateAllMuteToEngine model mobile =
         Coll.toList mobile.gears
 
 
-colorGen : Random.Generator Color.Color
+colorGen : Random.Generator Float
 colorGen =
-    Random.map (\f -> Color.hsl f 1 0.5) <| Random.float 0 1
+    Random.float 0 1
 
 
 colorToString : Color.Color -> String

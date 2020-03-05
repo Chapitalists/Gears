@@ -26,7 +26,7 @@ type alias Wheel =
     , content : WheelContent
     , viewContent : Bool
     , mute : Bool
-    , color : Color
+    , color : Float
     }
 
 
@@ -79,7 +79,7 @@ default =
     , content = C <| Content.S Sound.noSound
     , viewContent = True
     , mute = False
-    , color = Color.black
+    , color = 0
     }
 
 
@@ -99,7 +99,7 @@ type alias Style =
     { mod : Mod
     , motor : Bool
     , dashed : Bool
-    , baseColor : Maybe Color
+    , baseColor : Maybe Float
     , named : Bool
     }
 
@@ -122,7 +122,7 @@ type Msg
     | ChangeStart Float
     | ChangeLoop ( Maybe Float, Maybe Float )
     | Named String
-    | ChangeColor Color
+    | ChangeColor Float
     | ToggleContentView
 
 
@@ -295,9 +295,7 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                         [ SA.fill <| Fill Color.white ]
 
                                     else
-                                        [ SA.fill <| Fill w.color
-                                        , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
-                                        ]
+                                        [ SA.fill <| Fill <| Color.hsl w.color 1 (0.85 - 0.35 * w.volume) ]
                                    )
                             )
                             []
@@ -317,7 +315,7 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                             , SA.cy <| Num 0
                                             , SA.r <| Num (length / 2 - tickW * 2.5)
                                             , SA.strokeWidth <| Num (tickW * 4)
-                                            , SA.stroke c
+                                            , SA.stroke <| Color.hsl c 1 0.5
                                             , SA.fill FillNone
                                             ]
                                             []
@@ -478,7 +476,7 @@ encoder w =
     , ( "startPercent", E.float w.startPercent )
     , ( "volume", E.float w.volume )
     , ( "mute", E.bool w.mute )
-    , ( "color", colorEncoder w.color )
+    , ( "color", E.float w.color )
     , ( "viewContent", E.bool w.viewContent )
     , case w.content of
         C c ->
@@ -501,42 +499,28 @@ decoder =
                                             \volume ->
                                                 Field.require "mute" D.bool <|
                                                     \mute ->
-                                                        Field.attempt "color" colorDecoder <|
-                                                            \color ->
-                                                                D.succeed
-                                                                    { name = Maybe.withDefault "" name
-                                                                    , startPercent = startPercent
-                                                                    , volume = volume
-                                                                    , content = C content
-                                                                    , viewContent = Maybe.withDefault True viewContent
-                                                                    , mute = mute
-                                                                    , color = Maybe.withDefault Color.black color
-                                                                    }
+                                                        Field.attempt "color" D.float <|
+                                                            \mayColor ->
+                                                                Field.attemptAt [ "color", "hue" ] D.float <|
+                                                                    \mayHue ->
+                                                                        D.succeed
+                                                                            { name = Maybe.withDefault "" name
+                                                                            , startPercent = startPercent
+                                                                            , volume = volume
+                                                                            , content = C content
+                                                                            , viewContent = Maybe.withDefault True viewContent
+                                                                            , mute = mute
+                                                                            , color =
+                                                                                case mayColor of
+                                                                                    Just c ->
+                                                                                        c
+
+                                                                                    Nothing ->
+                                                                                        case mayHue of
+                                                                                            Just h ->
+                                                                                                h
+
+                                                                                            Nothing ->
+                                                                                                0
+                                                                            }
             )
-
-
-colorEncoder : Color -> E.Value
-colorEncoder c =
-    let
-        named =
-            Color.toHsla c
-    in
-    E.object
-        [ ( "hue", E.float named.hue )
-        , ( "sat", E.float named.saturation )
-        , ( "light", E.float named.lightness )
-        , ( "alpha", E.float named.alpha )
-        ]
-
-
-colorDecoder : D.Decoder Color
-colorDecoder =
-    Field.require "hue" D.float <|
-        \hue ->
-            Field.require "sat" D.float <|
-                \sat ->
-                    Field.require "light" D.float <|
-                        \light ->
-                            Field.require "alpha" D.float <|
-                                \alpha ->
-                                    D.succeed <| Color.hsla hue sat light alpha
