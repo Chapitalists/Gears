@@ -103,8 +103,8 @@ volumeChanged ( id, list ) volume e =
         []
 
 
-encodeWheel : Wheel -> Bool -> List ( String, E.Value )
-encodeWheel w hasView =
+encodeWheel : Wheel -> Bool -> String -> List ( String, E.Value )
+encodeWheel w hasView parentUid =
     [ ( "mute", E.bool w.mute )
     , ( "volume", E.float <| clamp 0 1 w.volume )
     , ( "startPercent", E.float w.startPercent )
@@ -120,7 +120,7 @@ encodeWheel w hasView =
                     [ ( "mobile", encodeMobile m False ) ]
 
                 Content.C c ->
-                    [ ( "collar", encodeCollar c False ) ]
+                    [ ( "collar", encodeCollar c hasView parentUid ) ]
            )
 
 
@@ -144,7 +144,7 @@ encodeGear hasView coll id =
             ([ ( "id", E.string <| uid )
              , ( "length", E.float length )
              ]
-                ++ encodeWheel g.wheel hasView
+                ++ encodeWheel g.wheel hasView uid
             )
 
 
@@ -156,18 +156,24 @@ encodeMobile { motor, gears } hasView =
         ]
 
 
-encodeCollar : Colleer -> Bool -> E.Value
-encodeCollar c hasView =
+encodeCollar : Colleer -> Bool -> String -> E.Value
+encodeCollar c hasView parentUid =
     E.object
         [ ( "length", E.float <| Collar.getCumulLengthAt c.matrice c )
         , ( "loopStart", E.float c.loop )
-        , ( "beads", E.list (encodeBead hasView) <| Collar.getBeads c )
+        , ( "beads", E.list (encodeBead hasView parentUid) <| List.indexedMap (\i el -> ( i, el )) <| Collar.getBeads c )
         ]
 
 
-encodeBead : Bool -> Beed -> E.Value
-encodeBead hasView b =
+encodeBead : Bool -> String -> ( Int, Beed ) -> E.Value
+encodeBead hasView parentUid ( i, b ) =
+    let
+        uid =
+            Content.beadUIDExtension parentUid i
+    in
     E.object
-        (( "length", E.float b.length )
-            :: encodeWheel b.wheel hasView
+        ([ ( "length", E.float b.length )
+         , ( "id", E.string uid )
+         ]
+            ++ encodeWheel b.wheel hasView uid
         )

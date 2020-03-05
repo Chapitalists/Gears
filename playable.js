@@ -30,11 +30,7 @@ function prepare(model, rate = 1) {
         model.rate = (rate * model.duration / model.length) || 1 // TODO when preparing top collar, no model.length
         model.durs = model.collar.beads.map(v => v.length / model.rate)
         let totalDur = model.durs.reduce((a,b) => a+b, 0)
-        model.players = model.collar.beads.map((v,i) => {
-            v.id = model.baseId + i
-//            v.once = true
-            return prepare(v, model.rate)
-        })
+        model.players = model.collar.beads.map(v => prepare(v, model.rate))
         model.clocks = model.players.map((subModel,i,a) => {
             return new Tone.Clock(t => {
                 if (model.paused && (model.progPause <= t)) return;

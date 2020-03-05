@@ -324,62 +324,6 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                     Nothing ->
                                         []
                                )
-                            ++ (if viewContent then
-                                    case w.content of
-                                        C (Content.C collar) ->
-                                            let
-                                                scale =
-                                                    lengthTmp / Content.getMatriceLength collar
-                                            in
-                                            [ S.g [ SA.transform [ Translate (-lengthTmp / 2) 0, Scale scale scale ] ] <|
-                                                insideCollarView collar mayWheelInter uid
-                                            ]
-
-                                        _ ->
-                                            Debug.todo "view Sound or Mobile inside wheel"
-
-                                else
-                                    let
-                                        symSize =
-                                            length / 4
-                                    in
-                                    case w.content of
-                                        C (Content.M _) ->
-                                            [ S.line
-                                                [ SA.x1 <| Num -symSize
-                                                , SA.y1 <| Num -symSize
-                                                , SA.x2 <| Num symSize
-                                                , SA.y2 <| Num symSize
-                                                , SA.stroke Color.grey
-                                                , SA.strokeWidth <| Num tickW
-                                                ]
-                                                []
-                                            , S.line
-                                                [ SA.x1 <| Num -symSize
-                                                , SA.y1 <| Num symSize
-                                                , SA.x2 <| Num symSize
-                                                , SA.y2 <| Num -symSize
-                                                , SA.stroke Color.grey
-                                                , SA.strokeWidth <| Num tickW
-                                                ]
-                                                []
-                                            ]
-
-                                        C (Content.C _) ->
-                                            [ S.line
-                                                [ SA.x1 <| Num -symSize
-                                                , SA.y1 <| Num 0
-                                                , SA.x2 <| Num symSize
-                                                , SA.y2 <| Num 0
-                                                , SA.stroke Color.grey
-                                                , SA.strokeWidth <| Num tickW
-                                                ]
-                                                []
-                                            ]
-
-                                        _ ->
-                                            []
-                               )
                         )
 
                      -- end rotation drag
@@ -436,6 +380,62 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                 _ ->
                                     []
                            )
+                        ++ (if viewContent then
+                                case w.content of
+                                    C (Content.C collar) ->
+                                        let
+                                            scale =
+                                                lengthTmp / Content.getMatriceLength collar
+                                        in
+                                        [ S.g [ SA.transform [ Translate (-lengthTmp / 2) 0, Scale scale scale ] ] <|
+                                            insideCollarView collar mayWheelInter uid
+                                        ]
+
+                                    _ ->
+                                        Debug.todo "view Sound or Mobile inside wheel"
+
+                            else
+                                let
+                                    symSize =
+                                        length / 4
+                                in
+                                case w.content of
+                                    C (Content.M _) ->
+                                        [ S.line
+                                            [ SA.x1 <| Num -symSize
+                                            , SA.y1 <| Num -symSize
+                                            , SA.x2 <| Num symSize
+                                            , SA.y2 <| Num symSize
+                                            , SA.stroke Color.grey
+                                            , SA.strokeWidth <| Num tickW
+                                            ]
+                                            []
+                                        , S.line
+                                            [ SA.x1 <| Num -symSize
+                                            , SA.y1 <| Num symSize
+                                            , SA.x2 <| Num symSize
+                                            , SA.y2 <| Num -symSize
+                                            , SA.stroke Color.grey
+                                            , SA.strokeWidth <| Num tickW
+                                            ]
+                                            []
+                                        ]
+
+                                    C (Content.C _) ->
+                                        [ S.line
+                                            [ SA.x1 <| Num -symSize
+                                            , SA.y1 <| Num 0
+                                            , SA.x2 <| Num symSize
+                                            , SA.y2 <| Num 0
+                                            , SA.stroke Color.grey
+                                            , SA.strokeWidth <| Num tickW
+                                            ]
+                                            []
+                                        ]
+
+                                    _ ->
+                                        []
+                           )
                     )
                ]
 
@@ -459,7 +459,7 @@ insideCollarView collar mayWheelInter parentUid =
                     defaultStyle
                     (Maybe.map (\( inter, l ) -> ( inter, l ++ [ i ] )) mayWheelInter)
                     Nothing
-                    (parentUid ++ String.fromInt i)
+                    (Content.beadUIDExtension parentUid i)
                     :: res
                 , ( p + b.length
                   , i + 1
