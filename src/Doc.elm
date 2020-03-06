@@ -1,6 +1,5 @@
 port module Doc exposing (..)
 
-import Coll exposing (Coll, Id)
 import Data exposing (Data)
 import Data.Common as Common exposing (Identifier)
 import Data.Content as Content exposing (Content)

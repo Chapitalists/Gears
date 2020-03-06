@@ -332,7 +332,7 @@ update msg ( model, mobile ) =
                 Edit _ ->
                     let
                         ( engine, v ) =
-                            Engine.setPlaying model.edit mobile.gears model.engine
+                            Engine.addPlaying model.edit mobile.gears model.engine
                     in
                     { return | model = { model | engine = engine, tool = Edit True }, toEngine = v }
 
