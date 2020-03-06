@@ -73,6 +73,7 @@ type alias Model =
     , edit : List (Id Geer)
     , cursor : Int
     , link : Maybe LinkInfo
+    , parentUid : String -- TODO Two sources of truth !! same in Engine
     , engine : Engine
     , interact : Interact.State Interactable Zone
     , pack : Pack
@@ -147,32 +148,36 @@ type alias BlinkState =
     ( Bool, Float )
 
 
-getShared : Model -> ( Pack, PanSvg.Model )
-getShared { pack, svg } =
-    ( pack, svg )
-
-
-init : Maybe Mobeel -> Maybe ( Pack, PanSvg.Model ) -> Model
-init mayMobile mayShared =
-    let
-        base =
-            Maybe.withDefault (PanSvg.init svgId) <| Maybe.map Tuple.second mayShared
-
-        svg =
-            Maybe.withDefault base <|
-                Maybe.map (\m -> PanSvg.centerZoom (Mobile.gearPosSize m.motor m.gears) base) mayMobile
-    in
+init : Model
+init =
     { dragging = NoDrag
     , tool = Play False False
     , mode = Normal
     , edit = []
     , cursor = 0
     , link = Nothing
+    , parentUid = ""
     , engine = Engine.init
     , interact = Interact.init
-    , pack = Pack.update (Pack.PrepareZoom svg) <| Maybe.withDefault Pack.init <| Maybe.map Tuple.first mayShared
+    , pack = Pack.init
     , wave = Waveform.init
-    , svg = svg
+    , svg = PanSvg.init svgId
+    }
+
+
+changeView : Maybe Mobeel -> String -> Model -> Model
+changeView mayMobile parentUid model =
+    let
+        svg =
+            Maybe.withDefault (PanSvg.init svgId) <|
+                Maybe.map (\m -> PanSvg.centerZoom (Mobile.gearPosSize m.motor m.gears) model.svg) mayMobile
+    in
+    { model
+        | edit = []
+        , engine = Engine.setParentUid parentUid model.engine
+        , parentUid = parentUid
+        , svg = svg
+        , pack = Pack.update (Pack.PrepareZoom svg) model.pack
     }
 
 
@@ -1134,7 +1139,7 @@ viewContent ( model, mobile ) =
                                 }
                                 (Just ( IWheel << Tuple.pair id, [] ))
                                 (Just <| IResizeHandle id)
-                                (Gear.toUID id)
+                                (model.parentUid ++ Gear.toUID id)
                         )
                      <|
                         Coll.toList mobile.gears

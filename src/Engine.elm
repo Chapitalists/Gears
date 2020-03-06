@@ -2,9 +2,9 @@ module Engine exposing
     ( Engine
     , addPlaying
     , init
-    , isPlaying
     , muted
     , playingIds
+    , setParentUid
     , setPlaying
     , stop
     , volumeChanged
@@ -24,51 +24,53 @@ import Sound
 
 
 type Engine
-    = E (List (Id Geer))
+    = E { playing : List (Id Geer), parentUid : String }
 
 
 init : Engine
 init =
-    E []
+    E { playing = [], parentUid = "" }
 
 
-isPlaying : Id Geer -> Engine -> Bool
-isPlaying id (E l) =
-    List.member id l
+setParentUid : String -> Engine -> Engine
+setParentUid str (E e) =
+    E { e | parentUid = str }
 
 
-playingIds : Engine -> List (Id Geer)
-playingIds (E e) =
-    e
+playingIds :
+    Engine
+    -> List (Id Geer) -- Needed to compute which needs to be paused or stopped in motor, when cut
+playingIds (E { playing }) =
+    playing
 
 
 setPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
 setPlaying l coll (E e) =
-    ( E l
+    ( E { e | playing = l }
     , if List.isEmpty l then
         []
 
       else
-        [ playPause coll <| List.filter (\el -> not <| List.member el l) e ]
+        [ playPause e.parentUid coll <| List.filter (\el -> not <| List.member el l) e.playing ]
     )
 
 
 addPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
 addPlaying l coll (E e) =
-    ( E (e ++ l)
+    ( E { e | playing = e.playing ++ l }
     , if List.isEmpty l then
         []
 
       else
-        [ playPause coll l ]
+        [ playPause e.parentUid coll l ]
     )
 
 
-playPause : Coll Geer -> List (Id Geer) -> E.Value
-playPause coll els =
+playPause : String -> Coll Geer -> List (Id Geer) -> E.Value
+playPause parentUid coll els =
     E.object
         [ ( "action", E.string "playPause" )
-        , ( "gears", E.list (encodeGear True coll) els )
+        , ( "gears", E.list (encodeGear True parentUid coll) els )
         ]
 
 
@@ -78,10 +80,10 @@ stop =
 
 
 muted : Identifier -> Bool -> Engine -> List E.Value
-muted ( id, list ) mute e =
+muted ( id, list ) mute (E e) =
     [ E.object
         [ ( "action", E.string "mute" )
-        , ( "id", E.string <| Gear.toUID id )
+        , ( "id", E.string <| e.parentUid ++ Gear.toUID id )
         , ( "beadIndexes", E.list E.int list )
         , ( "value", E.bool mute )
         ]
@@ -89,18 +91,14 @@ muted ( id, list ) mute e =
 
 
 volumeChanged : Identifier -> Float -> Engine -> List E.Value
-volumeChanged ( id, list ) volume e =
-    if isPlaying id e then
-        [ E.object
-            [ ( "action", E.string "volume" )
-            , ( "id", E.string <| Gear.toUID id )
-            , ( "beadIndexes", E.list E.int list )
-            , ( "value", E.float <| clamp 0 1 volume )
-            ]
+volumeChanged ( id, list ) volume (E e) =
+    [ E.object
+        [ ( "action", E.string "volume" )
+        , ( "id", E.string <| e.parentUid ++ Gear.toUID id )
+        , ( "beadIndexes", E.list E.int list )
+        , ( "value", E.float <| clamp 0 1 volume )
         ]
-
-    else
-        []
+    ]
 
 
 encodeWheel : Wheel -> Bool -> String -> List ( String, E.Value )
@@ -117,15 +115,15 @@ encodeWheel w hasView parentUid =
                     ]
 
                 Content.M m ->
-                    [ ( "mobile", encodeMobile m False ) ]
+                    [ ( "mobile", encodeMobile m False parentUid ) ]
 
                 Content.C c ->
                     [ ( "collar", encodeCollar c hasView parentUid ) ]
            )
 
 
-encodeGear : Bool -> Coll Geer -> Id Geer -> E.Value
-encodeGear hasView coll id =
+encodeGear : Bool -> String -> Coll Geer -> Id Geer -> E.Value
+encodeGear hasView parentUid coll id =
     let
         g =
             Coll.get id coll
@@ -134,7 +132,7 @@ encodeGear hasView coll id =
             Harmo.getLength g.harmony coll
 
         uid =
-            Gear.toUID id
+            parentUid ++ Gear.toUID id
     in
     if length == 0 then
         Debug.log (uid ++ "’s length is 0") E.null
@@ -148,11 +146,11 @@ encodeGear hasView coll id =
             )
 
 
-encodeMobile : Mobeel -> Bool -> E.Value
-encodeMobile { motor, gears } hasView =
+encodeMobile : Mobeel -> Bool -> String -> E.Value
+encodeMobile { motor, gears } hasView parentUid =
     E.object
         [ ( "length", E.float <| Harmo.getLengthId motor gears )
-        , ( "gears", E.list (encodeGear hasView gears) <| Motor.getMotored motor gears )
+        , ( "gears", E.list (encodeGear hasView parentUid gears) <| Motor.getMotored motor gears )
         ]
 
 
