@@ -174,7 +174,8 @@ changeView mayMobile parentUid model =
     in
     { model
         | edit = []
-        , engine = Engine.setParentUid parentUid model.engine
+        , link = Nothing
+        , engine = Engine.setParentUid parentUid Engine.init
         , parentUid = parentUid
         , svg = svg
         , pack = Pack.update (Pack.PrepareZoom svg) model.pack
