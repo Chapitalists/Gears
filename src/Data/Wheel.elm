@@ -467,7 +467,7 @@ insideCollarView collar mayWheelInter parentUid =
                 ( view b.wheel
                     (vec2 (p + b.length / 2) 0)
                     b.length
-                    defaultStyle
+                    { defaultStyle | named = False }
                     (Maybe.map (\( inter, l ) -> ( inter, l ++ [ i ] )) mayWheelInter)
                     Nothing
                     (Content.beadUIDExtension parentUid i)
