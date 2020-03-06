@@ -329,57 +329,6 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                      -- end rotation drag
                      ]
                         -- No drag events part
-                        ++ (case style.mod of
-                                Selected first ->
-                                    [ S.circle
-                                        [ SA.cx <| Num 0
-                                        , SA.cy <| Num 0
-                                        , SA.r <| Num (length / 2 + tickW * 2)
-                                        , SA.strokeWidth <| Num (tickW / 2)
-                                        , SA.stroke <|
-                                            if first then
-                                                Color.red
-
-                                            else
-                                                Color.black
-                                        , SA.fill FillNone
-                                        ]
-                                        []
-                                    ]
-
-                                Resizing ->
-                                    case mayHandleInter of
-                                        Just handle ->
-                                            [ S.polyline
-                                                [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
-                                                , SA.stroke Color.red
-                                                , SA.strokeWidth <| Num tickW
-                                                ]
-                                                []
-                                            , S.circle
-                                                ([ SA.cx <| Num (-length / 2)
-                                                 , SA.cy <| Num 0
-                                                 , SA.r <| Num (tickW * 2)
-                                                 ]
-                                                    ++ Interact.draggableEvents (handle False)
-                                                )
-                                                []
-                                            , S.circle
-                                                ([ SA.cx <| Num (length / 2)
-                                                 , SA.cy <| Num 0
-                                                 , SA.r <| Num (tickW * 2)
-                                                 ]
-                                                    ++ Interact.draggableEvents (handle True)
-                                                )
-                                                []
-                                            ]
-
-                                        Nothing ->
-                                            []
-
-                                _ ->
-                                    []
-                           )
                         ++ (if viewContent then
                                 case w.content of
                                     C (Content.C collar) ->
@@ -435,6 +384,57 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
 
                                     _ ->
                                         []
+                           )
+                        ++ (case style.mod of
+                                Selected first ->
+                                    [ S.circle
+                                        [ SA.cx <| Num 0
+                                        , SA.cy <| Num 0
+                                        , SA.r <| Num (length / 2 + tickW * 2)
+                                        , SA.strokeWidth <| Num (tickW / 2)
+                                        , SA.stroke <|
+                                            if first then
+                                                Color.red
+
+                                            else
+                                                Color.black
+                                        , SA.fill FillNone
+                                        ]
+                                        []
+                                    ]
+
+                                Resizing ->
+                                    case mayHandleInter of
+                                        Just handle ->
+                                            [ S.polyline
+                                                [ SA.points [ ( -length / 2, 0 ), ( length / 2, 0 ) ]
+                                                , SA.stroke Color.red
+                                                , SA.strokeWidth <| Num tickW
+                                                ]
+                                                []
+                                            , S.circle
+                                                ([ SA.cx <| Num (-length / 2)
+                                                 , SA.cy <| Num 0
+                                                 , SA.r <| Num (tickW * 2)
+                                                 ]
+                                                    ++ Interact.draggableEvents (handle False)
+                                                )
+                                                []
+                                            , S.circle
+                                                ([ SA.cx <| Num (length / 2)
+                                                 , SA.cy <| Num 0
+                                                 , SA.r <| Num (tickW * 2)
+                                                 ]
+                                                    ++ Interact.draggableEvents (handle True)
+                                                )
+                                                []
+                                            ]
+
+                                        Nothing ->
+                                            []
+
+                                _ ->
+                                    []
                            )
                     )
                ]
