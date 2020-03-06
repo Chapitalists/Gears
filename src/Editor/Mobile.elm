@@ -1018,7 +1018,7 @@ viewContent ( model, mobile ) =
 
             else
                 case Interact.getInteract model.interact of
-                    Just ( IWheel ( iid, [] ), mode ) ->
+                    Just ( IWheel ( iid, _ ), mode ) ->
                         if iid /= id then
                             Wheel.None
 
