@@ -326,7 +326,7 @@ update msg ( model, mobile ) =
                 Edit _ ->
                     let
                         ( engine, v ) =
-                            Engine.addPlaying model.edit mobile.gears model.engine
+                            Engine.setPlaying model.edit mobile.gears model.engine
                     in
                     { return | model = { model | engine = engine, tool = Edit True }, toEngine = v }
 
@@ -2287,6 +2287,9 @@ interactSelectEdit event mobile model =
                                 Waveform.update (Waveform.ChgSound <| Sound.toString s) model.wave
                         in
                         Just ( { model | edit = [ id ], wave = wave }, Cmd.map WaveMsg cmd )
+
+                    Content.C _ ->
+                        Just ( { model | edit = [ id ], cursor = 0 }, Cmd.none )
 
                     _ ->
                         Just ( { model | edit = [ id ] }, Cmd.none )

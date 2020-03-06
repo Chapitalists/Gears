@@ -28,10 +28,15 @@ getName ( id, l ) mobile =
                 Gear.toUID id
 
             _ ->
-                "beadTODO"
+                toUid ( id, l )
 
     else
         name
+
+
+toUid : Identifier -> String
+toUid ( id, l ) =
+    List.foldl (\i uid -> Content.beadUIDExtension uid i) (Gear.toUID id) l
 
 
 getWheel : Identifier -> Mobile Wheel -> Wheel
