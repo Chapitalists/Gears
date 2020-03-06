@@ -19,19 +19,32 @@ type alias Identifier =
 getName : Identifier -> Mobile Wheel -> String
 getName ( id, l ) mobile =
     let
-        name =
-            (getWheel ( id, l ) mobile).name
+        w =
+            getWheel ( id, l ) mobile
     in
-    if String.isEmpty name then
+    if String.isEmpty w.name then
         case l of
             [] ->
-                Gear.toUID id
+                case Wheel.getWheelContent w of
+                    Content.S s ->
+                        let
+                            fileName =
+                                Sound.fileName s
+                        in
+                        if String.isEmpty fileName then
+                            Gear.toUID id
+
+                        else
+                            fileName
+
+                    _ ->
+                        Gear.toUID id
 
             _ ->
                 toUid ( id, l )
 
     else
-        name
+        w.name
 
 
 toUid : Identifier -> String

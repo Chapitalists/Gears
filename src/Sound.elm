@@ -36,6 +36,17 @@ toString (S { path }) =
     path
 
 
+fileName : Sound -> String
+fileName (S { path }) =
+    Maybe.withDefault "" <|
+        List.head <|
+            String.split "." <|
+                Maybe.withDefault "" <|
+                    List.head <|
+                        List.reverse <|
+                            String.split "/" path
+
+
 getLoopPoints : Sound -> List Float
 getLoopPoints (S { startPercent, endPercent, duration }) =
     [ startPercent * duration, endPercent * duration ]

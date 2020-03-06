@@ -1407,7 +1407,7 @@ viewEditDetails model mobile =
                 [ Input.text [ Font.color (rgb 0 0 0) ]
                     { label = Input.labelAbove [] <| text "Roue :"
                     , text = g.wheel.name
-                    , placeholder = Just <| Input.placeholder [] <| text <| Gear.toUID id
+                    , placeholder = Just <| Input.placeholder [] <| text <| CommonData.getName ( id, [] ) mobile
                     , onChange = \str -> WheelMsgs [ ( wId, Wheel.Named str ) ]
                     }
                 , case Wheel.getContent g of

@@ -249,7 +249,18 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                 , SA.stroke Color.white
                 , SA.strokeWidth <| Num (tickW / 4)
                 ]
-                [ text w.name ]
+                [ text <|
+                    if String.isEmpty w.name then
+                        case getWheelContent w of
+                            Content.S s ->
+                                Sound.fileName s
+
+                            _ ->
+                                ""
+
+                    else
+                        w.name
+                ]
             ]
 
          else
