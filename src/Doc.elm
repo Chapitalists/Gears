@@ -1,6 +1,5 @@
 port module Doc exposing (..)
 
-import Coll exposing (Coll, Id)
 import Data exposing (Data)
 import Data.Common as Common exposing (Identifier)
 import Data.Content as Content exposing (Content)
@@ -34,7 +33,7 @@ init : Maybe Url -> Doc
 init url =
     { data = Data.init Mobile.new url
     , viewing = []
-    , editor = Editor.init Nothing Nothing
+    , editor = Editor.init
     }
 
 
@@ -92,7 +91,7 @@ update msg doc =
         New ->
             ( { data = Data.new Mobile.new doc.data
               , viewing = []
-              , editor = Editor.init Nothing <| Just <| Editor.getShared doc.editor
+              , editor = Editor.changeView Nothing "" doc.editor
               }
             , toEngine Engine.stop
             )
@@ -100,7 +99,7 @@ update msg doc =
         Loaded m name ->
             ( { data = Data.load m name doc.data
               , viewing = []
-              , editor = Editor.init (Just m) <| Just <| Editor.getShared doc.editor
+              , editor = Editor.changeView (Just m) "" doc.editor
               }
             , toEngine Engine.stop
             )
@@ -110,29 +109,41 @@ update msg doc =
                 data =
                     Data.undo doc.data
 
-                mayView =
-                    Tuple.second <| getViewingCleaned doc.viewing <| Data.current data
+                ( mobile, ( viewUid, mayView ) ) =
+                    getViewingCleaned doc.viewing <| Data.current data
             in
-            ( { doc | data = data, viewing = Maybe.withDefault doc.viewing mayView }, toEngine Engine.stop )
+            ( { doc
+                | data = data
+                , viewing = Maybe.withDefault doc.viewing mayView
+                , editor = Editor.changeView (Just mobile) viewUid doc.editor
+              }
+            , toEngine Engine.stop
+            )
 
         Redo ->
             let
                 data =
                     Data.redo doc.data
 
-                mayView =
-                    Tuple.second <| getViewingCleaned doc.viewing <| Data.current data
+                ( mobile, ( viewUid, mayView ) ) =
+                    getViewingCleaned doc.viewing <| Data.current data
             in
-            ( { doc | data = data, viewing = Maybe.withDefault doc.viewing mayView }, toEngine Engine.stop )
+            ( { doc
+                | data = data
+                , viewing = Maybe.withDefault doc.viewing mayView
+                , editor = Editor.changeView (Just mobile) viewUid doc.editor
+              }
+            , toEngine Engine.stop
+            )
 
         View l ->
             let
-                ( mobile, mayView ) =
+                ( mobile, ( viewUid, mayView ) ) =
                     getViewingCleaned l <| Data.current doc.data
             in
             ( { doc
                 | viewing = Maybe.withDefault l mayView
-                , editor = Editor.init (Just mobile) <| Just <| Editor.getShared doc.editor
+                , editor = Editor.changeView (Just mobile) viewUid doc.editor
               }
             , toEngine Engine.stop
             )
@@ -154,17 +165,28 @@ update msg doc =
                             update (MobileMsg <| Editor.ChangedTool <| Editor.Harmonize) doc
 
                         3 ->
-                            update (MobileMsg <| Editor.ChangedTool <| Editor.Edit) doc
+                            update (MobileMsg <| Editor.ChangedTool <| Editor.Edit False) doc
 
                         _ ->
                             ( doc, Cmd.none )
 
                 Play ->
-                    update (MobileMsg <| Editor.ToggleEngine) doc
+                    case doc.editor.tool of
+                        Editor.Play _ _ ->
+                            update (MobileMsg <| Editor.ToggleEngine) doc
+
+                        Editor.Edit True ->
+                            update (MobileMsg <| Editor.StopGear) doc
+
+                        Editor.Edit False ->
+                            update (MobileMsg <| Editor.PlayGear) doc
+
+                        _ ->
+                            ( doc, Cmd.none )
 
                 Suppr ->
                     case ( doc.editor.edit, doc.editor.tool ) of
-                        ( [ id ], Editor.Edit ) ->
+                        ( [ id ], Editor.Edit _ ) ->
                             update (MobileMsg <| Editor.DeleteWheel ( id, [] )) doc
 
                         _ ->
@@ -209,15 +231,23 @@ update msg doc =
                                                         ++ [ ( Common.getName id mobile, id ) ]
                                                 )
                                                 newDoc
+
+                                        Editor.UnSolo ->
+                                            ( newDoc
+                                            , Cmd.batch <|
+                                                List.map toEngine <|
+                                                    Editor.updateAllMuteToEngine newDoc.editor <|
+                                                        Data.current newDoc.data
+                                            )
                                 )
                         )
             in
             ( finalDoc
-            , Cmd.batch
+            , Cmd.batch <|
                 [ Cmd.map MobileMsg res.cmd
-                , Maybe.withDefault Cmd.none <| Maybe.map toEngine res.toEngine
                 , cmd
                 ]
+                    ++ List.map toEngine res.toEngine
             )
 
         InteractMsg subMsg ->
@@ -346,23 +376,23 @@ getViewing { viewing, data } =
 -- TODO Should be able to check id and indexes existence to clean, do it if Common.getWheel? Or make a copy here
 
 
-getViewingCleaned : List ( String, Identifier ) -> Mobeel -> ( Mobeel, Maybe (List ( String, Identifier )) )
+getViewingCleaned : List ( String, Identifier ) -> Mobeel -> ( Mobeel, ( String, Maybe (List ( String, Identifier )) ) )
 getViewingCleaned l mobile =
     case l of
         ( str, next ) :: rest ->
             case Wheel.getWheelContent <| Common.getWheel next mobile of
                 Content.M m ->
                     let
-                        ( mob, may ) =
+                        ( mob, ( parentUid, may ) ) =
                             getViewingCleaned rest m
                     in
-                    ( mob, Maybe.map ((::) ( str, next )) may )
+                    ( mob, ( Common.toUid next, Maybe.map ((::) ( str, next )) may ) )
 
                 _ ->
-                    Debug.log ("No mobile to view in " ++ str) ( mobile, Just [] )
+                    Debug.log ("No mobile to view in " ++ str) ( mobile, ( "", Just [] ) )
 
         _ ->
-            ( mobile, Nothing )
+            ( mobile, ( "", Nothing ) )
 
 
 updateViewing : List ( String, Identifier ) -> (Mobeel -> Mobeel) -> Mobeel -> Mobeel

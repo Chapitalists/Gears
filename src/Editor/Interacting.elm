@@ -16,8 +16,17 @@ type Interactable
     | IPacked (Id Packed)
     | ILink (Link Geer)
     | ISound Sound
+    | IWaveCursor Cursor
+    | IWaveSel
 
 
 type Zone
     = ZSurface
     | ZPack
+    | ZWave
+
+
+type Cursor
+    = LoopStart
+    | LoopEnd
+    | StartOffset

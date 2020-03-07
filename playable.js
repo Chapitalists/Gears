@@ -1,9 +1,12 @@
 // TODO clean changeVolume, use Tone.Draw
 
+// pauseOffset = sound time after the start point = position of the animation in sound time
+// startTime = date of the corresponding start = date of the last 0% of the animation
+// startPercent = percent of the whole sound where to start
+
 function prepare(model, rate = 1) {
     model.paused = true
     model.pauseOffset = 0
-    model.length = model.length
     if (model.view && model.id) {
         model.view = SVG.adopt(document.getElementById(model.id))
        /* model.once
@@ -12,9 +15,9 @@ function prepare(model, rate = 1) {
     }
     if (model.soundName) {
         model.player = new Tone.Player(buffers[model.soundName]).toMaster()
-        setVolume(model)
-        model.duration = model.player.buffer.duration
+        model.duration = model.loopPoints[1] - model.loopPoints[0]
         model.player.playbackRate = model.rate = rate * model.duration / model.length
+        model.player.setLoopPoints.apply(model.player, model.loopPoints)
         model.player.loop = true
     }
     if (model.mobile) {
@@ -27,11 +30,7 @@ function prepare(model, rate = 1) {
         model.rate = (rate * model.duration / model.length) || 1 // TODO when preparing top collar, no model.length
         model.durs = model.collar.beads.map(v => v.length / model.rate)
         let totalDur = model.durs.reduce((a,b) => a+b, 0)
-        model.players = model.collar.beads.map((v,i) => {
-            v.id = model.baseId + i
-//            v.once = true
-            return prepare(v, model.rate)
-        })
+        model.players = model.collar.beads.map(v => prepare(v, model.rate))
         model.clocks = model.players.map((subModel,i,a) => {
             return new Tone.Clock(t => {
                 if (model.paused && (model.progPause <= t)) return;
@@ -46,6 +45,7 @@ function prepare(model, rate = 1) {
             }, 1/totalDur)
         })
     }
+    setVolume(model)
     return model
 }
 
@@ -59,8 +59,7 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
         Tone.Draw.schedule(() => model.view.animate().play(), t)
     }
     if (model.soundName && model.player.output) {
-        setVolume(model, volume, mute)
-        model.player.start(t, model.pauseOffset + (model.startPercent * model.length))
+        model.player.start(t, model.pauseOffset + (model.startPercent * model.player.buffer.duration))
     }
     if (model.mobile) {
         model.gears.map((v,i) => play(v, t, model.gears[i], model.volume * volume, model.mute || mute))
@@ -87,7 +86,7 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
 function pause(model, t, force = false, clocked = false) {
     if (model.paused && !force) return;
     model.paused = true
-    model.pauseOffset = ((t - model.startTime) * model.rate)
+    model.pauseOffset = ((t - model.startTime) * model.rate) % model.duration
     if (model.view){//} && !clocked) {
         Tone.Draw.schedule(() => model.view.animate().pause().at((model.pauseOffset/model.length/model.rate) % 1), t)
     }
@@ -121,8 +120,14 @@ function stop(model) {
 
 function setVolume(model, volume = 1, mute = false) {
     if (model.soundName) {
-        if (mute || model.mute) model.player.volume.value = -100000
-        else model.player.volume.value = ((model.volume * volume) - 1) * 60
+        if (mute || model.mute) {
+            model.player.toMaster()
+            model.player.disconnect(Tone.Master)
+        }
+        else {
+            model.player.toMaster()
+            model.player.volume.value = ((model.volume * volume) - 1) * 60
+        }
     }
     if (model.mobile) model.gears.map(v => setVolume(v, model.volume * volume, model.mute || mute))
     if (model.collar) model.players.map(v => setVolume(v, model.volume * volume, model.mute || mute))

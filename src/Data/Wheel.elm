@@ -21,12 +21,12 @@ type alias Wheeled a =
 
 type alias Wheel =
     { name : String
-    , startPercent : Float
+    , startPercent : Float -- Percent of whole sound, not just looped part
     , volume : Float
     , content : WheelContent
     , viewContent : Bool
     , mute : Bool
-    , color : Color
+    , color : Float
     }
 
 
@@ -52,6 +52,16 @@ getWheelContent { content } =
             c
 
 
+getLoopPercents : Wheeled g -> ( Float, Float )
+getLoopPercents { wheel } =
+    case wheel.content of
+        C (Content.S s) ->
+            Sound.getLoopPercents s
+
+        _ ->
+            ( 0, 1 )
+
+
 setContent : Conteet -> Wheeled g -> Wheeled g
 setContent c g =
     let
@@ -69,7 +79,7 @@ default =
     , content = C <| Content.S Sound.noSound
     , viewContent = True
     , mute = False
-    , color = Color.black
+    , color = 0
     }
 
 
@@ -89,7 +99,7 @@ type alias Style =
     { mod : Mod
     , motor : Bool
     , dashed : Bool
-    , baseColor : Maybe Color
+    , baseColor : Maybe Float
     , named : Bool
     }
 
@@ -110,8 +120,9 @@ type Msg
     | ToggleMute
     | Mute Bool
     | ChangeStart Float
+    | ChangeLoop ( Maybe Float, Maybe Float )
     | Named String
-    | ChangeColor Color
+    | ChangeColor Float
     | ToggleContentView
 
 
@@ -135,7 +146,37 @@ update msg g =
             { g | wheel = { wheel | mute = b } }
 
         ChangeStart percent ->
-            { g | wheel = { wheel | startPercent = percent } }
+            let
+                ( min, max ) =
+                    case wheel.content of
+                        C (Content.S s) ->
+                            Sound.getLoopPercents s
+
+                        _ ->
+                            ( 0, 1 )
+            in
+            { g | wheel = { wheel | startPercent = clamp min max percent } }
+
+        ChangeLoop mayPoints ->
+            case wheel.content of
+                C (Content.S s) ->
+                    let
+                        newSound =
+                            Sound.setLoop mayPoints s
+
+                        ( min, max ) =
+                            Sound.getLoopPercents newSound
+                    in
+                    { g
+                        | wheel =
+                            { wheel
+                                | content = C <| Content.S newSound
+                                , startPercent = clamp min max wheel.startPercent
+                            }
+                    }
+
+                _ ->
+                    g
 
         Named name ->
             if String.all (\c -> Char.isAlphaNum c || c == '-') name then
@@ -186,6 +227,12 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
         circum =
             length * pi
 
+        ( loopStart, loopEnd ) =
+            getLoopPercents { wheel = w }
+
+        tickPercent =
+            (w.startPercent - loopStart) / (loopEnd - loopStart)
+
         ( hoverAttrs, dragAttrs ) =
             Maybe.withDefault ( [], [] ) <|
                 Maybe.map
@@ -202,11 +249,23 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                 , SA.stroke Color.white
                 , SA.strokeWidth <| Num (tickW / 4)
                 ]
-                [ text w.name ]
+                [ text <|
+                    if String.isEmpty w.name then
+                        case getWheelContent w of
+                            Content.S s ->
+                                Sound.fileName s
+
+                            _ ->
+                                ""
+
+                    else
+                        w.name
+                ]
             ]
 
          else
-            []
+            [ S.text_ [] [] ]
+         -- Because rotating g cannot be Keyed in TypedSvg, trick to prevent recreation
         )
             ++ [ S.g hoverAttrs <|
                     ([ S.g
@@ -247,9 +306,7 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                         [ SA.fill <| Fill Color.white ]
 
                                     else
-                                        [ SA.fill <| Fill w.color
-                                        , SA.fillOpacity <| Opacity (0.2 + 0.8 * w.volume)
-                                        ]
+                                        [ SA.fill <| Fill <| Color.hsl w.color 1 (0.85 - 0.35 * w.volume) ]
                                    )
                             )
                             []
@@ -258,7 +315,7 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                             , SA.height <| Num tickH
                             , SA.x <| Num (tickW / -2)
                             , SA.y <| Num (tickH / -2)
-                            , SA.transform [ Rotate (w.startPercent * 360) 0 0, Translate 0 ((length / -2) - (tickH / 2)) ]
+                            , SA.transform [ Rotate (tickPercent * 360) 0 0, Translate 0 ((length / -2) - (tickH / 2)) ]
                             ]
                             []
                          ]
@@ -269,7 +326,7 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                             , SA.cy <| Num 0
                                             , SA.r <| Num (length / 2 - tickW * 2.5)
                                             , SA.strokeWidth <| Num (tickW * 4)
-                                            , SA.stroke c
+                                            , SA.stroke <| Color.hsl c 1 0.5
                                             , SA.fill FillNone
                                             ]
                                             []
@@ -278,67 +335,67 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                     Nothing ->
                                         []
                                )
-                            ++ (if viewContent then
-                                    case w.content of
-                                        C (Content.C collar) ->
-                                            let
-                                                scale =
-                                                    lengthTmp / Content.getMatriceLength collar
-                                            in
-                                            [ S.g [ SA.transform [ Translate (-lengthTmp / 2) 0, Scale scale scale ] ] <|
-                                                insideCollarView collar mayWheelInter uid
-                                            ]
-
-                                        _ ->
-                                            Debug.todo "view Sound or Mobile inside wheel"
-
-                                else
-                                    let
-                                        symSize =
-                                            length / 4
-                                    in
-                                    case w.content of
-                                        C (Content.M _) ->
-                                            [ S.line
-                                                [ SA.x1 <| Num -symSize
-                                                , SA.y1 <| Num -symSize
-                                                , SA.x2 <| Num symSize
-                                                , SA.y2 <| Num symSize
-                                                , SA.stroke Color.grey
-                                                , SA.strokeWidth <| Num tickW
-                                                ]
-                                                []
-                                            , S.line
-                                                [ SA.x1 <| Num -symSize
-                                                , SA.y1 <| Num symSize
-                                                , SA.x2 <| Num symSize
-                                                , SA.y2 <| Num -symSize
-                                                , SA.stroke Color.grey
-                                                , SA.strokeWidth <| Num tickW
-                                                ]
-                                                []
-                                            ]
-
-                                        C (Content.C _) ->
-                                            [ S.line
-                                                [ SA.x1 <| Num -symSize
-                                                , SA.y1 <| Num 0
-                                                , SA.x2 <| Num symSize
-                                                , SA.y2 <| Num 0
-                                                , SA.stroke Color.grey
-                                                , SA.strokeWidth <| Num tickW
-                                                ]
-                                                []
-                                            ]
-
-                                        _ ->
-                                            []
-                               )
                         )
 
                      -- end rotation drag
                      ]
                         -- No drag events part
+                        ++ (if viewContent then
+                                case w.content of
+                                    C (Content.C collar) ->
+                                        let
+                                            scale =
+                                                lengthTmp / Content.getMatriceLength collar
+                                        in
+                                        [ S.g [ SA.transform [ Translate (-lengthTmp / 2) 0, Scale scale scale ] ] <|
+                                            insideCollarView collar mayWheelInter uid
+                                        ]
+
+                                    _ ->
+                                        Debug.todo "view Sound or Mobile inside wheel"
+
+                            else
+                                let
+                                    symSize =
+                                        length / 4
+                                in
+                                case w.content of
+                                    C (Content.M _) ->
+                                        [ S.line
+                                            [ SA.x1 <| Num -symSize
+                                            , SA.y1 <| Num -symSize
+                                            , SA.x2 <| Num symSize
+                                            , SA.y2 <| Num symSize
+                                            , SA.stroke Color.grey
+                                            , SA.strokeWidth <| Num tickW
+                                            ]
+                                            []
+                                        , S.line
+                                            [ SA.x1 <| Num -symSize
+                                            , SA.y1 <| Num symSize
+                                            , SA.x2 <| Num symSize
+                                            , SA.y2 <| Num -symSize
+                                            , SA.stroke Color.grey
+                                            , SA.strokeWidth <| Num tickW
+                                            ]
+                                            []
+                                        ]
+
+                                    C (Content.C _) ->
+                                        [ S.line
+                                            [ SA.x1 <| Num -symSize
+                                            , SA.y1 <| Num 0
+                                            , SA.x2 <| Num symSize
+                                            , SA.y2 <| Num 0
+                                            , SA.stroke Color.grey
+                                            , SA.strokeWidth <| Num tickW
+                                            ]
+                                            []
+                                        ]
+
+                                    _ ->
+                                        []
+                           )
                         ++ (case style.mod of
                                 Selected first ->
                                     [ S.circle
@@ -410,10 +467,10 @@ insideCollarView collar mayWheelInter parentUid =
                 ( view b.wheel
                     (vec2 (p + b.length / 2) 0)
                     b.length
-                    defaultStyle
+                    { defaultStyle | named = False }
                     (Maybe.map (\( inter, l ) -> ( inter, l ++ [ i ] )) mayWheelInter)
                     Nothing
-                    (parentUid ++ String.fromInt i)
+                    (Content.beadUIDExtension parentUid i)
                     :: res
                 , ( p + b.length
                   , i + 1
@@ -430,7 +487,7 @@ encoder w =
     , ( "startPercent", E.float w.startPercent )
     , ( "volume", E.float w.volume )
     , ( "mute", E.bool w.mute )
-    , ( "color", colorEncoder w.color )
+    , ( "color", E.float w.color )
     , ( "viewContent", E.bool w.viewContent )
     , case w.content of
         C c ->
@@ -453,42 +510,28 @@ decoder =
                                             \volume ->
                                                 Field.require "mute" D.bool <|
                                                     \mute ->
-                                                        Field.attempt "color" colorDecoder <|
-                                                            \color ->
-                                                                D.succeed
-                                                                    { name = Maybe.withDefault "" name
-                                                                    , startPercent = startPercent
-                                                                    , volume = volume
-                                                                    , content = C content
-                                                                    , viewContent = Maybe.withDefault True viewContent
-                                                                    , mute = mute
-                                                                    , color = Maybe.withDefault Color.black color
-                                                                    }
+                                                        Field.attempt "color" D.float <|
+                                                            \mayColor ->
+                                                                Field.attemptAt [ "color", "hue" ] D.float <|
+                                                                    \mayHue ->
+                                                                        D.succeed
+                                                                            { name = Maybe.withDefault "" name
+                                                                            , startPercent = startPercent
+                                                                            , volume = volume
+                                                                            , content = C content
+                                                                            , viewContent = Maybe.withDefault True viewContent
+                                                                            , mute = mute
+                                                                            , color =
+                                                                                case mayColor of
+                                                                                    Just c ->
+                                                                                        c
+
+                                                                                    Nothing ->
+                                                                                        case mayHue of
+                                                                                            Just h ->
+                                                                                                h
+
+                                                                                            Nothing ->
+                                                                                                0
+                                                                            }
             )
-
-
-colorEncoder : Color -> E.Value
-colorEncoder c =
-    let
-        named =
-            Color.toHsla c
-    in
-    E.object
-        [ ( "hue", E.float named.hue )
-        , ( "sat", E.float named.saturation )
-        , ( "light", E.float named.lightness )
-        , ( "alpha", E.float named.alpha )
-        ]
-
-
-colorDecoder : D.Decoder Color
-colorDecoder =
-    Field.require "hue" D.float <|
-        \hue ->
-            Field.require "sat" D.float <|
-                \sat ->
-                    Field.require "light" D.float <|
-                        \light ->
-                            Field.require "alpha" D.float <|
-                                \alpha ->
-                                    D.succeed <| Color.hsla hue sat light alpha

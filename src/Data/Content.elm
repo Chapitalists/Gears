@@ -74,6 +74,11 @@ mobileDecoder wheelDecoder defaultWheel =
             )
 
 
+beadUIDExtension : String -> Int -> String
+beadUIDExtension parentUid i =
+    parentUid ++ "-" ++ String.fromInt i
+
+
 type alias Bead item =
     { length : Float, wheel : item }
 
