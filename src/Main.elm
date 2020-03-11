@@ -6,7 +6,6 @@ import Browser.Navigation as Nav
 import Coll exposing (Coll, Id)
 import Data.Collar as Collar
 import Data.Content as Content
-import Data.Mobile as Mobile exposing (Mobeel)
 import Data.Wheel as Wheel
 import Dict exposing (Dict)
 import Doc exposing (Doc)
@@ -73,7 +72,7 @@ type alias Model =
     , soundList : Dict String SoundListType
     , loadedSoundList : List Sound
     , savesList : Set String
-    , doc : Doc
+    , doc : Doc.Model
     , screenSize : ScreenSize
     , fileExplorerTab : ExTab
     , mode : Mode
@@ -129,7 +128,7 @@ type Msg
     | RequestSavesList
     | RequestSaveLoad String
     | GotSavesList (Result Http.Error String)
-    | GotLoadedFile String (Result Http.Error Mobeel)
+    | GotLoadedFile String (Result Http.Error Doc)
     | SoundLoaded (Result D.Error Sound)
     | ClickedUpload
     | UploadSounds File (List File)
@@ -203,8 +202,11 @@ update msg model =
 
         GotLoadedFile name result ->
             case result of
-                Ok m ->
+                Ok doc ->
                     let
+                        m =
+                            doc.mobile
+
                         getSoundType el list dict =
                             case ( list, Dict.get el dict ) of
                                 ( [], res ) ->
@@ -389,7 +391,7 @@ update msg model =
                                             Doc.AddContent <| Content.M newMobile
 
                                         _ ->
-                                            Doc.Loaded newMobile name
+                                            Doc.Loaded { doc | mobile = newMobile } name
 
                                 ( mod, cmd ) =
                                     update (DocMsg subMsg) newModel
@@ -614,7 +616,12 @@ subs { doc } =
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
         ]
             ++ List.map (Sub.map DocMsg) (Doc.subs doc)
-            ++ List.map (Sub.map KeysMsg) Keys.subs
+            ++ (if doc.writing then
+                    []
+
+                else
+                    List.map (Sub.map KeysMsg) Keys.subs
+               )
 
 
 type Mode
@@ -970,7 +977,7 @@ fetchSaveFile url name =
         , headers = [ Http.header "Cache-Control" "no-cache" ]
         , url = Url.toString { url | path = "/saves/" ++ name }
         , body = Http.emptyBody
-        , expect = Http.expectJson (GotLoadedFile <| cutGearsExtension name) Mobile.decoder
+        , expect = Http.expectJson (GotLoadedFile <| cutGearsExtension name) Doc.decoder
         , timeout = Nothing
         , tracker = Nothing
         }

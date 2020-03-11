@@ -13,6 +13,7 @@ import Editor.Interacting exposing (..)
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Border as Border
+import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import Engine exposing (Engine)
@@ -235,6 +236,7 @@ type alias Return =
 type DocMsg
     = Inside Identifier
     | UnSolo
+    | Writing Bool
 
 
 type ToUndo
@@ -1404,7 +1406,7 @@ viewEditDetails model mobile =
                     ( id, [] )
             in
             [ viewDetailsColumn (rgb 0.5 0.5 0.5) <|
-                [ Input.text [ Font.color (rgb 0 0 0) ]
+                [ Input.text ([ Font.color (rgb 0 0 0) ] ++ updateWriting)
                     { label = Input.labelAbove [] <| text "Roue :"
                     , text = g.wheel.name
                     , placeholder = Just <| Input.placeholder [] <| text <| CommonData.getName ( id, [] ) mobile
@@ -1611,14 +1613,14 @@ viewHarmonizeDetails model mobile =
                 ([ text <| (Gear.toUID <| Tuple.first link) ++ (Gear.toUID <| Tuple.second link) ]
                     ++ (case fractInput of
                             FractionInput fract ->
-                                [ Input.text [ Font.color (rgb 0 0 0) ]
+                                [ Input.text ([ Font.color (rgb 0 0 0) ] ++ updateWriting)
                                     { text = String.fromInt fract.num
                                     , onChange = EnteredFract True
                                     , label = Input.labelHidden "Numerator"
                                     , placeholder = Nothing
                                     }
                                 , text "/"
-                                , Input.text [ Font.color (rgb 0 0 0) ]
+                                , Input.text ([ Font.color (rgb 0 0 0) ] ++ updateWriting)
                                     { text = String.fromInt fract.den
                                     , onChange = EnteredFract False
                                     , label = Input.labelHidden "Denominator"
@@ -1649,7 +1651,7 @@ viewHarmonizeDetails model mobile =
                                                     _ ->
                                                         Nothing
                                 in
-                                [ Input.text [ Font.color (rgb 0 0 0) ]
+                                [ Input.text ([ Font.color (rgb 0 0 0) ] ++ updateWriting)
                                     { placeholder =
                                         Just <|
                                             Input.placeholder [] <|
@@ -2521,6 +2523,11 @@ updateAllMuteToEngine : Model -> Mobeel -> List E.Value
 updateAllMuteToEngine model mobile =
     List.concatMap (\( idd, g ) -> Engine.muted ( idd, [] ) g.wheel.mute model.engine) <|
         Coll.toList mobile.gears
+
+
+updateWriting : List (Attribute Msg)
+updateWriting =
+    [ Events.onFocus <| OutMsg <| Writing True, Events.onLoseFocus <| OutMsg <| Writing False ]
 
 
 colorGen : Random.Generator Float

@@ -8,11 +8,14 @@ import Data.Wheel as Wheel exposing (Conteet, Wheel)
 import Editor.Interacting exposing (Interactable, Zone(..))
 import Editor.Mobile as Editor
 import Element exposing (..)
+import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import Engine
 import Html.Attributes
 import Interact
+import Json.Decode as D
+import Json.Decode.Field as Field
 import Json.Encode as E
 import Pack exposing (Pack)
 import PanSvg
@@ -22,18 +25,28 @@ import Url exposing (Url)
 port toEngine : E.Value -> Cmd msg
 
 
-type alias Doc =
-    { data : Data Mobeel
+type alias Model =
+    { data : Data Doc
     , viewing : List ( String, Identifier )
     , editor : Editor.Model
+    , viewComment : Bool
+    , writing : Bool
     }
 
 
-init : Maybe Url -> Doc
+type alias Doc =
+    { mobile : Mobeel
+    , comment : String
+    }
+
+
+init : Maybe Url -> Model
 init url =
-    { data = Data.init Mobile.new url
+    { data = Data.init (Doc Mobile.new "") url
     , viewing = []
     , editor = Editor.init
+    , viewComment = True
+    , writing = False
     }
 
 
@@ -52,12 +65,16 @@ type Shortcut
 
 type Msg
     = EnteredFileName String
+    | ChangedComment String
+    | ToggleCommentView
+    | Writing Bool
     | Save
     | Saved
     | New
-    | Loaded Mobeel String
+    | Loaded Doc String
     | Undo
     | Redo
+    | UnFocusComment
     | View (List ( String, Identifier ))
     | AddContent Conteet
     | KeyPressed Shortcut
@@ -66,7 +83,7 @@ type Msg
     | InteractMsg (Interact.Msg Interactable Zone)
 
 
-update : Msg -> Doc -> ( Doc, Cmd Msg )
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg doc =
     -- TODO Maybe clean viewing right here
     case msg of
@@ -77,10 +94,23 @@ update msg doc =
             else
                 ( doc, Cmd.none )
 
+        ChangedComment str ->
+            let
+                oldData =
+                    Data.current doc.data
+            in
+            ( { doc | data = Data.group { oldData | comment = str } doc.data }, Cmd.none )
+
+        ToggleCommentView ->
+            ( { doc | viewComment = not doc.viewComment }, Cmd.none )
+
+        Writing b ->
+            ( { doc | writing = b }, Cmd.none )
+
         Save ->
             let
                 ( data, cmd ) =
-                    Data.save doc.data Mobile.encoder Saved
+                    Data.save doc.data encoder Saved
             in
             ( { doc | data = data }, cmd )
 
@@ -89,17 +119,20 @@ update msg doc =
             ( doc, Cmd.none )
 
         New ->
-            ( { data = Data.new Mobile.new doc.data
-              , viewing = []
-              , editor = Editor.changeView Nothing "" doc.editor
+            ( { doc
+                | data = Data.new (Doc Mobile.new "") doc.data
+                , viewing = []
+                , editor = Editor.changeView Nothing "" doc.editor
               }
             , toEngine Engine.stop
             )
 
-        Loaded m name ->
-            ( { data = Data.load m name doc.data
-              , viewing = []
-              , editor = Editor.changeView (Just m) "" doc.editor
+        Loaded d name ->
+            ( { doc
+                | data = Data.load d name doc.data
+                , viewing = []
+                , editor = Editor.changeView (Just d.mobile) "" doc.editor
+                , viewComment = doc.viewComment || (not <| String.isEmpty d.comment)
               }
             , toEngine Engine.stop
             )
@@ -109,13 +142,13 @@ update msg doc =
                 data =
                     Data.undo doc.data
 
-                ( mobile, ( viewUid, mayView ) ) =
-                    getViewingCleaned doc.viewing <| Data.current data
+                { mobile, parentUid, cleanedView } =
+                    getCleanedView doc
             in
             ( { doc
                 | data = data
-                , viewing = Maybe.withDefault doc.viewing mayView
-                , editor = Editor.changeView (Just mobile) viewUid doc.editor
+                , viewing = cleanedView
+                , editor = Editor.changeView (Just mobile) parentUid doc.editor
               }
             , toEngine Engine.stop
             )
@@ -125,25 +158,28 @@ update msg doc =
                 data =
                     Data.redo doc.data
 
-                ( mobile, ( viewUid, mayView ) ) =
-                    getViewingCleaned doc.viewing <| Data.current data
+                { mobile, parentUid, cleanedView } =
+                    getCleanedView doc
             in
             ( { doc
                 | data = data
-                , viewing = Maybe.withDefault doc.viewing mayView
-                , editor = Editor.changeView (Just mobile) viewUid doc.editor
+                , viewing = cleanedView
+                , editor = Editor.changeView (Just mobile) parentUid doc.editor
               }
             , toEngine Engine.stop
             )
 
+        UnFocusComment ->
+            ( { doc | data = Data.do (Data.current doc.data) doc.data, writing = False }, Cmd.none )
+
         View l ->
             let
-                ( mobile, ( viewUid, mayView ) ) =
-                    getViewingCleaned l <| Data.current doc.data
+                { mobile, parentUid, cleanedView } =
+                    getCleanedView { doc | viewing = l }
             in
             ( { doc
-                | viewing = Maybe.withDefault l mayView
-                , editor = Editor.changeView (Just mobile) viewUid doc.editor
+                | viewing = cleanedView
+                , editor = Editor.changeView (Just mobile) parentUid doc.editor
               }
             , toEngine Engine.stop
             )
@@ -210,10 +246,10 @@ update msg doc =
                     Editor.update subMsg ( doc.editor, mobile )
 
                 newMobile =
-                    updateViewing doc.viewing (always res.mobile) <| Data.current doc.data
+                    updateViewing doc.viewing (always res.mobile) (Data.current doc.data).mobile
 
                 data =
-                    updateData res.toUndo newMobile doc
+                    updateMobileData res.toUndo newMobile doc
 
                 newDoc =
                     { doc | data = data, editor = res.model }
@@ -237,8 +273,11 @@ update msg doc =
                                             , Cmd.batch <|
                                                 List.map toEngine <|
                                                     Editor.updateAllMuteToEngine newDoc.editor <|
-                                                        Data.current newDoc.data
+                                                        (Data.current newDoc.data).mobile
                                             )
+
+                                        Editor.Writing b ->
+                                            update (Writing <| newDoc.writing || b) newDoc
                                 )
                         )
             in
@@ -254,7 +293,7 @@ update msg doc =
             update (MobileMsg <| Editor.InteractMsg subMsg) doc
 
 
-subs : Doc -> List (Sub Msg)
+subs : Model -> List (Sub Msg)
 subs doc =
     List.map (Sub.map MobileMsg) <| Editor.subs doc.editor
 
@@ -264,7 +303,7 @@ keyCodeToMode =
     Editor.keyCodeToMode
 
 
-view : Doc -> Element Msg
+view : Model -> Element Msg
 view doc =
     row [ height fill, width fill ] <|
         (column [ width fill, height fill ]
@@ -283,13 +322,21 @@ view doc =
         )
 
 
-viewTop : Doc -> Element Msg
+viewTop : Model -> Element Msg
 viewTop doc =
-    column [ width fill ]
+    column
+        ([ width fill ]
+            ++ (if doc.viewComment then
+                    [ below <| viewComment doc ]
+
+                else
+                    []
+               )
+        )
         [ viewNav doc
         , row [ width fill, padding 10, spacing 20, Font.size 14 ]
             ((Element.map MobileMsg <| Editor.viewTools doc.editor)
-                :: [ Input.text [ width (fill |> maximum 500), centerX ]
+                :: [ Input.text ([ width (fill |> maximum 500), centerX ] ++ updateWriting)
                         { label = Input.labelHidden "Nom du fichier"
                         , text = Data.getName doc.data
                         , placeholder = Just <| Input.placeholder [] <| text "nom-a-sauvegarder"
@@ -311,7 +358,7 @@ viewTop doc =
                         { label = text "Nouveau"
                         , onPress = Just New
                         }
-                   , Input.button [ alignRight ]
+                   , Input.button [ centerX ]
                         { label = text "Undo"
                         , onPress =
                             if Data.canUndo doc.data then
@@ -320,7 +367,7 @@ viewTop doc =
                             else
                                 Nothing
                         }
-                   , Input.button []
+                   , Input.button [ centerX ]
                         { label = text "Redo"
                         , onPress =
                             if Data.canRedo doc.data then
@@ -330,14 +377,21 @@ viewTop doc =
                                 Nothing
                         }
                    ]
+                ++ [ Input.button [ alignRight ]
+                        { label = text "Notes"
+                        , onPress = Just ToggleCommentView
+                        }
+                   ]
             )
         ]
 
 
-viewNav : Doc -> Element Msg
+viewNav : Model -> Element Msg
 viewNav doc =
-    row [] <|
-        List.intersperse (text ">") <|
+    row
+        [ width fill, padding 10, spacing 5 ]
+    <|
+        (List.intersperse (text ">") <|
             Input.button []
                 { label = text "Racine"
                 , onPress = Just <| View []
@@ -350,49 +404,89 @@ viewNav doc =
                             }
                     )
                     doc.viewing
+        )
 
 
-viewBottom : Doc -> List (Element Msg)
+viewBottom : Model -> List (Element Msg)
 viewBottom doc =
     [ Element.map MobileMsg <| Editor.viewExtraTools doc.editor ]
 
 
-viewSide : Doc -> List (Element Msg)
+viewSide : Model -> List (Element Msg)
 viewSide doc =
     List.map (Element.map MobileMsg) <| Editor.viewDetails doc.editor <| getViewing doc
 
 
-viewContent : Doc -> Element Msg
+viewContent : Model -> Element Msg
 viewContent doc =
     Element.map MobileMsg <| Editor.viewContent ( doc.editor, getViewing doc )
 
 
-getViewing : Doc -> Mobeel
-getViewing { viewing, data } =
-    Tuple.first <| getViewingCleaned viewing <| Data.current data
+viewComment : Model -> Element Msg
+viewComment { data } =
+    Input.multiline [ Events.onLoseFocus UnFocusComment, Events.onFocus <| Writing True ]
+        { text = (Data.current data).comment
+        , placeholder = Just <| Input.placeholder [] <| text "Laissez ici vos notes ou commentaires"
+        , onChange = ChangedComment
+        , label = Input.labelHidden "Notes"
+        , spellcheck = False
+        }
+
+
+encoder : Doc -> E.Value
+encoder d =
+    E.object [ ( "mobile", Mobile.encoder d.mobile ), ( "comment", E.string d.comment ) ]
+
+
+decoder : D.Decoder Doc
+decoder =
+    Field.attempt "mobile" Mobile.decoder <|
+        \mayMobile ->
+            case mayMobile of
+                Just mobile ->
+                    Field.attempt "comment" D.string <|
+                        \mayComment ->
+                            D.succeed <| Doc mobile <| Maybe.withDefault "" mayComment
+
+                Nothing ->
+                    Mobile.decoder |> D.andThen (\m -> D.succeed <| Doc m "")
+
+
+type alias ViewRes =
+    { mobile : Mobeel, parentUid : String, cleanedView : List ( String, Identifier ) }
+
+
+getViewing : Model -> Mobeel
+getViewing doc =
+    (getCleanedView doc).mobile
+
+
+getCleanedView : Model -> ViewRes
+getCleanedView { viewing, data } =
+    getViewingHelper viewing (Data.current data).mobile
 
 
 
 -- TODO Should be able to check id and indexes existence to clean, do it if Common.getWheel? Or make a copy here
 
 
-getViewingCleaned : List ( String, Identifier ) -> Mobeel -> ( Mobeel, ( String, Maybe (List ( String, Identifier )) ) )
-getViewingCleaned l mobile =
+getViewingHelper : List ( String, Identifier ) -> Mobeel -> ViewRes
+getViewingHelper l mob =
     case l of
         ( str, next ) :: rest ->
-            case Wheel.getWheelContent <| Common.getWheel next mobile of
+            case Wheel.getWheelContent <| Common.getWheel next mob of
                 Content.M m ->
                     let
-                        ( mob, ( parentUid, may ) ) =
-                            getViewingCleaned rest m
+                        { mobile, parentUid, cleanedView } =
+                            getViewingHelper rest m
                     in
-                    ( mob, ( Common.toUid next, Maybe.map ((::) ( str, next )) may ) )
+                    ViewRes mobile (Common.toUid next ++ parentUid) <| ( str, next ) :: cleanedView
 
                 _ ->
-                    Debug.log ("No mobile to view in " ++ str) ( mobile, ( "", Just [] ) )
+                    Debug.log ("No mobile to view in " ++ str) <| ViewRes mob "" []
 
         _ ->
-            ( mobile, ( "", Nothing ) )
+            ViewRes mob "" []
 
 
 updateViewing : List ( String, Identifier ) -> (Mobeel -> Mobeel) -> Mobeel -> Mobeel
@@ -412,17 +506,29 @@ updateViewing l f mobile =
             f mobile
 
 
-updateData : Editor.ToUndo -> Mobeel -> Doc -> Data Mobeel
-updateData to newMobile { data } =
+updateMobileData : Editor.ToUndo -> Mobeel -> Model -> Data Doc
+updateMobileData to newMobile { data } =
+    let
+        oldData =
+            Data.current data
+
+        newData =
+            { oldData | mobile = newMobile }
+    in
     case to of
         Editor.Do ->
-            Data.do newMobile data
+            Data.do newData data
 
         Editor.Group ->
-            Data.group newMobile data
+            Data.group newData data
 
         Editor.Cancel ->
             Data.cancelGroup data
 
         Editor.NOOP ->
             data
+
+
+updateWriting : List (Attribute Msg)
+updateWriting =
+    [ Events.onFocus <| Writing True, Events.onLoseFocus <| Writing False ]
