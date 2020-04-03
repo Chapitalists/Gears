@@ -616,12 +616,7 @@ subs { doc } =
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
         ]
             ++ List.map (Sub.map DocMsg) (Doc.subs doc)
-            ++ (if doc.writing then
-                    []
-
-                else
-                    List.map (Sub.map KeysMsg) Keys.subs
-               )
+            ++ List.map (Sub.map KeysMsg) Keys.subs
 
 
 type Mode

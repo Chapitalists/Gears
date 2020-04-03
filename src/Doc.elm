@@ -30,7 +30,6 @@ type alias Model =
     , viewing : List ( String, Identifier )
     , editor : Editor.Model
     , viewComment : Bool
-    , writing : Bool
     }
 
 
@@ -46,7 +45,6 @@ init url =
     , viewing = []
     , editor = Editor.init
     , viewComment = True
-    , writing = False
     }
 
 
@@ -67,7 +65,6 @@ type Msg
     = EnteredFileName String
     | ChangedComment String
     | ToggleCommentView
-    | Writing Bool
     | Save
     | Saved
     | New
@@ -103,9 +100,6 @@ update msg doc =
 
         ToggleCommentView ->
             ( { doc | viewComment = not doc.viewComment }, Cmd.none )
-
-        Writing b ->
-            ( { doc | writing = b }, Cmd.none )
 
         Save ->
             let
@@ -170,7 +164,7 @@ update msg doc =
             )
 
         UnFocusComment ->
-            ( { doc | data = Data.do (Data.current doc.data) doc.data, writing = False }, Cmd.none )
+            ( { doc | data = Data.do (Data.current doc.data) doc.data }, Cmd.none )
 
         View l ->
             let
@@ -275,9 +269,6 @@ update msg doc =
                                                     Editor.updateAllMuteToEngine newDoc.editor <|
                                                         (Data.current newDoc.data).mobile
                                             )
-
-                                        Editor.Writing b ->
-                                            update (Writing <| newDoc.writing || b) newDoc
                                 )
                         )
             in
@@ -336,7 +327,7 @@ viewTop doc =
         [ viewNav doc
         , row [ width fill, padding 10, spacing 20, Font.size 14 ]
             ((Element.map MobileMsg <| Editor.viewTools doc.editor)
-                :: [ Input.text ([ width (fill |> maximum 500), centerX ] ++ updateWriting)
+                :: [ Input.text [ width (fill |> maximum 500), centerX ]
                         { label = Input.labelHidden "Nom du fichier"
                         , text = Data.getName doc.data
                         , placeholder = Just <| Input.placeholder [] <| text "nom-a-sauvegarder"
@@ -424,7 +415,7 @@ viewContent doc =
 
 viewComment : Model -> Element Msg
 viewComment { data } =
-    Input.multiline [ Events.onLoseFocus UnFocusComment, Events.onFocus <| Writing True ]
+    Input.multiline [ Events.onLoseFocus UnFocusComment ]
         { text = (Data.current data).comment
         , placeholder = Just <| Input.placeholder [] <| text "Laissez ici vos notes ou commentaires"
         , onChange = ChangedComment
@@ -527,8 +518,3 @@ updateMobileData to newMobile { data } =
 
         Editor.NOOP ->
             data
-
-
-updateWriting : List (Attribute Msg)
-updateWriting =
-    [ Events.onFocus <| Writing True, Events.onLoseFocus <| Writing False ]
