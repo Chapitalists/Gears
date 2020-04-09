@@ -71,8 +71,7 @@ const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
 
         , upSound : (req, res) => {
             if (req.method == 'POST') {
-                let form = new formidable.IncomingForm()
-                form.uploadDir = backupPath
+                let form = formidable({uploadDir : backupPath})
                 form.parse(req, (err, fields, files) => {
                     if (err) {
                         console.log(err)
@@ -80,8 +79,8 @@ const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
                         res.end()
                         return;
                     }
-                    if (files.file.type != 'audio/wav') {
-                        console.log("Wrong type " + files.file.type)
+                    if (files.file.type != 'audio/wav' && files.file.type != 'audio/x-wav') {
+                        console.log("Wrong type " + files.file.type + ", need WAV")
                         res.statusCode = 501
                         res.end()
                         return;
@@ -93,6 +92,35 @@ const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
                         return;
                     }
                     fs.renameSync(files.file.path, soundPath + files.file.name)
+                    res.end()
+                })
+            } else {
+                res.statusCode = 404
+                res.end()
+            }
+        }
+
+        , upSave : (req, res) => {
+            if (req.method == 'POST') {
+                let form = formidable({uploadDir : backupPath, keepExtensions : true})
+                form.parse(req, (err, fields, files) => {
+                    if (err) {
+                        console.log(err)
+                        res.statusCode = 500
+                        res.end()
+                        return;
+                    }
+                    if (files.file.name.split('.').slice(-1)[0] != 'gears') {
+                        console.log("Wrong type " + files.file.name + ", need *.gears")
+                        res.statusCode = 501
+                        res.end()
+                        return;
+                    }
+                    if (fs.existsSync(savePath + files.file.name)) {
+                        backItUp(savePath + files.file.name, files.file.name.split('.').slice(0,-1).join('.'), saveExtension)
+                        fs.unlinkSync(savePath + files.file.name)
+                    }
+                    fs.renameSync(files.file.path, savePath + files.file.name)
                     res.end()
                 })
             } else {
@@ -117,14 +145,19 @@ function writeFile (data) {
       , dateStr = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-')
       , created = true
     if (fs.existsSync(filePath)) {
-        fs.copyFileSync(
-            filePath,
-            backupPath + data.name + dateStr + saveExtension
-        )
+        backItUp(filePath, data.name, saveExtension)
         created = false
     }
     fs.writeFileSync(filePath, JSON.stringify(data.data, null, 2))
     return created
+}
+
+function backItUp (filePath, fileName, extension) {
+    let dateStr = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-')
+    fs.copyFileSync(
+        filePath,
+        backupPath + fileName + dateStr + extension
+    )
 }
 
 require('http').createServer(callback).listen(port)
