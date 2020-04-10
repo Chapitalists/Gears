@@ -13,7 +13,6 @@ import Editor.Interacting exposing (..)
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Border as Border
-import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import Engine exposing (Engine)
@@ -72,7 +71,7 @@ type alias Model =
     , tool : Tool
     , mode : Mode
     , edit : List (Id Geer)
-    , cursor : Int
+    , beadCursor : Int
     , link : Maybe LinkInfo
     , parentUid : String -- TODO Two sources of truth !! same in Engine
     , engine : Engine
@@ -155,7 +154,7 @@ init =
     , tool = Play False False
     , mode = Normal
     , edit = []
-    , cursor = 0
+    , beadCursor = 0
     , link = Nothing
     , parentUid = ""
     , engine = Engine.init
@@ -353,7 +352,7 @@ update msg ( model, mobile ) =
                 [ id ] ->
                     case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
                         Content.C col ->
-                            { return | model = { model | cursor = min (model.cursor + 1) <| Collar.length col } }
+                            { return | model = { model | beadCursor = min (model.beadCursor + 1) <| Collar.length col } }
 
                         _ ->
                             return
@@ -366,7 +365,7 @@ update msg ( model, mobile ) =
                 [ id ] ->
                     case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
                         Content.C _ ->
-                            { return | model = { model | cursor = max (model.cursor - 1) 0 } }
+                            { return | model = { model | beadCursor = max (model.beadCursor - 1) 0 } }
 
                         _ ->
                             return
@@ -382,11 +381,11 @@ update msg ( model, mobile ) =
                             { return
                                 | mobile =
                                     CommonData.updateWheel ( id, [] )
-                                        (Wheel.ChangeContent <| Content.C <| Collar.add model.cursor (Collar.beadFromContent c) col)
+                                        (Wheel.ChangeContent <| Content.C <| Collar.add model.beadCursor (Collar.beadFromContent c) col)
                                         mobile
                                 , toUndo = Group
-                                , model = { model | cursor = model.cursor + 1 }
-                                , cmd = Random.generate (\color -> WheelMsgs [ ( ( id, [ model.cursor ] ), Wheel.ChangeColor color ) ]) colorGen
+                                , model = { model | beadCursor = model.beadCursor + 1 }
+                                , cmd = Random.generate (\color -> WheelMsgs [ ( ( id, [ model.beadCursor ] ), Wheel.ChangeColor color ) ]) colorGen
                             }
 
                         _ ->
@@ -404,10 +403,10 @@ update msg ( model, mobile ) =
                                 { return
                                     | mobile =
                                         CommonData.updateWheel ( id, [] )
-                                            (Wheel.ChangeContent <| Content.C <| Collar.add model.cursor { wheel = w, length = l } col)
+                                            (Wheel.ChangeContent <| Content.C <| Collar.add model.beadCursor { wheel = w, length = l } col)
                                             mobile
                                     , toUndo = Do
-                                    , model = { model | cursor = model.cursor + 1 }
+                                    , model = { model | beadCursor = model.beadCursor + 1 }
                                 }
 
                             else
@@ -462,26 +461,26 @@ update msg ( model, mobile ) =
 
                             else
                                 model.edit
-                        , cursor =
+                        , beadCursor =
                             if model.edit == [ id ] then
                                 case l of
                                     [ i ] ->
                                         case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
                                             Content.C _ ->
-                                                if model.cursor > i then
-                                                    model.cursor - 1
+                                                if model.beadCursor > i then
+                                                    model.beadCursor - 1
 
                                                 else
-                                                    model.cursor
+                                                    model.beadCursor
 
                                             _ ->
-                                                model.cursor
+                                                model.beadCursor
 
                                     _ ->
-                                        model.cursor
+                                        model.beadCursor
 
                             else
-                                model.cursor
+                                model.beadCursor
                         , engine = Engine.init
                     }
                 , toUndo = Do
@@ -1307,7 +1306,7 @@ viewContent ( model, mobile ) =
                                                     in
                                                     [ S.rect
                                                         [ SA.transform [ Translate (getX pos) (getY pos), Translate (-length / 2) 0, Scale scale scale ]
-                                                        , SA.x <| Num <| Collar.getCumulLengthAt model.cursor col - cursorW / 2
+                                                        , SA.x <| Num <| Collar.getCumulLengthAt model.beadCursor col - cursorW / 2
                                                         , SA.y <| Num <| -cursorH / 2
                                                         , SA.width <| Num cursorW
                                                         , SA.height <| Num cursorH
@@ -2296,7 +2295,7 @@ interactSelectEdit event mobile model =
                         Just ( { model | edit = [ id ], wave = wave }, Cmd.map WaveMsg cmd )
 
                     Content.C _ ->
-                        Just ( { model | edit = [ id ], cursor = 0 }, Cmd.none )
+                        Just ( { model | edit = [ id ], beadCursor = 0 }, Cmd.none )
 
                     _ ->
                         Just ( { model | edit = [ id ] }, Cmd.none )
