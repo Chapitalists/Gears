@@ -6,7 +6,6 @@ import Browser.Navigation as Nav
 import Coll exposing (Coll, Id)
 import Data.Collar as Collar
 import Data.Content as Content
-import Data.Mobile as Mobile exposing (Mobeel)
 import Data.Wheel as Wheel
 import Dict exposing (Dict)
 import Doc exposing (Doc)
@@ -73,7 +72,7 @@ type alias Model =
     , soundList : Dict String SoundListType
     , loadedSoundList : List Sound
     , savesList : Set String
-    , doc : Doc
+    , doc : Doc.Model
     , screenSize : ScreenSize
     , fileExplorerTab : ExTab
     , mode : Mode
@@ -115,6 +114,11 @@ init screen url _ =
     )
 
 
+soundMimeTypes : List String
+soundMimeTypes =
+    [ "audio/x-wav", "audio/wav" ]
+
+
 
 -- UPDATE
 
@@ -129,10 +133,12 @@ type Msg
     | RequestSavesList
     | RequestSaveLoad String
     | GotSavesList (Result Http.Error String)
-    | GotLoadedFile String (Result Http.Error Mobeel)
+    | GotLoadedFile String (Result Http.Error Doc)
     | SoundLoaded (Result D.Error Sound)
-    | ClickedUpload
+    | ClickedUploadSound
     | UploadSounds File (List File)
+    | ClickedUploadSave
+    | UploadSaves File (List File)
     | ChangedExplorerTab ExTab
     | ChangedMode Mode
     | GotScreenSize ScreenSize
@@ -203,8 +209,11 @@ update msg model =
 
         GotLoadedFile name result ->
             case result of
-                Ok m ->
+                Ok doc ->
                     let
+                        m =
+                            doc.mobile
+
                         getSoundType el list dict =
                             case ( list, Dict.get el dict ) of
                                 ( [], res ) ->
@@ -389,7 +398,7 @@ update msg model =
                                             Doc.AddContent <| Content.M newMobile
 
                                         _ ->
-                                            Doc.Loaded newMobile name
+                                            Doc.Loaded { doc | mobile = newMobile } name
 
                                 ( mod, cmd ) =
                                     update (DocMsg subMsg) newModel
@@ -429,11 +438,10 @@ update msg model =
 
         RequestSoundDownload n ->
             ( model
-            , if Dict.member n model.soundList then
-                DL.url <| Url.toString model.currentUrl ++ "sons/" ++ n
-
-              else
-                Cmd.none
+            , --if Dict.member n model.soundList then
+              DL.url <| Url.toString model.currentUrl ++ "sons/" ++ n
+              --else
+              --  Cmd.none
             )
 
         RequestSavesList ->
@@ -457,22 +465,55 @@ update msg model =
                 Ok s ->
                     ( { model | loadedSoundList = s :: model.loadedSoundList }, Cmd.none )
 
-        ClickedUpload ->
-            ( model, Select.files [ "audio/x-wav" ] UploadSounds )
+        ClickedUploadSound ->
+            ( model, Select.files soundMimeTypes UploadSounds )
 
         UploadSounds f lf ->
             ( model
             , Cmd.batch <|
                 List.map
                     (\file ->
-                        Http.post
-                            { url = Url.toString model.currentUrl ++ "upSound"
-                            , body =
-                                Http.multipartBody
-                                    [ Http.filePart "file" file
-                                    ]
-                            , expect = Http.expectWhatever <| always RequestSoundList
-                            }
+                        if List.member (File.mime file) soundMimeTypes && File.size file <= (200 * 1024 * 1024) then
+                            Http.post
+                                { url = Url.toString model.currentUrl ++ "upSound"
+                                , body =
+                                    Http.multipartBody
+                                        [ Http.filePart "file" file
+                                        ]
+                                , expect = Http.expectWhatever <| always RequestSoundList
+                                }
+
+                        else
+                            Cmd.none
+                    )
+                    (f :: lf)
+            )
+
+        ClickedUploadSave ->
+            ( model, Select.files [] UploadSaves )
+
+        UploadSaves f lf ->
+            ( model
+            , Cmd.batch <|
+                List.map
+                    (\file ->
+                        if
+                            (List.head <| List.reverse <| String.split "." <| File.name file)
+                                == Just "gears"
+                                && File.size file
+                                <= (20 * 1024 * 1024)
+                        then
+                            Http.post
+                                { url = Url.toString model.currentUrl ++ "upSave"
+                                , body =
+                                    Http.multipartBody
+                                        [ Http.filePart "file" file
+                                        ]
+                                , expect = Http.expectWhatever <| always RequestSavesList
+                                }
+
+                        else
+                            Cmd.none
                     )
                     (f :: lf)
             )
@@ -743,26 +784,31 @@ viewFileExplorer model =
         )
 
 
+viewOpenRefreshButtons : Msg -> Msg -> Bool -> List (Element Msg)
+viewOpenRefreshButtons openMsg refreshMsg connected =
+    [ Input.button []
+        { label = text "Ouvrir"
+        , onPress = Just openMsg
+        }
+    , Input.button
+        [ Font.color <|
+            if connected then
+                rgb 0 0 0
+
+            else
+                rgb 1 0 0
+        ]
+        { onPress = Just refreshMsg
+        , label = text "Actualiser"
+        }
+    ]
+
+
 viewSounds : Model -> List (Element Msg)
 viewSounds model =
-    [ column [ width fill, height <| fillPortion 2, spacing 20, scrollbarY ]
-        [ Input.button []
-            { label = text "Ouvrir"
-            , onPress = Just ClickedUpload
-            }
-        , Input.button
-            [ Font.color <|
-                if model.connected then
-                    rgb 0 0 0
-
-                else
-                    rgb 1 0 0
-            ]
-            { onPress = Just RequestSoundList
-            , label = text "Actualiser"
-            }
-        , viewLib model [] model.soundList
-        ]
+    [ column [ width fill, height <| fillPortion 2, spacing 20, scrollbarY ] <|
+        viewOpenRefreshButtons ClickedUploadSound RequestSoundList model.connected
+            ++ [ viewLib model [] model.soundList ]
     ]
 
 
@@ -890,24 +936,14 @@ soundView s =
 
 viewSaveFiles : Model -> List (Element Msg)
 viewSaveFiles model =
-    [ column [ height <| fillPortion 1, width fill, spacing 20, scrollbarY ]
-        [ Input.button
-            [ Font.color <|
-                if model.connected then
-                    rgb 0 0 0
-
-                else
-                    rgb 1 0 0
-            ]
-            { onPress = Just RequestSavesList
-            , label = text "Actualiser"
-            }
-        , column [ width fill, spacing 5, padding 2, scrollbarY ] <|
-            (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutGearsExtension s)) <|
-                List.sortWith Natural.compare <|
-                    Set.toList model.savesList
-            )
-        ]
+    [ column [ height <| fillPortion 1, width fill, spacing 20, scrollbarY ] <|
+        viewOpenRefreshButtons ClickedUploadSave RequestSavesList model.connected
+            ++ [ column [ width fill, spacing 5, padding 2, scrollbarY ] <|
+                    (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutGearsExtension s)) <|
+                        List.sortWith Natural.compare <|
+                            Set.toList model.savesList
+                    )
+               ]
     ]
 
 
@@ -970,7 +1006,7 @@ fetchSaveFile url name =
         , headers = [ Http.header "Cache-Control" "no-cache" ]
         , url = Url.toString { url | path = "/saves/" ++ name }
         , body = Http.emptyBody
-        , expect = Http.expectJson (GotLoadedFile <| cutGearsExtension name) Mobile.decoder
+        , expect = Http.expectJson (GotLoadedFile <| cutGearsExtension name) Doc.decoder
         , timeout = Nothing
         , tracker = Nothing
         }
