@@ -170,7 +170,7 @@ changeView : Maybe Mobeel -> String -> Model -> Model
 changeView mayMobile parentUid model =
     let
         svg =
-            Maybe.withDefault (PanSvg.init svgId) <|
+            Maybe.withDefault model.svg <|
                 Maybe.map (\m -> PanSvg.centerZoom (Mobile.gearPosSize m.motor m.gears) model.svg) mayMobile
     in
     { model
