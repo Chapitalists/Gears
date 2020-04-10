@@ -44,7 +44,7 @@ init url =
     { data = Data.init (Doc Mobile.new "") url
     , viewing = []
     , editor = Editor.init
-    , viewComment = True
+    , viewComment = False
     }
 
 
@@ -368,11 +368,11 @@ viewTop doc =
                                 Nothing
                         }
                    ]
-                ++ [ Input.button [ alignRight ]
-                        { label = text "Notes"
-                        , onPress = Just ToggleCommentView
-                        }
-                   ]
+             --++ [ Input.button [ alignRight ]
+             --        { label = text "Notes"
+             --        , onPress = Just ToggleCommentView
+             --        }
+             --   ]
             )
         ]
 
