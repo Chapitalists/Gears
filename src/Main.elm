@@ -438,11 +438,10 @@ update msg model =
 
         RequestSoundDownload n ->
             ( model
-            , if Dict.member n model.soundList then
-                DL.url <| Url.toString model.currentUrl ++ "sons/" ++ n
-
-              else
-                Cmd.none
+            , --if Dict.member n model.soundList then
+              DL.url <| Url.toString model.currentUrl ++ "sons/" ++ n
+              --else
+              --  Cmd.none
             )
 
         RequestSavesList ->
