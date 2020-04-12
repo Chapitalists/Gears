@@ -47,6 +47,12 @@ port toggleRecord : Bool -> Cmd msg
 port gotRecord : (D.Value -> msg) -> Sub msg
 
 
+port requestCutSample : { old : String, new : String, percents : ( Float, Float ) } -> Cmd msg
+
+
+port gotNewSample : (D.Value -> msg) -> Sub msg
+
+
 
 -- TODO Maybe delegate Coll dependence to Data.Mobile (except Id)
 
@@ -54,6 +60,11 @@ port gotRecord : (D.Value -> msg) -> Sub msg
 svgId : String
 svgId =
     "svg"
+
+
+charsInFile : List Char
+charsInFile =
+    [ '_', '-', ' ' ]
 
 
 blinkOnTime : Float
@@ -73,6 +84,7 @@ type alias Model =
     , edit : List (Id Geer)
     , beadCursor : Int
     , link : Maybe LinkInfo
+    , newSampleName : String
     , parentUid : String -- TODO Two sources of truth !! same in Engine
     , engine : Engine
     , interact : Interact.State Interactable Zone
@@ -156,6 +168,7 @@ init =
     , edit = []
     , beadCursor = 0
     , link = Nothing
+    , newSampleName = ""
     , parentUid = ""
     , engine = Engine.init
     , interact = Interact.init
@@ -210,6 +223,9 @@ type Msg
     | Capsuled (List (Id Geer))
     | Collared (Id Geer)
     | UnCollar (Id Geer)
+    | EnteredNewSampleName String
+    | CutNewSample
+    | GotNewSample (Result D.Error String)
     | Blink
     | InteractMsg (Interact.Msg Interactable Zone)
     | SvgMsg PanSvg.Msg
@@ -748,6 +764,44 @@ update msg ( model, mobile ) =
                 _ ->
                     return
 
+        EnteredNewSampleName str ->
+            { return
+                | model =
+                    { model
+                        | newSampleName =
+                            if String.all (\c -> Char.isAlphaNum c || List.member c charsInFile) str then
+                                str
+
+                            else
+                                model.newSampleName
+                    }
+            }
+
+        CutNewSample ->
+            case model.edit of
+                [ id ] ->
+                    let
+                        g =
+                            Coll.get id mobile.gears
+                    in
+                    case Wheel.getContent g of
+                        Content.S s ->
+                            { return | cmd = requestCutSample { old = Sound.toString s, new = model.newSampleName, percents = Wheel.getLoopPercents g } }
+
+                        _ ->
+                            return
+
+                _ ->
+                    return
+
+        GotNewSample res ->
+            case res of
+                Ok url ->
+                    { return | cmd = DL.url url }
+
+                Err err ->
+                    Debug.log (D.errorToString err) return
+
         Blink ->
             case model.dragging of
                 Alterning x y ( b, _ ) ->
@@ -895,6 +949,7 @@ subs { interact, dragging } =
     PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
         :: Sub.map WaveMsg Waveform.sub
         :: (gotRecord <| (GotRecord << D.decodeValue D.string))
+        :: (gotNewSample <| (GotNewSample << D.decodeValue D.string))
         :: (List.map (Sub.map InteractMsg) <| Interact.subs interact)
         ++ (case dragging of
                 Alterning _ _ ( _, t ) ->
@@ -1587,6 +1642,41 @@ viewEditDetails model mobile =
                     "Contenu : "
                         ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)
                 ]
+                    ++ (case Wheel.getContent g of
+                            Content.S s ->
+                                let
+                                    ok =
+                                        model.newSampleName
+                                            /= Sound.toString s
+                                            && (not <| String.isEmpty model.newSampleName)
+                                in
+                                [ Input.button
+                                    [ Font.color <|
+                                        if ok then
+                                            rgb 1 1 1
+
+                                        else
+                                            rgb 0 0 0
+                                    ]
+                                    { label = text "Couper en tant que"
+                                    , onPress =
+                                        if ok then
+                                            Just <| CutNewSample
+
+                                        else
+                                            Nothing
+                                    }
+                                , Input.text [ Font.color <| rgb 0 0 0 ]
+                                    { label = Input.labelHidden "Nouveau nom"
+                                    , text = model.newSampleName
+                                    , placeholder = Just <| Input.placeholder [] <| text "Nouveau nom"
+                                    , onChange = EnteredNewSampleName
+                                    }
+                                ]
+
+                            _ ->
+                                []
+                       )
             ]
 
         _ :: _ ->
