@@ -147,6 +147,7 @@ const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
 
 
     , callback = (req, res) => {
+        console.log(new Date(), req.method + ' ' + req.headers.host + req.url)
         const dir = req.url.split('/')[1]
             , cb = (dir == 'sons' || dir == 'saves') ? externCallback : dynamicCallbacks[dir]
         ;(cb || internCallback)(req, res)
