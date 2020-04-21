@@ -3,6 +3,7 @@ Copyright ou © ou Copr. Clément Bossut, (2018)
 <bossut.clement@gmail.com>
 */
 
+process.chdir(__dirname)
 
 console.log('args : port soundDir saveDir backUpDir')
 
