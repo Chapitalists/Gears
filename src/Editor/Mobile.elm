@@ -2,7 +2,7 @@ port module Editor.Mobile exposing (..)
 
 import Coll exposing (Coll, Id)
 import Color
-import Data.Collar as Collar
+import Data.Collar as Collar exposing (Beed)
 import Data.Common as CommonData exposing (Identifier)
 import Data.Content as Content exposing (Content)
 import Data.Gear as Gear
@@ -386,57 +386,41 @@ update msg ( model, mobile ) =
                     return
 
         NewBead c ->
-            case model.edit of
-                [ id ] ->
-                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
-                        Content.C col ->
-                            { return
-                                | mobile =
-                                    CommonData.updateWheel ( id, [] )
-                                        (Wheel.ChangeContent <| Content.C <| Collar.add model.beadCursor (Collar.beadFromContent c) col)
-                                        mobile
-                                , toUndo = Group
-                                , model = { model | beadCursor = model.beadCursor + 1 }
-                                , cmd = Random.generate (\color -> WheelMsgs [ ( ( id, [ model.beadCursor ] ), Wheel.ChangeColor color ) ]) colorGen
-                            }
-
-                        _ ->
-                            return
+            case addBead model mobile <| Collar.beadFromContent c of
+                Just ( newModel, newMobile, id ) ->
+                    { return
+                        | model = newModel
+                        , mobile = newMobile
+                        , toUndo = Group
+                        , cmd = Random.generate (\color -> WheelMsgs [ ( ( id, [ model.beadCursor ] ), Wheel.ChangeColor color ) ]) colorGen
+                    }
 
                 _ ->
                     return
 
         UnpackBead ( w, l ) new ->
-            case model.edit of
-                [ id ] ->
-                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
-                        Content.C col ->
-                            if new then
-                                { return
-                                    | mobile =
-                                        CommonData.updateWheel ( id, [] )
-                                            (Wheel.ChangeContent <| Content.C <| Collar.add model.beadCursor { wheel = w, length = l } col)
-                                            mobile
-                                    , toUndo = Do
-                                    , model = { model | beadCursor = model.beadCursor + 1 }
-                                }
+            if new then
+                case addBead model mobile { wheel = w, length = l } of
+                    Just ( newModel, newMobile, _ ) ->
+                        { return
+                            | model = newModel
+                            , mobile = newMobile
+                            , toUndo = Do
+                        }
 
-                            else
-                                Debug.todo "ChangeContent of bead, has to select bead"
+                    _ ->
+                        return
 
-                        {- case model.common.edit of
-                           [ B i ] ->
-                               update (WheelMsg ( i, Wheel.ChangeContent <| Wheel.getContent { wheel = w } )) ( model, collar )
+            else
+                Debug.todo "ChangeContent of bead, has to select bead"
 
-                           _ ->
-                               return
-                        -}
-                        _ ->
-                            return
+        {- case model.common.edit of
+           [ B i ] ->
+               update (WheelMsg ( i, Wheel.ChangeContent <| Wheel.getContent { wheel = w } )) ( model, collar )
 
-                _ ->
-                    return
-
+           _ ->
+               return
+        -}
         CopyGear id ->
             { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
@@ -1877,6 +1861,43 @@ doChangeContent id c mayColor model mobile =
                 , model = newModel
                 , cmd = Random.generate (WheelMsgs << colorToMsgs) colorGen
             }
+
+
+addBead : Model -> Mobeel -> Beed -> Maybe ( Model, Mobeel, Id Geer )
+addBead model mobile bead =
+    case model.edit of
+        [ id ] ->
+            case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                Content.C col ->
+                    let
+                        newCol =
+                            Collar.add model.beadCursor bead col
+
+                        newMob =
+                            CommonData.updateWheel ( id, [] )
+                                (Wheel.ChangeContent <| Content.C newCol)
+                                mobile
+
+                        oldLength =
+                            Harmo.getLengthId id mobile.gears
+
+                        oldContentLength =
+                            Collar.getTotalLength col
+
+                        newContentLength =
+                            Collar.getTotalLength newCol
+                    in
+                    Just
+                        ( { model | beadCursor = model.beadCursor + 1 }
+                        , { newMob | gears = Harmo.resizeFree id (newContentLength * oldLength / oldContentLength) newMob.gears }
+                        , id
+                        )
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
 
 
 computeCuts : ( Vec2, Vec2 ) -> Coll Geer -> List (Link Geer)
