@@ -2159,7 +2159,27 @@ manageInteractEvent event model mobile =
                                                     in
                                                     case interactWave g event model mobile of
                                                         Just subMsg ->
-                                                            update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
+                                                            let
+                                                                ret =
+                                                                    update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
+
+                                                                newMob =
+                                                                    ret.mobile
+
+                                                                oldPercents =
+                                                                    Wheel.getLoopPercents (Coll.get id mobile.gears)
+
+                                                                newPercents =
+                                                                    Wheel.getLoopPercents (Coll.get id newMob.gears)
+
+                                                                ratio =
+                                                                    (Tuple.second newPercents - Tuple.first newPercents)
+                                                                        / (Tuple.second oldPercents - Tuple.first oldPercents)
+
+                                                                oldLength =
+                                                                    Harmo.getLengthId id mobile.gears
+                                                            in
+                                                            { ret | mobile = { newMob | gears = Harmo.resizeFree id (ratio * oldLength) newMob.gears } }
 
                                                         Nothing ->
                                                             return
