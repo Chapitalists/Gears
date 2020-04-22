@@ -47,10 +47,7 @@ port toggleRecord : Bool -> Cmd msg
 port gotRecord : (D.Value -> msg) -> Sub msg
 
 
-port requestCutSample : { old : String, new : String, percents : ( Float, Float ) } -> Cmd msg
-
-
-port gotNewSample : (D.Value -> msg) -> Sub msg
+port requestCutSample : { fromFileName : String, newFileName : String, percents : ( Float, Float ) } -> Cmd msg
 
 
 
@@ -225,7 +222,6 @@ type Msg
     | UnCollar (Id Geer)
     | EnteredNewSampleName String
     | CutNewSample
-    | GotNewSample (Result D.Error String)
     | Blink
     | InteractMsg (Interact.Msg Interactable Zone)
     | SvgMsg PanSvg.Msg
@@ -786,21 +782,13 @@ update msg ( model, mobile ) =
                     in
                     case Wheel.getContent g of
                         Content.S s ->
-                            { return | cmd = requestCutSample { old = Sound.toString s, new = model.newSampleName, percents = Wheel.getLoopPercents g } }
+                            { return | cmd = requestCutSample { fromFileName = Sound.toString s, newFileName = model.newSampleName, percents = Wheel.getLoopPercents g } }
 
                         _ ->
                             return
 
                 _ ->
                     return
-
-        GotNewSample res ->
-            case res of
-                Ok url ->
-                    { return | cmd = DL.url url }
-
-                Err err ->
-                    Debug.log (D.errorToString err) return
 
         Blink ->
             case model.dragging of
@@ -946,11 +934,11 @@ update msg ( model, mobile ) =
 
 subs : Model -> List (Sub Msg)
 subs { interact, dragging } =
-    PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
-        :: Sub.map WaveMsg Waveform.sub
-        :: (gotRecord <| (GotRecord << D.decodeValue D.string))
-        :: (gotNewSample <| (GotNewSample << D.decodeValue D.string))
-        :: (List.map (Sub.map InteractMsg) <| Interact.subs interact)
+    [ PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
+    , Sub.map WaveMsg Waveform.sub
+    , gotRecord <| (GotRecord << D.decodeValue D.string)
+    ]
+        ++ (List.map (Sub.map InteractMsg) <| Interact.subs interact)
         ++ (case dragging of
                 Alterning _ _ ( _, t ) ->
                     [ Time.every t <| always <| Blink ]

@@ -41,6 +41,9 @@ port loadSound : String -> Cmd msg
 port soundLoaded : (D.Value -> msg) -> Sub msg
 
 
+port gotNewSample : (D.Value -> msg) -> Sub msg
+
+
 
 -- TODO refactor existing Debug.log with "key" value
 -- TODO check bug visibility hidden not emitted on window change but on tab change
@@ -137,6 +140,7 @@ type Msg
     | SoundLoaded (Result D.Error Sound)
     | ClickedUploadSound
     | UploadSounds File (List File)
+    | GotNewSample (Result D.Error File)
     | ClickedUploadSave
     | UploadSaves File (List File)
     | ChangedExplorerTab ExTab
@@ -489,6 +493,14 @@ update msg model =
                     (f :: lf)
             )
 
+        GotNewSample res ->
+            case res of
+                Ok file ->
+                    update (UploadSounds file []) model
+
+                Err err ->
+                    Debug.log (D.errorToString err) ( model, Cmd.none )
+
         ClickedUploadSave ->
             ( model, Select.files [] UploadSaves )
 
@@ -653,6 +665,7 @@ subs { doc } =
     Sub.batch <|
         [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
+        , gotNewSample <| (GotNewSample << D.decodeValue File.decoder)
         ]
             ++ List.map (Sub.map DocMsg) (Doc.subs doc)
             ++ List.map (Sub.map KeysMsg) Keys.subs

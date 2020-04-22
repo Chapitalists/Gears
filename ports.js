@@ -58,9 +58,9 @@ function toggleRecord(bool) {
 }
 
 function cutSample(infos) {
-    if (!buffers[infos.old]) {console.err("infos.old " + "ain’t loaded, cannot cut");return;}
+    if (!buffers[infos.fromFileName]) {console.err(infos.fromFileName + " ain’t loaded, cannot cut");return;}
 
-    let buf = buffers[infos.old]._buffer
+    let buf = buffers[infos.fromFileName]._buffer
       , start = infos.percents[0] * buf.length - 1
       , end = infos.percents[1] * buf.length + 1
       , newBuf = new AudioBuffer(
@@ -74,7 +74,7 @@ function cutSample(infos) {
         newBuf.copyToChannel(chan, i)
     }
 
-    app.ports.gotNewSample.send(URL.createObjectURL(new Blob([audioBufferToWav(newBuf)], {type: "audio/wav"})))
+    app.ports.gotNewSample.send(new File([audioBufferToWav(newBuf)], infos.newFileName + ".wav", {type: "audio/wav"}))
 }
 
 function engine(o) {
