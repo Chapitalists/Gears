@@ -862,7 +862,7 @@ viewSoundInLib model s id playing loading =
                 else
                     rgb 1 1 1
             ]
-            { label = text s
+            { label = text <| cutExtension s
             , onPress =
                 Just <|
                     if model.mode == Downloading then
@@ -944,7 +944,7 @@ soundView s =
          <|
             Interact.draggableEvents (Interacting.ISound s)
         )
-        (text (Sound.toString s))
+        (text <| cutExtension <| Sound.toString s)
 
 
 viewSaveFiles : Model -> List (Element Msg)
@@ -952,7 +952,7 @@ viewSaveFiles model =
     [ column [ height <| fillPortion 1, width fill, spacing 20, scrollbarY ] <|
         viewOpenRefreshButtons ClickedUploadSave RequestSavesList model.connected
             ++ [ column [ width fill, spacing 5, padding 2, scrollbarY ] <|
-                    (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutGearsExtension s)) <|
+                    (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutExtension s)) <|
                         List.sortWith Natural.compare <|
                             Set.toList model.savesList
                     )
@@ -1019,12 +1019,16 @@ fetchSaveFile url name =
         , headers = [ Http.header "Cache-Control" "no-cache" ]
         , url = Url.toString { url | path = "/saves/" ++ name }
         , body = Http.emptyBody
-        , expect = Http.expectJson (GotLoadedFile <| cutGearsExtension name) Doc.decoder
+        , expect = Http.expectJson (GotLoadedFile <| cutExtension name) Doc.decoder
         , timeout = Nothing
         , tracker = Nothing
         }
 
 
-cutGearsExtension : String -> String
-cutGearsExtension =
-    String.dropRight 6
+cutExtension : String -> String
+cutExtension fullName =
+    let
+        l =
+            String.split "." fullName
+    in
+    String.join "." <| List.take (List.length l - 1) l
