@@ -74,6 +74,7 @@ type alias Model =
     , currentUrl : Url.Url
     , soundList : Dict String SoundListType
     , loadedSoundList : List Sound
+    , showDirLoad : Bool
     , savesList : Set String
     , doc : Doc.Model
     , screenSize : ScreenSize
@@ -107,6 +108,7 @@ init screen url _ =
         url
         Dict.empty
         []
+        True
         Set.empty
         (Doc.init <| Just url)
         screen
@@ -144,6 +146,7 @@ type Msg
     | ClickedUploadSave
     | UploadSaves File (List File)
     | ChangedExplorerTab ExTab
+    | ToggleShowDirLoad Bool
     | ChangedMode Mode
     | GotScreenSize ScreenSize
     | DocMsg Doc.Msg
@@ -571,6 +574,9 @@ update msg model =
         ChangedExplorerTab tab ->
             ( { model | fileExplorerTab = tab }, Cmd.none )
 
+        ToggleShowDirLoad b ->
+            ( { model | showDirLoad = b }, Cmd.none )
+
         -- FIXME Code smell?
         ChangedMode mode ->
             case mode of
@@ -913,16 +919,35 @@ viewDirInLib model str id dict opened =
 
 viewLoaded : Model -> List (Element Msg)
 viewLoaded model =
-    [ column [ width fill, height <| fillPortion 3, spacing 10, padding 2, scrollbarY ] <|
-        List.map soundView <|
-            List.sortWith
-                (\s t -> Natural.compare (Sound.toString s) (Sound.toString t))
-                model.loadedSoundList
+    [ column [ width fill, height <| fillPortion 3, spacing 10, padding 2, scrollbarY ]
+        ([ Input.checkbox []
+            { label = Input.labelLeft [] <| text "Voir dossiers"
+            , checked = model.showDirLoad
+            , onChange = ToggleShowDirLoad
+            , icon = Input.defaultCheckbox
+            }
+         ]
+            ++ (List.map (soundView model.showDirLoad) <|
+                    List.sortWith
+                        (\s t -> Natural.compare (Sound.toString s) (Sound.toString t))
+                        model.loadedSoundList
+               )
+        )
     ]
 
 
-soundView : Sound -> Element Msg
-soundView s =
+soundView : Bool -> Sound -> Element Msg
+soundView showDir s =
+    let
+        fullPath =
+            cutExtension <| Sound.toString s
+
+        l =
+            List.concatMap (String.split "/") <| String.split "\\" fullPath
+
+        justName =
+            String.join "/" <| List.drop (List.length l - 1) l
+    in
     el
         (List.map
             (Element.htmlAttribute
@@ -931,7 +956,13 @@ soundView s =
          <|
             Interact.draggableEvents (Interacting.ISound s)
         )
-        (text <| cutExtension <| Sound.toString s)
+        (text <|
+            if showDir then
+                fullPath
+
+            else
+                justName
+        )
 
 
 viewSaveFiles : Model -> List (Element Msg)
