@@ -752,36 +752,9 @@ viewFileExplorer model =
     in
     column [ height fill, Bg.color bgColor, Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ] <|
         ([ row [ Font.size 14, spacing 20 ]
-            [ Input.button
-                (if model.fileExplorerTab == Sounds then
-                    [ padding 5, Bg.color (rgb 0.2 0.2 0.2) ]
-
-                 else
-                    [ padding 5 ]
-                )
-                { label = text "Sons"
-                , onPress = Just <| ChangedExplorerTab Sounds
-                }
-            , Input.button
-                (if model.fileExplorerTab == LoadedSounds then
-                    [ padding 5, Bg.color (rgb 0.1 0.1 0.1) ]
-
-                 else
-                    [ padding 5 ]
-                )
-                { label = text "Chargés"
-                , onPress = Just <| ChangedExplorerTab LoadedSounds
-                }
-            , Input.button
-                (if model.fileExplorerTab == Saves then
-                    [ padding 5, Bg.color (rgb 0.1 0.1 0.1) ]
-
-                 else
-                    [ padding 5 ]
-                )
-                { label = text "Saves"
-                , onPress = Just <| ChangedExplorerTab Saves
-                }
+            [ viewExplorerTab model.fileExplorerTab Sounds "Sons"
+            , viewExplorerTab model.fileExplorerTab LoadedSounds "Chargés"
+            , viewExplorerTab model.fileExplorerTab Saves "Saves"
             ]
          ]
             ++ (case model.fileExplorerTab of
@@ -795,6 +768,20 @@ viewFileExplorer model =
                         viewSaveFiles model
                )
         )
+
+
+viewExplorerTab : ExTab -> ExTab -> String -> Element Msg
+viewExplorerTab seled tab name =
+    Input.button
+        (if seled == tab then
+            [ padding 5, Bg.color (rgb 0.2 0.2 0.2) ]
+
+         else
+            [ padding 5 ]
+        )
+        { label = text name
+        , onPress = Just <| ChangedExplorerTab tab
+        }
 
 
 viewOpenRefreshButtons : Msg -> Msg -> Bool -> List (Element Msg)
