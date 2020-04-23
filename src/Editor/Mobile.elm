@@ -448,6 +448,52 @@ update msg ( model, mobile ) =
             }
 
         DeleteWheel ( id, l ) ->
+            let
+                newMob =
+                    CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
+
+                finalMob =
+                    case l of
+                        [ i ] ->
+                            let
+                                colId =
+                                    ( id, [] )
+
+                                mayOldCol =
+                                    case Wheel.getWheelContent <| CommonData.getWheel colId mobile of
+                                        Content.C col ->
+                                            Just col
+
+                                        _ ->
+                                            Nothing
+
+                                mayNewCol =
+                                    case Wheel.getWheelContent <| CommonData.getWheel colId newMob of
+                                        Content.C col ->
+                                            Just col
+
+                                        _ ->
+                                            Nothing
+
+                                mayOldContentLength =
+                                    Maybe.map Collar.getTotalLength mayOldCol
+
+                                mayNewContentLength =
+                                    Maybe.map Collar.getTotalLength mayNewCol
+
+                                oldLength =
+                                    Harmo.getLengthId id mobile.gears
+                            in
+                            case Maybe.map2 Tuple.pair mayOldContentLength mayNewContentLength of
+                                Just ( oldCL, newCL ) ->
+                                    { newMob | gears = Harmo.resizeFree id (newCL * oldLength / oldCL) newMob.gears }
+
+                                Nothing ->
+                                    newMob
+
+                        _ ->
+                            newMob
+            in
             { return
                 | model =
                     { model
@@ -481,7 +527,7 @@ update msg ( model, mobile ) =
                     }
                 , toUndo = Do
                 , toEngine = [ Engine.stop ]
-                , mobile = CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
+                , mobile = finalMob
             }
 
         EnteredFract isNumerator str ->
