@@ -486,7 +486,7 @@ update msg ( model, mobile ) =
                             in
                             case Maybe.map2 Tuple.pair mayOldContentLength mayNewContentLength of
                                 Just ( oldCL, newCL ) ->
-                                    { newMob | gears = Harmo.resizeFree id (newCL * oldLength / oldCL) newMob.gears }
+                                    { newMob | gears = Harmo.changeSelf id (newCL * oldLength / oldCL) newMob.gears }
 
                                 Nothing ->
                                     newMob
@@ -1935,7 +1935,7 @@ addBead model mobile bead =
                     in
                     Just
                         ( { model | beadCursor = model.beadCursor + 1 }
-                        , { newMob | gears = Harmo.resizeFree id (newContentLength * oldLength / oldContentLength) newMob.gears }
+                        , { newMob | gears = Harmo.changeSelf id (newContentLength * oldLength / oldContentLength) newMob.gears }
                         , id
                         )
 
@@ -2246,7 +2246,7 @@ manageInteractEvent event model mobile =
                                                                 oldLength =
                                                                     Harmo.getLengthId id mobile.gears
                                                             in
-                                                            { ret | mobile = { newMob | gears = Harmo.resizeFree id (ratio * oldLength) newMob.gears } }
+                                                            { ret | mobile = { newMob | gears = Harmo.changeSelf id (ratio * oldLength) newMob.gears } }
 
                                                         Nothing ->
                                                             return
