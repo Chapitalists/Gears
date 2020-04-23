@@ -32,6 +32,7 @@ border =
 
 type alias Waveform =
     { size : Int
+    , height : Int
     , drawn : Drawing
     , sel : Maybe ( Int, Int )
     }
@@ -46,6 +47,7 @@ type Drawing
 init : Waveform
 init =
     { size = 1000
+    , height = 150
     , drawn = None
     , sel = Nothing
     }
@@ -161,9 +163,9 @@ view visible wave cursors interState wrapInter =
                     ([ selection ( toPx 0, toPx cursors.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
                      , selection ( toPx cursors.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
                      , selection ( toPx cursors.start, toPx cursors.end ) (Just IWaveSel) <| rgba 0 0 0 0
-                     , cursor (toPx cursors.start) LoopStart
-                     , cursor (toPx cursors.end) LoopEnd
-                     , cursor (toPx cursors.offset) StartOffset
+                     , cursor (toPx cursors.start) LoopStart wave.height
+                     , cursor (toPx cursors.end) LoopEnd wave.height
+                     , cursor (toPx cursors.offset) StartOffset wave.height
                      ]
                         ++ (case wave.sel of
                                 Just points ->
@@ -187,15 +189,11 @@ view visible wave cursors interState wrapInter =
                 []
 
 
-cursor : Int -> Cursor -> Attribute (Interact.Msg Interactable zone)
-cursor pos cur =
-    inFront <|
-        el
-            ([ htmlAttribute <| Attr.style "cursor" "ew-resize"
-             , Border.width <| border
-             , height fill
-             , moveRight <| toFloat <| pos - border
-             , inFront <|
+cursor : Int -> Cursor -> Int -> Attribute (Interact.Msg Interactable zone)
+cursor pos cur h =
+    let
+        handle attrs =
+            inFront <|
                 el
                     ([ htmlAttribute <| Attr.style "cursor" "grab"
                      , height <| px <| border * 8
@@ -204,19 +202,29 @@ cursor pos cur =
                      , Bg.color <| rgb 0 0 0
                      , moveLeft <| toFloat <| border * 4
                      ]
-                        ++ (case cur of
-                                LoopStart ->
-                                    [ alignTop, moveUp <| toFloat border ]
-
-                                LoopEnd ->
-                                    [ alignBottom, moveDown <| toFloat border ]
-
-                                StartOffset ->
-                                    [ centerY ]
-                           )
+                        ++ attrs
                     )
                     none
+    in
+    inFront <|
+        el
+            ([ htmlAttribute <| Attr.style "cursor" "ew-resize"
+             , Border.width <| border
+             , height fill
+             , moveRight <| toFloat <| pos - border
              ]
+                ++ (case cur of
+                        LoopStart ->
+                            [ handle [ alignTop, moveUp <| toFloat border ] ]
+
+                        LoopEnd ->
+                            [ handle [ alignBottom, moveDown <| toFloat border ] ]
+
+                        StartOffset ->
+                            [ handle [ centerY, moveDown <| toFloat h / 4 ]
+                            , handle [ centerY, moveUp <| toFloat h / 4 ]
+                            ]
+                   )
                 ++ (List.map htmlAttribute <| Interact.draggableEvents <| IWaveCursor cur)
             )
             none
