@@ -11,6 +11,7 @@ saves
 
 # compiled
 elmApp.js
+index.html
 
 # elm-package generated files
 elm-stuff
