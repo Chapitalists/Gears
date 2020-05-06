@@ -343,8 +343,12 @@ update msg ( model, mobile ) =
             case model.tool of
                 Edit _ ->
                     let
+                        demutedMobile =
+                            model.edit
+                                |> List.foldl (\id mob -> CommonData.updateWheel ( id, [] ) (Wheel.Mute False) mob) mobile
+
                         ( engine, v ) =
-                            Engine.addPlaying model.edit mobile.gears model.engine
+                            Engine.addPlaying model.edit demutedMobile.gears model.engine
                     in
                     { return | model = { model | engine = engine, tool = Edit True }, toEngine = v }
 
