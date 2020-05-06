@@ -79,6 +79,7 @@ type alias Model =
     , doc : Doc.Model
     , screenSize : ScreenSize
     , fileExplorerTab : ExTab
+    , fileFilter : String
     , mode : Mode
     , keys : Keys.State
     }
@@ -113,6 +114,7 @@ init screen url _ =
         (Doc.init <| Just url)
         screen
         Sounds
+        ""
         NoMode
         Keys.init
     , Cmd.batch [ fetchSoundList url, fetchSavesList url ]
@@ -147,6 +149,7 @@ type Msg
     | UploadSaves File (List File)
     | ChangedExplorerTab ExTab
     | ToggleShowDirLoad Bool
+    | ChgFilter String
     | ChangedMode Mode
     | GotScreenSize ScreenSize
     | DocMsg Doc.Msg
@@ -577,6 +580,9 @@ update msg model =
         ToggleShowDirLoad b ->
             ( { model | showDirLoad = b }, Cmd.none )
 
+        ChgFilter s ->
+            ( { model | fileFilter = s }, Cmd.none )
+
         -- FIXME Code smell?
         ChangedMode mode ->
             case mode of
@@ -757,13 +763,18 @@ viewFileExplorer model =
                     rgb 0.5 0.5 0.5
     in
     column [ height fill, Bg.color bgColor, Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ] <|
-        ([ row [ Font.size 14, spacing 20 ]
+        (row [ Font.size 14, spacing 20 ]
             [ viewExplorerTab model.fileExplorerTab Sounds "Sons"
             , viewExplorerTab model.fileExplorerTab LoadedSounds "Chargés"
             , viewExplorerTab model.fileExplorerTab Saves "Saves"
             ]
-         ]
-            ++ (case model.fileExplorerTab of
+            :: Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
+                { label = Input.labelLeft [] <| text "Filtrer\u{202F}:"
+                , text = model.fileFilter
+                , placeholder = Nothing
+                , onChange = ChgFilter
+                }
+            :: (case model.fileExplorerTab of
                     Sounds ->
                         viewSounds model
 
@@ -814,31 +825,54 @@ viewSounds : Model -> List (Element Msg)
 viewSounds model =
     [ column [ width fill, height <| fillPortion 2, spacing 20, scrollbarY ] <|
         viewOpenRefreshButtons ClickedUploadSound RequestSoundList model.connected
-            ++ [ viewLib model [] model.soundList ]
+            ++ [ viewLibColumn <| viewLib model [] model.soundList ]
     ]
 
 
-viewLib : Model -> List String -> Dict String SoundListType -> Element Msg
+viewLibColumn : List (Element Msg) -> Element Msg
+viewLibColumn =
+    column [ width fill, spacing 5, padding 2, scrollbarY ]
+
+
+viewLib : Model -> List String -> Dict String SoundListType -> List (Element Msg)
 viewLib model id dict =
-    column [ width fill, spacing 5, padding 2, scrollbarY ] <|
-        List.concatMap
-            (\( s, sType ) ->
-                case sType of
-                    Stopped ->
-                        [ viewSoundInLib model s (id ++ [ s ]) False False ]
+    List.concatMap
+        (\( s, sType ) ->
+            let
+                newId =
+                    id ++ [ s ]
 
-                    Playing ->
-                        [ viewSoundInLib model s (id ++ [ s ]) True False ]
+                filterOut =
+                    not <| String.contains (String.toLower model.fileFilter) <| String.toLower <| String.join "/" newId
+            in
+            case sType of
+                Stopped ->
+                    if filterOut then
+                        []
 
-                    Loading ->
-                        [ viewSoundInLib model s (id ++ [ s ]) False True ]
+                    else
+                        [ viewSoundInLib model s newId False False ]
 
-                    Directory opened dir ->
-                        viewDirInLib model s (id ++ [ s ]) dir opened
-            )
-        <|
-            List.sortWith (\t1 t2 -> Natural.compare (Tuple.first t1) (Tuple.first t2)) <|
-                Dict.toList dict
+                Playing ->
+                    if filterOut then
+                        []
+
+                    else
+                        [ viewSoundInLib model s newId True False ]
+
+                Loading ->
+                    if filterOut then
+                        []
+
+                    else
+                        [ viewSoundInLib model s newId False True ]
+
+                Directory opened dir ->
+                    viewDirInLib model s newId dir opened
+        )
+    <|
+        List.sortWith (\t1 t2 -> Natural.compare (Tuple.first t1) (Tuple.first t2)) <|
+            Dict.toList dict
 
 
 viewSoundInLib : Model -> String -> List String -> Bool -> Bool -> Element Msg
@@ -895,26 +929,34 @@ viewSoundInLib model s id playing loading =
 
 viewDirInLib : Model -> String -> List String -> Dict String SoundListType -> Bool -> List (Element Msg)
 viewDirInLib model str id dict opened =
-    Input.button [ Font.color <| rgb 1 1 1 ]
-        { label =
-            el [ Font.bold ] <|
-                text <|
-                    (if opened then
-                        "▽"
+    let
+        subView =
+            viewLib model id dict
+    in
+    if not <| List.isEmpty subView then
+        Input.button [ Font.color <| rgb 1 1 1 ]
+            { label =
+                el [ Font.bold ] <|
+                    text <|
+                        (if opened then
+                            "▽"
 
-                     else
-                        "◿"
-                    )
-                        ++ " "
-                        ++ str
-        , onPress = Just <| ExpandDir id
-        }
-        :: (if opened then
-                [ el [ moveRight 10 ] <| viewLib model id dict ]
+                         else
+                            "◿"
+                        )
+                            ++ " "
+                            ++ str
+            , onPress = Just <| ExpandDir id
+            }
+            :: (if opened then
+                    [ el [ moveRight 10 ] <| viewLibColumn subView ]
 
-            else
-                []
-           )
+                else
+                    []
+               )
+
+    else
+        []
 
 
 viewLoaded : Model -> List (Element Msg)
@@ -928,9 +970,8 @@ viewLoaded model =
             }
          ]
             ++ (List.map (soundView model.showDirLoad) <|
-                    List.sortWith
-                        (\s t -> Natural.compare (Sound.toString s) (Sound.toString t))
-                        model.loadedSoundList
+                    List.sortWith (\s t -> Natural.compare (Sound.toString s) (Sound.toString t)) <|
+                        filterFiles model.fileFilter Sound.toString model.loadedSoundList
                )
         )
     ]
@@ -972,7 +1013,8 @@ viewSaveFiles model =
             ++ [ column [ width fill, spacing 5, padding 2, scrollbarY ] <|
                     (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutExtension s)) <|
                         List.sortWith Natural.compare <|
-                            Set.toList model.savesList
+                            filterFiles model.fileFilter identity <|
+                                Set.toList model.savesList
                     )
                ]
     ]
@@ -1041,6 +1083,14 @@ fetchSaveFile url name =
         , timeout = Nothing
         , tracker = Nothing
         }
+
+
+filterFiles : String -> (a -> String) -> List a -> List a
+filterFiles filter toString =
+    List.filter <|
+        (String.contains <| String.toLower filter)
+            << String.toLower
+            << toString
 
 
 cutExtension : String -> String
