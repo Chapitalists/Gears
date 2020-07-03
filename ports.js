@@ -87,7 +87,7 @@ function engine(o) {
         playing = {}
         break;
     case "playPause" :
-        let t = Tone.now()+0.1
+        let t = Tone.now()+2
         o.gears.map(g=>playPause(g,t))
         break;
     case "mute" :
