@@ -117,14 +117,15 @@ type Mode
     | Solo
 
 
-keyCodeToMode : List ( String, Mode )
-keyCodeToMode =
-    [ ( "KeyD", Move )
-    , ( "KeyV", Nav )
+keyToMode : List ( String, Mode )
+keyToMode =
+    -- TODO Could be in Main with other keyToMode ?
+    [ ( "d", Move )
+    , ( "v", Nav )
     , ( "Delete", SupprMode )
     , ( "Backspace", SupprMode )
-    , ( "KeyQ", Alternate )
-    , ( "KeyS", Solo )
+    , ( "a", Alternate )
+    , ( "s", Solo )
     ]
 
 

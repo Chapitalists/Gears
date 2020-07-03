@@ -627,39 +627,39 @@ update msg model =
                     Keys.update subMsg model.keys
             in
             List.foldl
-                (\event ( m, c ) ->
+                (\event ( m, k ) ->
                     case event of
                         Keys.Hold hold ->
-                            case List.filterMap (\code -> Dict.get code keyCodeToMode) <| Set.toList hold of
+                            case List.filterMap (\code -> Dict.get code keyToMode) <| Set.toList hold of
                                 [ only ] ->
-                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, c ]) <| update (ChangedMode only) m
+                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, k ]) <| update (ChangedMode only) m
 
                                 _ ->
-                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, c ]) <| update (ChangedMode NoMode) m
+                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, k ]) <| update (ChangedMode NoMode) m
 
-                        Keys.Press code ->
-                            case Dict.get code keyCodeToShortcut of
+                        Keys.Press key ->
+                            case Dict.get key keyToShortcut of
                                 Just press ->
                                     let
                                         ( doc, cmd ) =
                                             Doc.update (Doc.KeyPressed press) m.doc
                                     in
-                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
+                                    ( { m | doc = doc }, Cmd.batch [ k, Cmd.map DocMsg cmd ] )
 
                                 Nothing ->
-                                    ( m, c )
+                                    ( m, k )
 
-                        Keys.Repeat code ->
-                            case Dict.get code keyCodeToDirection of
+                        Keys.Repeat key ->
+                            case Dict.get key keyToDirection of
                                 Just dir ->
                                     let
                                         ( doc, cmd ) =
                                             Doc.update (Doc.DirectionRepeat dir) m.doc
                                     in
-                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
+                                    ( { m | doc = doc }, Cmd.batch [ k, Cmd.map DocMsg cmd ] )
 
                                 Nothing ->
-                                    ( m, c )
+                                    ( m, k )
                 )
                 ( { model | keys = state }, Cmd.none )
                 events
@@ -690,38 +690,39 @@ type Mode
     | NoMode
 
 
-keyCodeToMode : Dict String Mode
-keyCodeToMode =
+keyToMode : Dict String Mode
+keyToMode =
     Dict.fromList <|
-        [ ( "KeyE", Capsuling )
-        , ( "KeyR", Downloading )
+        [ ( "e", Capsuling )
+        , ( "r", Downloading )
         ]
-            ++ List.map (Tuple.mapSecond EditorMode) Doc.keyCodeToMode
+            ++ List.map (Tuple.mapSecond EditorMode) Doc.keyToMode
 
 
-keyCodeToShortcut : Dict String Doc.Shortcut
-keyCodeToShortcut =
+keyToShortcut : Dict String Doc.Shortcut
+keyToShortcut =
     Dict.fromList
-        [ ( "KeyZ", Doc.Tool 1 )
-        , ( "KeyX", Doc.Tool 2 )
-        , ( "KeyC", Doc.Tool 3 )
-        , ( "Space", Doc.Play )
+        [ ( "w", Doc.Tool 1 )
+        , ( "x", Doc.Tool 2 )
+        , ( "c", Doc.Tool 3 )
+        , ( " ", Doc.Play )
         , ( "ArrowLeft", Doc.Left )
         , ( "ArrowRight", Doc.Right )
         , ( "Backspace", Doc.Suppr )
         , ( "Delete", Doc.Suppr )
-        , ( "KeyT", Doc.Pack )
+        , ( "t", Doc.Pack )
         ]
 
 
-keyCodeToDirection : Dict String PanSvg.Direction
-keyCodeToDirection =
+keyToDirection : Dict String PanSvg.Direction
+keyToDirection =
     Dict.fromList
-        [ ( "KeyO", PanSvg.Up )
-        , ( "KeyK", PanSvg.Left )
-        , ( "KeyL", PanSvg.Down )
-        , ( "Semicolon", PanSvg.Right )
+        [ ( "o", PanSvg.Up )
+        , ( "k", PanSvg.Left )
+        , ( "l", PanSvg.Down )
+        , ( "m", PanSvg.Right )
         ]
+
 
 
 

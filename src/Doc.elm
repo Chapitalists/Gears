@@ -289,9 +289,10 @@ subs doc =
     List.map (Sub.map MobileMsg) <| Editor.subs doc.editor
 
 
-keyCodeToMode : List ( String, Editor.Mode )
-keyCodeToMode =
-    Editor.keyCodeToMode
+keyToMode : List ( String, Editor.Mode )
+keyToMode =
+    -- FIXME Strange delegation to Editor ?
+    Editor.keyToMode
 
 
 view : Model -> Element Msg
