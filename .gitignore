@@ -16,6 +16,9 @@ index.html
 # elm-package generated files
 elm-stuff
 
+# elm-spa generated files
+test/src/Generated/
+
 # unknown elm stuff ?
 .elm*
 
