@@ -154,6 +154,7 @@ type Msg
     | GotScreenSize ScreenSize
     | DocMsg Doc.Msg
     | KeysMsg Keys.Msg
+    | KeysMimic (List Keys.Msg)
     | NOOP
 
 
@@ -664,6 +665,14 @@ update msg model =
                 ( { model | keys = state }, Cmd.none )
                 events
 
+        KeysMimic events ->
+            List.foldl
+                (\subMsg ( m, k ) ->
+                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, k ]) <| update (KeysMsg subMsg) m
+                )
+                ( model, Cmd.none )
+                events
+
         NOOP ->
             ( model, Cmd.none )
 
@@ -724,6 +733,23 @@ keyToDirection =
         ]
 
 
+keyToModeMenu : List ( String, String )
+keyToModeMenu =
+    [ ( "a", "(A) lterner" )
+    , ( "s", "(S) olo" )
+    , ( "v", "(V) oir" )
+    , ( "d", "(D) éplacer" )
+    , ( "Delete", "(Suppr) imer" )
+    , ( "z", "(Z) oom" ) --mod keyCode menu + touchZoom
+    ]
+
+
+keyToShortcutMenu : List ( String, String )
+keyToShortcutMenu =
+    [ ( "ArrowRight", "==>" )
+    , ( "ArrowLeft", "<==" )
+    , ( "t", "(T) rousse" )
+    ]
 
 
 -- VIEW
@@ -743,10 +769,54 @@ view model =
         [ layout [] <|
             row [ height <| px model.screenSize.height, width <| px model.screenSize.width ]
                 [ viewFileExplorer model
-                , Element.map DocMsg <| Doc.view model.doc
+                , column [ width fill, height fill ]
+                    [ viewKeyMenu model
+                    , Element.map DocMsg <| Doc.view model.doc
+                    ]
                 ]
         ]
     }
+
+
+viewKeyMenu : Model -> Element Msg
+viewKeyMenu model =
+    row [ width fill, Font.size 14, spacing 20, padding 10 ] <|
+        (List.map
+            (\s ->
+                Input.button
+                    [ padding 5
+                    , Font.color <|
+                        if Set.member (Tuple.first s) model.keys then
+                            rgb 0.2 0.8 0.2
+
+                        else
+                            rgb 0 0 0
+                    ]
+                    { label = text <| Tuple.second s
+                    , onPress =
+                        if Set.member (Tuple.first s) model.keys then
+                            Just <| KeysMimic [ Keys.HoldUp (Tuple.first s) ]
+
+                        else
+                            Just <|
+                                KeysMimic <|
+                                    List.map (\t -> Keys.HoldUp (Tuple.first t)) keyToModeMenu
+                                        ++ [ Keys.HoldDown (Tuple.first s) ]
+                    }
+            )
+         <|
+            keyToModeMenu
+        )
+            ++ (List.map
+                    (\s ->
+                        Input.button [ padding 5, Font.color <| rgb 0 0 0 ]
+                            { label = text <| Tuple.second s
+                            , onPress = Just <| KeysMimic [ Keys.HoldDown (Tuple.first s), Keys.HoldUp (Tuple.first s) ]
+                            }
+                    )
+                <|
+                    keyToShortcutMenu
+               )
 
 
 viewFileExplorer : Model -> Element Msg

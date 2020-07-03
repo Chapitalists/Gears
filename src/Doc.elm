@@ -381,7 +381,7 @@ viewTop doc =
 viewNav : Model -> Element Msg
 viewNav doc =
     row
-        [ width fill, padding 10, spacing 5 ]
+        [ padding 10, moveRight 5 ]
     <|
         (List.intersperse (text ">") <|
             Input.button []
