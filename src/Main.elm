@@ -720,6 +720,7 @@ keyToShortcut =
         , ( "Backspace", Doc.Suppr )
         , ( "Delete", Doc.Suppr )
         , ( "t", Doc.Pack )
+        , ( "f", Doc.CleanView )
         ]
 
 
@@ -749,7 +750,9 @@ keyToShortcutMenu =
     [ ( "ArrowRight", "==>" )
     , ( "ArrowLeft", "<==" )
     , ( "t", "(T) rousse" )
+    , ( "f", "(F) ocus" )
     ]
+
 
 
 -- VIEW

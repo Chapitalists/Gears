@@ -57,6 +57,7 @@ type Shortcut
     | Play
     | Left
     | Right
+    | CleanView
     | Suppr
     | Pack
 
@@ -227,6 +228,18 @@ update msg doc =
 
                 Right ->
                     update (MobileMsg <| Editor.CursorRight) doc
+
+                CleanView ->
+                    let
+                        { mobile, parentUid, cleanedView } =
+                            getCleanedView doc
+                    in
+                    ( { doc
+                        | viewing = cleanedView
+                        , editor = Editor.changeView (Just mobile) parentUid doc.editor
+                      }
+                    , Cmd.none
+                    )
 
         DirectionRepeat dir ->
             update (MobileMsg <| Editor.SvgMsg <| PanSvg.Pan dir) doc
