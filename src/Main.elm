@@ -614,6 +614,46 @@ update msg model =
                     Doc.update subMsg model.doc
             in
             case subMsg of
+                Doc.MobileMsg (Editor.InteractMsg subsubMsg) ->
+                    let
+                        ( interact, event ) =
+                            Interact.update subsubMsg model.doc.editor.interact
+                    in
+                    case event of
+                        Nothing ->
+                            ( { model | doc = doc }, Cmd.map DocMsg cmd )
+
+                        Just e ->
+                            case e.action of
+                                Interact.MultiDragMode i ->
+                                    case i of
+                                        1 ->
+                                            ( { model | doc = doc }, Cmd.map DocMsg cmd )
+
+                                        _ ->
+                                            let
+                                                ( newModel, cmds ) =
+                                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, Cmd.map DocMsg cmd ]) <|
+                                                        update (KeysMsgs (List.map (\k -> Keys.HoldUp k) (Set.toList model.keys))) { model | doc = doc }
+                                            in
+                                            case i of
+                                                2 ->
+                                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, cmds ]) <| update (KeysMsg (Keys.HoldDown "d")) newModel
+
+                                                _ ->
+                                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, cmds ]) <| update (KeysMsg (Keys.HoldDown "z")) newModel
+
+                                Interact.DragEnded _ ->
+                                    --case i of
+                                    --    1 ->
+                                    --        ( { model | doc = doc }, Cmd.map DocMsg cmd )
+                                    --
+                                    --    _ ->
+                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, Cmd.map DocMsg cmd ]) <| update (KeysMsgs [ Keys.HoldUp "d", Keys.HoldUp "z" ]) { model | doc = doc }
+
+                                _ ->
+                                    ( { model | doc = doc }, Cmd.map DocMsg cmd )
+
                 -- FIXME Absurd... Should be a commonMsg and common ChangedMode
                 Doc.MobileMsg (Editor.ChangedMode (Editor.ChangeSound _)) ->
                     ( { model | doc = doc, fileExplorerTab = LoadedSounds }, Cmd.map DocMsg cmd )
