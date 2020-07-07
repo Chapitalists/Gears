@@ -1027,9 +1027,12 @@ viewSoundInLib model s id playing loading =
             ++ (if playing then
                     [ Element.html <|
                         Html.audio
-                            [ Attr.hidden True
+                            -- [ Attr.hidden True --original
+                            [ Attr.hidden False --mod Ios compatibility
                             , Attr.src <| Url.Builder.relative ("sons" :: id) []
-                            , Attr.autoplay True
+
+                            --, Attr.autoplay True --original
+                            , Attr.controls True --mod Ios compatibility
                             , Events.on "ended" <| D.succeed <| PreListening id False
                             ]
                             []
