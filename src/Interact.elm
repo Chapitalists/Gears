@@ -3,8 +3,10 @@ module Interact exposing (..)
 import Browser.Events as BE
 import Html
 import Html.Events.Extra.Mouse as Mouse
+import Html.Events.Extra.Pointer as Pointer
 import Json.Decode as D
 import Math.Vector2 as Vec exposing (Vec2, vec2)
+import Set exposing (Set)
 import Time
 
 
@@ -57,6 +59,8 @@ type alias ClickState item zone =
     , pos : Vec2
     , abs : Vec2
     , hold : HoldState zone
+    , pointerId : Int
+    , pointerIds : Set Int
     , keys : Mouse.Keys
     }
 
@@ -78,8 +82,8 @@ init =
 type Msg item zone
     = HoverIn item
     | HoverOut
-    | StartClick item Vec2 Vec2 Mouse.Keys -- offsetPos clientPos
-    | ClickMove zone Vec2 Vec2
+    | StartClick item Vec2 Vec2 Int Mouse.Keys -- offsetPos clientPos
+    | ClickMove zone Vec2 Vec2 Int
     | ClickHold
     | EndClick
     | AbortClick
@@ -92,14 +96,14 @@ map f m =
         HoverIn a ->
             HoverIn (f a)
 
-        StartClick a v c k ->
-            StartClick (f a) v c k
+        StartClick a v c i k ->
+            StartClick (f a) v c i k
 
         HoverOut ->
             HoverOut
 
-        ClickMove z v c ->
-            ClickMove z v c
+        ClickMove z v c i ->
+            ClickMove z v c i
 
         ClickHold ->
             ClickHold
@@ -125,6 +129,7 @@ type Action zone
     | Dragged (DragInfo zone) zone ( Bool, Bool, Bool ) -- Shift Ctrl Alt
     | DragIn
     | DragOut
+    | MultiDragMode Int
     | DragEnded Bool -- True for Up, False for Abort
     | Holded
     | HoldEnded
@@ -157,41 +162,67 @@ update msg (S state) =
                 Nothing ->
                     ( S state, Nothing )
 
-        StartClick id pos abs keys ->
-            ( S { state | click = Just <| ClickState id pos abs Clicking keys }, Nothing )
-
-        ClickMove zone pos abs ->
+        StartClick id p a i keys ->
             case state.click of
                 Just click ->
-                    let
-                        dragInit =
-                            case click.hold of
-                                Moving res ->
-                                    res
-
-                                _ ->
-                                    ( click.pos, zone )
-                    in
                     ( S
                         { state
                             | click =
-                                Just { click | pos = pos, abs = abs, hold = Moving dragInit }
+                                Just
+                                    { click
+                                        | pointerId = i
+                                        , pointerIds = Set.insert i click.pointerIds
+                                        , keys = keys -- FIXME Used ? What does it mean ? Keys at start or during ?
+                                    }
                         }
-                    , Just <|
-                        Event
-                            (Dragged
-                                { start = dragInit
-                                , oldPos = click.pos
-                                , newPos = pos
-                                , startD = Vec.sub abs click.abs
-                                , absD = Vec.sub abs click.abs
-                                }
-                                zone
-                             <|
-                                tupleFromKeys click.keys
-                            )
-                            click.item
+                    , Nothing
                     )
+
+                _ ->
+                    ( S { state | click = Just <| ClickState id p a Clicking i (Set.singleton i) keys }
+                    , Nothing
+                    )
+
+        ClickMove zone pos abs i ->
+            case state.click of
+                Just click ->
+                    if i == click.pointerId && Vec.distance click.abs abs >= 10 then
+                        let
+                            ( dragInit, dragEvent ) =
+                                case click.hold of
+                                    Moving res ->
+                                        ( res
+                                        , Just <|
+                                            Event
+                                                (Dragged
+                                                    { start = res
+                                                    , oldPos = click.pos
+                                                    , newPos = pos
+                                                    , startD = Vec.sub abs click.abs
+                                                    , absD = Vec.sub abs click.abs
+                                                    }
+                                                    zone
+                                                 <|
+                                                    tupleFromKeys click.keys
+                                                )
+                                                click.item
+                                        )
+
+                                    _ ->
+                                        ( ( click.pos, zone )
+                                        , Just <| Event (MultiDragMode <| Set.size click.pointerIds) click.item
+                                        )
+                        in
+                        ( S
+                            { state
+                                | click =
+                                    Just { click | pos = pos, abs = abs, hold = Moving dragInit }
+                            }
+                        , dragEvent
+                        )
+
+                    else
+                        ( S state, Nothing )
 
                 _ ->
                     ( S state, Nothing )
@@ -208,7 +239,7 @@ update msg (S state) =
 
         EndClick ->
             case state.click of
-                Just { item, hold, keys } ->
+                Just { item, hold, keys, pointerIds } ->
                     ( S { state | click = Nothing }
                     , case hold of
                         Moving _ ->
@@ -218,7 +249,15 @@ update msg (S state) =
                             Just <| Event HoldEnded item
 
                         Clicking ->
-                            Just <| Event (Clicked <| tupleFromKeys keys) item
+                            case Set.size pointerIds of
+                                2 ->
+                                    Just <| Event (Clicked ( False, True, False )) item
+
+                                3 ->
+                                    Just <| Event (Clicked ( True, False, False )) item
+
+                                _ ->
+                                    Just <| Event (Clicked <| tupleFromKeys keys) item
                     )
 
                 _ ->
@@ -226,7 +265,7 @@ update msg (S state) =
 
         AbortClick ->
             case state.click of
-                Just { item, hold, keys } ->
+                Just { item, hold, keys, pointerIds } ->
                     ( S { state | click = Nothing }
                     , case hold of
                         Moving _ ->
@@ -252,7 +291,7 @@ subs (S { click }) =
         Nothing ->
             []
 
-        Just { hold } ->
+        Just { hold, pointerId } ->
             [ BE.onMouseUp <| D.succeed <| EndClick
             , BE.onVisibilityChange
                 (\v ->
@@ -281,20 +320,26 @@ dragSpaceEvents (S { click }) zone =
             []
 
         Just _ ->
-            [ Mouse.onMove <| \{ offsetPos, clientPos } -> ClickMove zone (vecFromTuple offsetPos) (vecFromTuple clientPos) ]
+            [ Pointer.onMove <| \e -> ClickMove zone (vecFromTuple e.pointer.offsetPos) (vecFromTuple e.pointer.clientPos) e.pointerId --mod Pointers multitouch
+            , Pointer.onUp <| \e -> EndClick
+            ]
+
+
+
+--EndClick redundancy is needed to support multitouch
 
 
 hoverEvents : item -> List (Html.Attribute (Msg item zone))
 hoverEvents id =
-    [ Mouse.onEnter <| always <| HoverIn id
-    , Mouse.onLeave <| always HoverOut
+    [ Pointer.onEnter <| always <| HoverIn id
+    , Pointer.onLeave <| always HoverOut
     ]
 
 
 draggableEvents : item -> List (Html.Attribute (Msg item zone))
 draggableEvents id =
-    [ Mouse.onWithOptions "mousedown" { stopPropagation = True, preventDefault = False } <|
-        \e -> StartClick id (vecFromTuple e.offsetPos) (vecFromTuple e.clientPos) e.keys
+    [ Pointer.onWithOptions "pointerdown" { stopPropagation = True, preventDefault = False } <|
+        \e -> StartClick id (vecFromTuple e.pointer.offsetPos) (vecFromTuple e.pointer.clientPos) e.pointerId e.pointer.keys
     ]
 
 
