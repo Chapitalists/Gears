@@ -154,7 +154,7 @@ type Msg
     | GotScreenSize ScreenSize
     | DocMsg Doc.Msg
     | KeysMsg Keys.Msg
-    | KeysMimic (List Keys.Msg)
+    | KeysMsgs (List Keys.Msg) -- TODO Could merge both Key Msgs
     | NOOP
 
 
@@ -665,7 +665,7 @@ update msg model =
                 ( { model | keys = state }, Cmd.none )
                 events
 
-        KeysMimic events ->
+        KeysMsgs events ->
             List.foldl
                 (\subMsg ( m, k ) ->
                     Tuple.mapSecond (\cm -> Cmd.batch [ cm, k ]) <| update (KeysMsg subMsg) m
@@ -798,11 +798,11 @@ viewKeyMenu model =
                     { label = text <| Tuple.second s
                     , onPress =
                         if Set.member (Tuple.first s) model.keys then
-                            Just <| KeysMimic [ Keys.HoldUp (Tuple.first s) ]
+                            Just <| KeysMsgs [ Keys.HoldUp (Tuple.first s) ]
 
                         else
                             Just <|
-                                KeysMimic <|
+                                KeysMsgs <|
                                     List.map (\t -> Keys.HoldUp (Tuple.first t)) keyToModeMenu
                                         ++ [ Keys.HoldDown (Tuple.first s) ]
                     }
@@ -814,7 +814,7 @@ viewKeyMenu model =
                     (\s ->
                         Input.button [ padding 5, Font.color <| rgb 0 0 0 ]
                             { label = text <| Tuple.second s
-                            , onPress = Just <| KeysMimic [ Keys.HoldDown (Tuple.first s), Keys.HoldUp (Tuple.first s) ]
+                            , onPress = Just <| KeysMsgs [ Keys.HoldDown (Tuple.first s), Keys.HoldUp (Tuple.first s) ]
                             }
                     )
                 <|
