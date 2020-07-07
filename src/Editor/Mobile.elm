@@ -125,6 +125,7 @@ type Mode
     | SelectMotor
     | Alternate
     | Solo
+    | Zoom
 
 
 keyToMode : List ( String, Mode )
@@ -136,6 +137,7 @@ keyToMode =
     , ( "Backspace", SupprMode )
     , ( "a", Alternate )
     , ( "s", Solo )
+    , ( "z", Zoom )
     ]
 
 
@@ -2024,6 +2026,43 @@ manageInteractEvent event model mobile =
 
                         _ ->
                             return
+
+        Zoom ->
+            case ( event.item, event.action ) of
+                ( ISurface, Interact.Dragged { start, absD } _ _ ) ->
+                    let
+                        pointZoom =
+                            PanSvg.mapOut (Tuple.first start) model.svg
+
+                        factorZoom =
+                            20 * Vec.getY absD
+                    in
+                    update (SvgMsg (PanSvg.ZoomPoint factorZoom ( Vec.getX pointZoom, Vec.getY pointZoom ))) ( model, mobile )
+
+                ( IPack, Interact.Dragged { start, absD } _ _ ) ->
+                    let
+                        pointZoom =
+                            PanSvg.mapOut (Tuple.first start) model.pack.svg
+
+                        factorZoom =
+                            20 * Vec.getY absD
+                    in
+                    update (PackMsg (Pack.SvgMsg (PanSvg.ZoomPoint factorZoom ( Vec.getX pointZoom, Vec.getY pointZoom )))) ( model, mobile )
+
+                ( IWheel id, Interact.Dragged { absD } _ _ ) ->
+                    let
+                        res =
+                            doVolumeChange id absD mobile model.engine
+                    in
+                    { return
+                        | model = { model | dragging = VolumeChange }
+                        , mobile = res.mobile
+                        , toUndo = res.toUndo
+                        , toEngine = res.toEngine
+                    }
+
+                _ ->
+                    return
 
         SelectMotor ->
             case ( event.item, event.action ) of
