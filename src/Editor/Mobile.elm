@@ -50,6 +50,16 @@ port gotRecord : (D.Value -> msg) -> Sub msg
 port requestCutSample : { fromFileName : String, newFileName : String, percents : ( Float, Float ) } -> Cmd msg
 
 
+printInteract : Bool
+printInteract =
+    True
+
+
+printEvent : Bool
+printEvent =
+    True
+
+
 
 -- TODO Maybe delegate Coll dependence to Data.Mobile (except Id)
 
@@ -911,6 +921,20 @@ update msg ( model, mobile ) =
 
                 newModel =
                     { model | interact = interact }
+
+                printInter =
+                    if printInteract then
+                        Debug.log "Interact after " ( subMsg, interact )
+
+                    else
+                        ( subMsg, interact )
+
+                pringEv =
+                    if printEvent then
+                        Debug.log "Event after " ( subMsg, event )
+
+                    else
+                        ( subMsg, event )
             in
             case event of
                 Nothing ->
