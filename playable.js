@@ -12,6 +12,7 @@ function prepare(model, rate = 1) {
        /* model.once
           ? model.view.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).pause()
           : */model.view.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).loop().pause()
+        model.flip = Array.from(document.querySelector('#' + model.id + '>.flip').childNodes, SVG.adopt)
     }
     if (model.soundName) {
         model.player = new Tone.Player(buffers[model.soundName]).toMaster()
@@ -58,6 +59,16 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
     if (model.view) {
         Tone.Draw.schedule(() => model.view.animate().play(), t)
     }
+    if (model.flip) {
+        let n = model.flip.length
+          , d = model.length / n
+          , doFlip = (i, t) => () => {console.log(i,t)
+                model.flip[(i+n-1)%n].attr('opacity', 0)
+                model.flip[i].attr('opacity', 1)
+                Tone.Draw.schedule(doFlip((i+1)%n, t+d), t)
+            }
+        Tone.Draw.schedule(doFlip(1,t+d), t)
+    }
     if (model.soundName && model.player.output) {
         model.player.start(t, model.pauseOffset + (model.startPercent * model.player.buffer.duration))
     }
@@ -89,6 +100,7 @@ function pause(model, t, force = false, clocked = false) {
     model.pauseOffset = ((t - model.startTime) * model.rate) % model.duration
     if (model.view){//} && !clocked) {
         Tone.Draw.schedule(() => model.view.animate().pause().at((model.pauseOffset/model.length/model.rate) % 1), t)
+        Tone.Draw.cancel(t)
     }
     if (model.soundName && model.player.output) {
         model.player.stop(t)
@@ -110,6 +122,10 @@ function pause(model, t, force = false, clocked = false) {
 
 function stop(model) {
     if (model.view) model.view.animate().play().finish().stop()
+    if (model.flip) {
+        Tone.Draw.cancel()
+        model.flip.map((v,i,a) => v.attr('opacity', i==a.length-1?1:0))
+    }
     if (model.soundName) model.player.stop().dispose()
     if (model.mobile) model.gears.map(stop)
     if (model.collar) {

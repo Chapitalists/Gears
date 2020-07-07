@@ -2,6 +2,7 @@ module Data.Wheel exposing (..)
 
 import Color exposing (Color)
 import Data.Content as Content exposing (Content, Mobile)
+import FlipBook exposing (Images)
 import Html.Attributes
 import Interact
 import Json.Decode as D
@@ -27,6 +28,7 @@ type alias Wheel =
     , viewContent : Bool
     , mute : Bool
     , color : Float
+    , images : Images
     }
 
 
@@ -80,6 +82,7 @@ default =
     , viewContent = True
     , mute = False
     , color = 0
+    , images = FlipBook.make
     }
 
 
@@ -319,6 +322,12 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                             ]
                             []
                          ]
+                            ++ (if w.mute then
+                                    []
+
+                                else
+                                    [ FlipBook.view w.images length ]
+                               )
                             ++ (case style.baseColor of
                                     Just c ->
                                         [ S.circle
@@ -488,6 +497,7 @@ encoder w =
     , ( "volume", E.float w.volume )
     , ( "mute", E.bool w.mute )
     , ( "color", E.float w.color )
+    , ( "images", E.list E.string w.images )
     , ( "viewContent", E.bool w.viewContent )
     , case w.content of
         C c ->
@@ -514,24 +524,33 @@ decoder =
                                                             \mayColor ->
                                                                 Field.attemptAt [ "color", "hue" ] D.float <|
                                                                     \mayHue ->
-                                                                        D.succeed
-                                                                            { name = Maybe.withDefault "" name
-                                                                            , startPercent = startPercent
-                                                                            , volume = volume
-                                                                            , content = C content
-                                                                            , viewContent = Maybe.withDefault True viewContent
-                                                                            , mute = mute
-                                                                            , color =
-                                                                                case mayColor of
-                                                                                    Just c ->
-                                                                                        c
-
-                                                                                    Nothing ->
-                                                                                        case mayHue of
-                                                                                            Just h ->
-                                                                                                h
+                                                                        Field.attempt "images" (D.list D.string) <|
+                                                                            \mayImages ->
+                                                                                D.succeed
+                                                                                    { name = Maybe.withDefault "" name
+                                                                                    , startPercent = startPercent
+                                                                                    , volume = volume
+                                                                                    , content = C content
+                                                                                    , viewContent = Maybe.withDefault True viewContent
+                                                                                    , mute = mute
+                                                                                    , color =
+                                                                                        case mayColor of
+                                                                                            Just c ->
+                                                                                                c
 
                                                                                             Nothing ->
-                                                                                                0
-                                                                            }
+                                                                                                case mayHue of
+                                                                                                    Just h ->
+                                                                                                        h
+
+                                                                                                    Nothing ->
+                                                                                                        0
+                                                                                    , images =
+                                                                                        case mayImages of
+                                                                                            Just l ->
+                                                                                                l
+
+                                                                                            Nothing ->
+                                                                                                []
+                                                                                    }
             )
