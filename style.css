@@ -5,6 +5,14 @@
   -ms-user-select: none;
 }
 
+body {
+  overscroll-behavior: contain;
+}
+
+div {
+  overscroll-behavior: contain;
+}
+
 input {
   user-select: auto;
   -webkit-user-select: auto;
