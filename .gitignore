@@ -5,9 +5,9 @@
 ref
 
 # data
-sons
-backup
-saves
+sons*
+backup*
+saves*
 
 # compiled
 elmApp.js
