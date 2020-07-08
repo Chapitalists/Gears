@@ -22,6 +22,7 @@ import File.Select as Select
 import Html
 import Html.Attributes as Attr
 import Html.Events as Events
+import Html.Events.Extra.Pointer as Pointer
 import Http
 import Interact
 import Json.Decode as D
@@ -827,14 +828,18 @@ viewKeyMenu model =
         (List.map
             (\s ->
                 Input.button
-                    [ padding 5
-                    , Font.color <|
-                        if Set.member (Tuple.first s) model.keys then
-                            rgb 0.2 0.8 0.2
+                    (padding 5
+                        :: (if Set.member (Tuple.first s) model.keys then
+                                [ Font.color <| rgb 0.2 0.8 0.2
+                                , htmlAttribute <| Pointer.onUp <| always <| KeysMsg <| Keys.HoldUp <| Tuple.first s
+                                ]
 
-                        else
-                            rgb 0 0 0
-                    ]
+                            else
+                                [ Font.color <| rgb 0 0 0
+                                , htmlAttribute <| Pointer.onDown <| always <| KeysMsg <| Keys.HoldDown <| Tuple.first s
+                                ]
+                           )
+                    )
                     { label = text <| Tuple.second s
                     , onPress =
                         if Set.member (Tuple.first s) model.keys then
