@@ -639,10 +639,10 @@ update msg model =
                                             in
                                             case i of
                                                 2 ->
-                                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, cmds ]) <| update (KeysMsg (Keys.HoldDown "d")) newModel
+                                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, cmds ]) <| update (KeysMsg (Keys.HoldDown "KeyD")) newModel
 
                                                 _ ->
-                                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, cmds ]) <| update (KeysMsg (Keys.HoldDown "z")) newModel
+                                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, cmds ]) <| update (KeysMsg (Keys.HoldDown "KeyW")) newModel
 
                                 Interact.DragEnded _ ->
                                     --case i of
@@ -650,7 +650,7 @@ update msg model =
                                     --        ( { model | doc = doc }, Cmd.map DocMsg cmd )
                                     --
                                     --    _ ->
-                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, Cmd.map DocMsg cmd ]) <| update (KeysMsgs [ Keys.HoldUp "d", Keys.HoldUp "z" ]) { model | doc = doc }
+                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, Cmd.map DocMsg cmd ]) <| update (KeysMsgs [ Keys.HoldUp "KeyD", Keys.HoldUp "KeyW" ]) { model | doc = doc }
 
                                 _ ->
                                     ( { model | doc = doc }, Cmd.map DocMsg cmd )
