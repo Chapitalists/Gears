@@ -28,22 +28,22 @@ type Msg
 update : Msg -> State -> ( State, List Event )
 update msg state =
     case msg of
-        HoldDown key ->
+        HoldDown code ->
             let
                 hold =
-                    Set.insert key state
+                    Set.insert code state
             in
-            ( hold, [ Hold hold, Repeat key ] )
+            ( hold, [ Hold hold, Repeat code ] )
 
-        HoldUp key ->
+        HoldUp code ->
             let
                 hold =
-                    Set.remove key state
+                    Set.remove code state
             in
             ( hold
             , Hold hold
-                :: (if Set.member key state then
-                        [ Press key ]
+                :: (if Set.member code state then
+                        [ Press code ]
 
                     else
                         []
@@ -53,6 +53,6 @@ update msg state =
 
 subs : List (Sub Msg)
 subs =
-    [ BE.onKeyDown <| D.andThen (\str -> D.succeed <| HoldDown str) <| D.field "key" D.string
-    , BE.onKeyUp <| D.andThen (\str -> D.succeed <| HoldUp str) <| D.field "key" D.string
+    [ BE.onKeyDown <| D.andThen (\str -> D.succeed <| HoldDown str) <| D.field "code" D.string
+    , BE.onKeyUp <| D.andThen (\str -> D.succeed <| HoldUp str) <| D.field "code" D.string
     ]

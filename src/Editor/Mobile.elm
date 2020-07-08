@@ -128,16 +128,16 @@ type Mode
     | Zoom
 
 
-keyToMode : List ( String, Mode )
-keyToMode =
-    -- TODO Could be in Main with other keyToMode ?
-    [ ( "d", Move )
-    , ( "v", Nav )
+keyCodeToMode : List ( String, Mode )
+keyCodeToMode =
+    -- TODO Could be in Main with other keyCodeToMode ?
+    [ ( "KeyD", Move )
+    , ( "KeyV", Nav )
     , ( "Delete", SupprMode )
     , ( "Backspace", SupprMode )
-    , ( "a", Alternate )
-    , ( "s", Solo )
-    , ( "z", Zoom )
+    , ( "KeyQ", Alternate )
+    , ( "KeyS", Solo )
+    , ( "KeyW", Zoom )
     ]
 
 

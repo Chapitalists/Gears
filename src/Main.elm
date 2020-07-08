@@ -668,39 +668,39 @@ update msg model =
                     Keys.update subMsg model.keys
             in
             List.foldl
-                (\event ( m, k ) ->
+                (\event ( m, c ) ->
                     case event of
                         Keys.Hold hold ->
-                            case List.filterMap (\code -> Dict.get code keyToMode) <| Set.toList hold of
+                            case List.filterMap (\code -> Dict.get code keyCodeToMode) <| Set.toList hold of
                                 [ only ] ->
-                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, k ]) <| update (ChangedMode only) m
+                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, c ]) <| update (ChangedMode only) m
 
                                 _ ->
-                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, k ]) <| update (ChangedMode NoMode) m
+                                    Tuple.mapSecond (\cm -> Cmd.batch [ cm, c ]) <| update (ChangedMode NoMode) m
 
-                        Keys.Press key ->
-                            case Dict.get key keyToShortcut of
+                        Keys.Press code ->
+                            case Dict.get code keyCodeToShortcut of
                                 Just press ->
                                     let
                                         ( doc, cmd ) =
                                             Doc.update (Doc.KeyPressed press) m.doc
                                     in
-                                    ( { m | doc = doc }, Cmd.batch [ k, Cmd.map DocMsg cmd ] )
+                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
 
                                 Nothing ->
-                                    ( m, k )
+                                    ( m, c )
 
-                        Keys.Repeat key ->
-                            case Dict.get key keyToDirection of
+                        Keys.Repeat code ->
+                            case Dict.get code keyCodeToDirection of
                                 Just dir ->
                                     let
                                         ( doc, cmd ) =
                                             Doc.update (Doc.DirectionRepeat dir) m.doc
                                     in
-                                    ( { m | doc = doc }, Cmd.batch [ k, Cmd.map DocMsg cmd ] )
+                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
 
                                 Nothing ->
-                                    ( m, k )
+                                    ( m, c )
                 )
                 ( { model | keys = state }, Cmd.none )
                 events
@@ -739,58 +739,58 @@ type Mode
     | NoMode
 
 
-keyToMode : Dict String Mode
-keyToMode =
+keyCodeToMode : Dict String Mode
+keyCodeToMode =
     Dict.fromList <|
-        [ ( "e", Capsuling )
-        , ( "r", Downloading )
+        [ ( "KeyE", Capsuling )
+        , ( "KeyR", Downloading )
         ]
-            ++ List.map (Tuple.mapSecond EditorMode) Doc.keyToMode
+            ++ List.map (Tuple.mapSecond EditorMode) Doc.keyCodeToMode
 
 
-keyToShortcut : Dict String Doc.Shortcut
-keyToShortcut =
+keyCodeToShortcut : Dict String Doc.Shortcut
+keyCodeToShortcut =
     Dict.fromList
-        [ ( "w", Doc.Tool 1 )
-        , ( "x", Doc.Tool 2 )
-        , ( "c", Doc.Tool 3 )
-        , ( " ", Doc.Play )
+        [ ( "KeyZ", Doc.Tool 1 )
+        , ( "KeyX", Doc.Tool 2 )
+        , ( "KeyC", Doc.Tool 3 )
+        , ( "Space", Doc.Play )
         , ( "ArrowLeft", Doc.Left )
         , ( "ArrowRight", Doc.Right )
         , ( "Backspace", Doc.Suppr )
         , ( "Delete", Doc.Suppr )
-        , ( "t", Doc.Pack )
-        , ( "f", Doc.CleanView )
+        , ( "KeyT", Doc.Pack )
+        , ( "KeyF", Doc.CleanView )
         ]
 
 
-keyToDirection : Dict String PanSvg.Direction
-keyToDirection =
+keyCodeToDirection : Dict String PanSvg.Direction
+keyCodeToDirection =
     Dict.fromList
-        [ ( "o", PanSvg.Up )
-        , ( "k", PanSvg.Left )
-        , ( "l", PanSvg.Down )
-        , ( "m", PanSvg.Right )
+        [ ( "KeyO", PanSvg.Up )
+        , ( "KeyK", PanSvg.Left )
+        , ( "KeyL", PanSvg.Down )
+        , ( "Semicolon", PanSvg.Right )
         ]
 
 
-keyToModeMenu : List ( String, String )
-keyToModeMenu =
-    [ ( "a", "(A) lterner" )
-    , ( "s", "(S) olo" )
-    , ( "v", "(V) oir" )
-    , ( "d", "(D) éplacer" )
+keyCodeToModeMenu : List ( String, String )
+keyCodeToModeMenu =
+    [ ( "KeyQ", "(A) lterner" )
+    , ( "KeyS", "(S) olo" )
+    , ( "KeyV", "(V) oir" )
+    , ( "KeyD", "(D) éplacer" )
     , ( "Delete", "(Suppr) imer" )
-    , ( "z", "(Z) oom" ) --mod keyCode menu + touchZoom
+    , ( "KeyW", "(Z) oom" )
     ]
 
 
-keyToShortcutMenu : List ( String, String )
-keyToShortcutMenu =
+keyCodeToShortcutMenu : List ( String, String )
+keyCodeToShortcutMenu =
     [ ( "ArrowRight", "==>" )
     , ( "ArrowLeft", "<==" )
-    , ( "t", "(T) rousse" )
-    , ( "f", "(F) ocus" )
+    , ( "KeyT", "(T) rousse" )
+    , ( "KeyF", "(F) ocus" )
     ]
 
 
@@ -843,12 +843,12 @@ viewKeyMenu model =
                         else
                             Just <|
                                 KeysMsgs <|
-                                    List.map (\t -> Keys.HoldUp (Tuple.first t)) keyToModeMenu
+                                    List.map (\t -> Keys.HoldUp (Tuple.first t)) keyCodeToModeMenu
                                         ++ [ Keys.HoldDown (Tuple.first s) ]
                     }
             )
          <|
-            keyToModeMenu
+            keyCodeToModeMenu
         )
             ++ (List.map
                     (\s ->
@@ -858,7 +858,7 @@ viewKeyMenu model =
                             }
                     )
                 <|
-                    keyToShortcutMenu
+                    keyCodeToShortcutMenu
                )
 
 
@@ -1027,12 +1027,9 @@ viewSoundInLib model s id playing loading =
             ++ (if playing then
                     [ Element.html <|
                         Html.audio
-                            -- [ Attr.hidden True --original
-                            [ Attr.hidden False --mod Ios compatibility
+                            [ Attr.hidden True
                             , Attr.src <| Url.Builder.relative ("sons" :: id) []
-
-                            --, Attr.autoplay True --original
-                            , Attr.controls True --mod Ios compatibility
+                            , Attr.autoplay True
                             , Events.on "ended" <| D.succeed <| PreListening id False
                             ]
                             []
