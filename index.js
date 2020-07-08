@@ -5,7 +5,7 @@ Copyright ou © ou Copr. Clément Bossut, (2018)
 
 process.chdir(__dirname)
 
-console.log('args : port soundDir saveDir backUpDir')
+console.log('args : port')
 
 if (process.argv[2]) {
   let port = parseInt(process.argv[2])
@@ -22,10 +22,10 @@ const fs = require('fs')
     , staticRoute = require('static-route')
     , formidable = require('formidable')
     , port = process.argv[2] || 12345
-    , soundPath = process.argv[3] || './sons/'
+    , soundPath = './sons/'
     , soundExtensions = ['.wav']
-    , savePath = process.argv[4] || './saves/'
-    , backupPath = process.argv[5] || './backup/'
+    , savePath = './saves/'
+    , backupPath = './backup/'
     , saveExtension = '.gears'
 
 console.log('Checking directories')
