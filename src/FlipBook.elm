@@ -1,5 +1,7 @@
 module FlipBook exposing (..)
 
+import Element exposing (..)
+import Time
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core exposing (Svg)
@@ -18,8 +20,52 @@ type alias Images =
     List String
 
 
+type alias FlipBook =
+    { urls : Images
+    , current : Int
+    , interval : Float
+    , running : Bool
+    }
+
+
 make =
     [ "1.jpg", "2.jpg" ]
+
+
+init =
+    FlipBook [] 0 200 False
+
+
+type Msg
+    = Play
+    | Pause
+    | Flip
+    | Urls Images
+
+
+update : Msg -> FlipBook -> FlipBook
+update msg model =
+    case msg of
+        Play ->
+            { model | running = True }
+
+        Pause ->
+            { model | running = False }
+
+        Flip ->
+            { model | current = modBy (List.length model.urls) <| model.current + 1 }
+
+        Urls urls ->
+            { model | urls = urls }
+
+
+subs : FlipBook -> Sub Msg
+subs { running, interval } =
+    if running then
+        Time.every interval <| always Flip
+
+    else
+        Sub.none
 
 
 view : Images -> Float -> Svg msg
@@ -56,3 +102,29 @@ view urls l =
                     Nothing ->
                         []
                )
+
+
+preview : FlipBook -> Int -> Attribute msg
+preview { urls } w =
+    inFront <|
+        row [ width <| px w, spaceEvenly ] <|
+            List.map
+                (\url ->
+                    image [ width <| px <| round <| toFloat w / (toFloat <| List.length urls) ]
+                        { src = url, description = "image to decrypt" }
+                )
+                urls
+
+
+flip : FlipBook -> Int -> Attribute msg
+flip { urls, interval, current } h =
+    let
+        mayUrl =
+            List.head <| List.drop current <| urls
+    in
+    case mayUrl of
+        Just url ->
+            inFront <| image [ height <| px <| h - 150 ] { src = url, description = "image n°" ++ String.fromInt current }
+
+        Nothing ->
+            inFront none
