@@ -16,7 +16,10 @@ import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
 import Engine exposing (Engine)
+import File exposing (File)
 import File.Download as DL
+import File.Select as Select
+import FlipBook
 import Fraction as Fract exposing (Fraction)
 import Harmony as Harmo
 import Html
@@ -33,6 +36,7 @@ import PanSvg
 import Random
 import Round
 import Sound exposing (Sound)
+import Task
 import Time
 import TypedSvg as S
 import TypedSvg.Attributes as SA
@@ -220,6 +224,8 @@ type Msg
     | Capsuled (List (Id Geer))
     | Collared (Id Geer)
     | UnCollar (Id Geer)
+    | ClickedLoadFlip Identifier
+    | GotFlipBook Identifier File (List File)
     | EnteredNewSampleName String
     | CutNewSample
     | Blink
@@ -794,6 +800,17 @@ update msg ( model, mobile ) =
                 _ ->
                     return
 
+        ClickedLoadFlip wId ->
+            { return | cmd = Select.files [ "image/png", "image/jpg", "image/jpeg", "image/bmp" ] <| GotFlipBook wId }
+
+        GotFlipBook wId img imgs ->
+            { return
+                | cmd =
+                    Task.perform (WheelMsgs << List.singleton << Tuple.pair wId << Wheel.FlipMsg << FlipBook.Urls) <|
+                        Task.sequence <|
+                            List.map File.toUrl (img :: imgs)
+            }
+
         EnteredNewSampleName str ->
             { return
                 | model =
@@ -1063,7 +1080,7 @@ viewExtraTools model =
 viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
-        ( wavePoints, viewWave ) =
+        ( wavePoints, ( viewWave, mayFlip ) ) =
             case model.edit of
                 [ id ] ->
                     let
@@ -1074,17 +1091,24 @@ viewContent ( model, mobile ) =
                             Wheel.getLoopPercents g
                     in
                     ( { offset = g.wheel.startPercent, start = start, end = end }
-                    , case ( model.tool, Wheel.getContent g ) of
-                        ( Edit _, Content.S s ) ->
-                            (model.wave.drawn == (Waveform.SoundDrawn <| Sound.toString s))
-                                && g.wheel.viewContent
+                    , ( case ( model.tool, Wheel.getContent g ) of
+                            ( Edit _, Content.S s ) ->
+                                (model.wave.drawn == (Waveform.SoundDrawn <| Sound.toString s))
+                                    && g.wheel.viewContent
 
-                        _ ->
-                            False
+                            _ ->
+                                False
+                      , case model.tool of
+                            Edit _ ->
+                                Just g.wheel.flip
+
+                            _ ->
+                                Nothing
+                      )
                     )
 
                 _ ->
-                    ( { offset = 0, start = 0, end = 0 }, False )
+                    ( { offset = 0, start = 0, end = 0 }, ( False, Nothing ) )
 
         getMod : Id Geer -> Wheel.Mod
         getMod id =
@@ -1140,9 +1164,9 @@ viewContent ( model, mobile ) =
 -}
     in
     Element.el
-        [ Element.width Element.fill
-        , Element.height Element.fill
-        , Element.inFront <|
+        ([ Element.width Element.fill
+         , Element.height Element.fill
+         , Element.inFront <|
             Pack.view model.pack
                 (List.map (Html.Attributes.map InteractMsg) <|
                     Interact.dragSpaceEvents model.interact ZPack
@@ -1151,14 +1175,22 @@ viewContent ( model, mobile ) =
                 IPacked
                 IPack
                 InteractMsg
-        , Element.inFront <|
+         , Element.inFront <|
             Waveform.view
                 viewWave
                 model.wave
                 wavePoints
                 model.interact
                 InteractMsg
-        ]
+         ]
+            ++ (case mayFlip of
+                    Just flip ->
+                        [ Element.inFront <| FlipBook.preview flip model.wave.size ]
+
+                    Nothing ->
+                        []
+               )
+        )
     <|
         Element.html <|
             S.svg
@@ -1651,6 +1683,22 @@ viewEditDetails model mobile =
                                         ]
                                         []
                                 ]
+                           ]
+                        ++ [ Input.button [] <|
+                                if List.length g.wheel.flip.urls == 0 then
+                                    { label = text "Charger Pellicule"
+                                    , onPress = Just <| ClickedLoadFlip wId
+                                    }
+
+                                else if g.wheel.flip.show then
+                                    { label = text "Cacher Pellicule"
+                                    , onPress = Just <| WheelMsgs [ ( wId, Wheel.FlipMsg FlipBook.Show ) ]
+                                    }
+
+                                else
+                                    { label = text "Montrer Pellicule"
+                                    , onPress = Just <| WheelMsgs [ ( wId, Wheel.FlipMsg FlipBook.Show ) ]
+                                    }
                            ]
                 , text <|
                     "Durée : "

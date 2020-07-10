@@ -8,10 +8,6 @@ import TypedSvg.Core exposing (Svg)
 import TypedSvg.Types exposing (Align(..), ClipPath(..), Length(..), MeetOrSlice(..), Opacity(..))
 
 
-path =
-    "./images/"
-
-
 class =
     "flip"
 
@@ -22,8 +18,8 @@ type alias Images =
 
 type alias FlipBook =
     { urls : Images
+    , show : Bool
     , current : Int
-    , interval : Float
     , running : Bool
     }
 
@@ -32,13 +28,15 @@ make =
     [ "1.jpg", "2.jpg" ]
 
 
-init =
-    FlipBook [] 0 200 False
+init : Images -> FlipBook
+init imgs =
+    FlipBook imgs False 0 False
 
 
 type Msg
     = Play
     | Pause
+    | Show
     | Flip
     | Urls Images
 
@@ -52,6 +50,9 @@ update msg model =
         Pause ->
             { model | running = False }
 
+        Show ->
+            { model | show = not model.show }
+
         Flip ->
             { model | current = modBy (List.length model.urls) <| model.current + 1 }
 
@@ -59,8 +60,8 @@ update msg model =
             { model | urls = urls }
 
 
-subs : FlipBook -> Sub Msg
-subs { running, interval } =
+subs : FlipBook -> Float -> Sub Msg
+subs { running } interval =
     if running then
         Time.every interval <| always Flip
 
@@ -68,13 +69,13 @@ subs { running, interval } =
         Sub.none
 
 
-view : Images -> Float -> Svg msg
-view urls l =
+view : FlipBook -> Float -> Svg msg
+view { urls } l =
     S.svg [ SA.class [ class ], SA.clipPath <| ClipPathFunc <| "circle(" ++ String.fromFloat (l / 2) ++ ")" ] <|
         (List.map
             (\url ->
                 S.image
-                    [ SA.xlinkHref (path ++ url)
+                    [ SA.xlinkHref url
                     , SA.opacity <| Opacity 0
                     , SA.width <| Num l
                     , SA.x <| Num <| -l / 2
@@ -90,7 +91,7 @@ view urls l =
             ++ (case List.head urls of
                     Just url ->
                         [ S.image
-                            [ SA.xlinkHref (path ++ url)
+                            [ SA.xlinkHref url
                             , SA.width <| Num l
                             , SA.x <| Num <| -l / 2
                             , SA.y <| Num <| -l / 2
@@ -104,10 +105,10 @@ view urls l =
                )
 
 
-preview : FlipBook -> Int -> Attribute msg
-preview { urls } w =
-    inFront <|
-        row [ width <| px w, spaceEvenly ] <|
+preview : FlipBook -> Int -> Element msg
+preview { urls, show } w =
+    if show then
+        row [ width <| px w, spaceEvenly, alignBottom, centerX ] <|
             List.map
                 (\url ->
                     image [ width <| px <| round <| toFloat w / (toFloat <| List.length urls) ]
@@ -115,9 +116,12 @@ preview { urls } w =
                 )
                 urls
 
+    else
+        none
+
 
 flip : FlipBook -> Int -> Attribute msg
-flip { urls, interval, current } h =
+flip { urls, current } h =
     let
         mayUrl =
             List.head <| List.drop current <| urls

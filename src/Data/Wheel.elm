@@ -2,7 +2,7 @@ module Data.Wheel exposing (..)
 
 import Color exposing (Color)
 import Data.Content as Content exposing (Content, Mobile)
-import FlipBook exposing (Images)
+import FlipBook exposing (FlipBook)
 import Html.Attributes
 import Interact
 import Json.Decode as D
@@ -28,7 +28,7 @@ type alias Wheel =
     , viewContent : Bool
     , mute : Bool
     , color : Float
-    , images : Images
+    , flip : FlipBook
     }
 
 
@@ -82,7 +82,7 @@ default =
     , viewContent = True
     , mute = False
     , color = 0
-    , images = FlipBook.make
+    , flip = FlipBook.init []
     }
 
 
@@ -126,6 +126,7 @@ type Msg
     | ChangeLoop ( Maybe Float, Maybe Float )
     | Named String
     | ChangeColor Float
+    | FlipMsg FlipBook.Msg
     | ToggleContentView
 
 
@@ -190,6 +191,9 @@ update msg g =
 
         ChangeColor c ->
             { g | wheel = { wheel | color = c } }
+
+        FlipMsg subMsg ->
+            { g | wheel = { wheel | flip = FlipBook.update subMsg wheel.flip } }
 
         ToggleContentView ->
             { g | wheel = { wheel | viewContent = not wheel.viewContent } }
@@ -326,7 +330,7 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                     []
 
                                 else
-                                    [ FlipBook.view w.images length ]
+                                    [ FlipBook.view w.flip length ]
                                )
                             ++ (case style.baseColor of
                                     Just c ->
@@ -497,7 +501,7 @@ encoder w =
     , ( "volume", E.float w.volume )
     , ( "mute", E.bool w.mute )
     , ( "color", E.float w.color )
-    , ( "images", E.list E.string w.images )
+    , ( "images", E.list E.string w.flip.urls )
     , ( "viewContent", E.bool w.viewContent )
     , case w.content of
         C c ->
@@ -545,12 +549,13 @@ decoder =
 
                                                                                                     Nothing ->
                                                                                                         0
-                                                                                    , images =
-                                                                                        case mayImages of
-                                                                                            Just l ->
-                                                                                                l
+                                                                                    , flip =
+                                                                                        FlipBook.init <|
+                                                                                            case mayImages of
+                                                                                                Just l ->
+                                                                                                    l
 
-                                                                                            Nothing ->
-                                                                                                []
+                                                                                                Nothing ->
+                                                                                                    []
                                                                                     }
             )

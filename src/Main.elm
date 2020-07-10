@@ -19,7 +19,6 @@ import Element.Input as Input
 import File exposing (File)
 import File.Download as DL
 import File.Select as Select
-import FlipBook exposing (FlipBook, Images)
 import Html
 import Html.Attributes as Attr
 import Html.Events as Events
@@ -32,7 +31,6 @@ import PanSvg
 import Result exposing (Result)
 import Set exposing (Set)
 import Sound exposing (Sound)
-import Task
 import Url exposing (Url)
 import Url.Builder
 
@@ -78,7 +76,6 @@ type alias Model =
     , loadedSoundList : List Sound
     , showDirLoad : Bool
     , savesList : Set String
-    , flip : FlipBook
     , doc : Doc.Model
     , screenSize : ScreenSize
     , fileExplorerTab : ExTab
@@ -114,7 +111,6 @@ init screen url _ =
         []
         True
         Set.empty
-        FlipBook.init
         (Doc.init <| Just url)
         screen
         Sounds
@@ -151,15 +147,12 @@ type Msg
     | GotNewSample (Result D.Error File)
     | ClickedUploadSave
     | UploadSaves File (List File)
-    | ClickedLoadFlip
-    | GotFlipBook File (List File)
     | ChangedExplorerTab ExTab
     | ToggleShowDirLoad Bool
     | ChgFilter String
     | ChangedMode Mode
     | GotScreenSize ScreenSize
     | DocMsg Doc.Msg
-    | FlipMsg FlipBook.Msg
     | KeysMsg Keys.Msg
     | NOOP
 
@@ -543,12 +536,6 @@ update msg model =
                     (f :: lf)
             )
 
-        ClickedLoadFlip ->
-            ( model, Select.files [ "image/png", "image/jpg", "image/jpeg", "image/bmp" ] GotFlipBook )
-
-        GotFlipBook img imgs ->
-            ( model, Task.perform (FlipMsg << FlipBook.Urls) <| Task.sequence <| List.map File.toUrl (img :: imgs) )
-
         PreListening strs p ->
             ( { model
                 | soundList =
@@ -633,9 +620,6 @@ update msg model =
                 _ ->
                     ( { model | doc = doc }, Cmd.map DocMsg cmd )
 
-        FlipMsg subMsg ->
-            ( { model | flip = FlipBook.update subMsg model.flip }, Cmd.none )
-
         -- TODO Should dispatch KeysMsg, not specific messages to each part, too big of a dependency
         KeysMsg subMsg ->
             let
@@ -689,7 +673,7 @@ update msg model =
 
 
 subs : Model -> Sub Msg
-subs { doc, flip } =
+subs { doc } =
     Sub.batch <|
         [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
@@ -697,7 +681,6 @@ subs { doc, flip } =
         ]
             ++ List.map (Sub.map DocMsg) (Doc.subs doc)
             ++ List.map (Sub.map KeysMsg) Keys.subs
-            ++ [ Sub.map FlipMsg <| FlipBook.subs flip ]
 
 
 type Mode
@@ -757,19 +740,7 @@ view model =
                )
     , body =
         [ layout [] <|
-            row
-                ([ height <| px model.screenSize.height, width <| px model.screenSize.width ]
-                    ++ (if List.length model.flip.urls > 0 then
-                            if model.flip.running then
-                                [ FlipBook.flip model.flip model.screenSize.height ]
-
-                            else
-                                [ FlipBook.preview model.flip model.screenSize.width ]
-
-                        else
-                            []
-                       )
-                )
+            row [ height <| px model.screenSize.height, width <| px model.screenSize.width ]
                 [ viewFileExplorer model
                 , Element.map DocMsg <| Doc.view model.doc
                 ]
@@ -813,15 +784,6 @@ viewFileExplorer model =
                     Saves ->
                         viewSaveFiles model
                )
-            ++ [ row [ Font.color (rgb 0.8 0.2 0.8), padding 10, spacing 5 ]
-                    [ Input.button []
-                        { label = text "Charger Pellicule"
-                        , onPress = Just ClickedLoadFlip
-                        }
-                    , Input.button [] { label = text "▶", onPress = Just <| FlipMsg <| FlipBook.Play }
-                    , Input.button [] { label = text "◼", onPress = Just <| FlipMsg <| FlipBook.Pause }
-                    ]
-               ]
         )
 
 

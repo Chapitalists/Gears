@@ -24,7 +24,6 @@ const fs = require('fs')
     , port = process.argv[2] || 12345
     , soundPath = process.argv[3] || './sons/'
     , soundExtensions = ['.wav']
-    , imagePath = './images/'
     , savePath = process.argv[4] || './saves/'
     , backupPath = process.argv[5] || './backup/'
     , saveExtension = '.gears'
@@ -32,7 +31,6 @@ const fs = require('fs')
 console.log('Checking directories')
 
 if (!fs.existsSync(soundPath)) fs.mkdirSync(soundPath)
-if (!fs.existsSync(imagePath)) fs.mkdirSync(imagePath)
 if (!fs.existsSync(savePath)) fs.mkdirSync(savePath)
 if (!fs.existsSync(backupPath)) fs.mkdirSync(backupPath)
 
