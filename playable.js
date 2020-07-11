@@ -12,7 +12,8 @@ function prepare(model, rate = 1) {
        /* model.once
           ? model.view.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).pause()
           : */model.view.animate(model.length * 1000).transform({rotation:360, cx:0, cy:0}).loop().pause()
-        model.flip = Array.from(document.querySelector('#' + model.id + '>.flip').childNodes, SVG.adopt)
+        let flip = document.querySelector('#' + model.id + '>.flip')
+        if (flip) model.flip = Array.from(flip.childNodes, SVG.adopt)
     }
     if (model.soundName) {
         model.player = new Tone.Player(buffers[model.soundName]).toMaster()
@@ -59,7 +60,7 @@ function play(model, t, newModel = {}, volume = 1, mute = false) { // TODO What 
     if (model.view) {
         Tone.Draw.schedule(() => model.view.animate().play(), t)
     }
-    if (model.flip) {
+    if (model.flip && model.flip.length) {
         let n = model.flip.length
           , d = model.length / n
           , doFlip = (i, t) => () => {console.log(i,t)
@@ -100,7 +101,7 @@ function pause(model, t, force = false, clocked = false) {
     model.pauseOffset = ((t - model.startTime) * model.rate) % model.duration
     if (model.view){//} && !clocked) {
         Tone.Draw.schedule(() => model.view.animate().pause().at((model.pauseOffset/model.length/model.rate) % 1), t)
-        Tone.Draw.cancel(t)
+        Tone.Draw.cancel(t+0.1)
     }
     if (model.soundName && model.player.output) {
         model.player.stop(t)
