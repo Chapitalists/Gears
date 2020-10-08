@@ -58,7 +58,7 @@ function toggleRecord(bool) {
 }
 
 function cutSample(infos) {
-    if (!buffers[infos.fromFileName]) {console.err(infos.fromFileName + " ain’t loaded, cannot cut");return;}
+    if (!buffers[infos.fromFileName]) {console.error(infos.fromFileName + " ain’t loaded, cannot cut");return;}
 
     let buf = buffers[infos.fromFileName]._buffer
       , start = infos.percents[0] * buf.length - 1
