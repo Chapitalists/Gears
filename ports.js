@@ -5,12 +5,18 @@ if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 if (app.ports.toggleRecord) app.ports.toggleRecord.subscribe(toggleRecord)
 if (app.ports.requestSoundDraw) app.ports.requestSoundDraw.subscribe(drawSound)
 if (app.ports.requestCutSample) app.ports.requestCutSample.subscribe(cutSample)
+if (app.ports.openMic) app.ports.openMic.subscribe(openMic)
+if (app.ports.inputRec) app.ports.inputRec.subscribe(inputRec)
 
 const buffers = {}
     , ro = new ResizeObserver(sendSize)
     , nodeToRecord = Tone.context.createGain()
     , recorder = new Recorder(nodeToRecord)
+    , mic = new Tone.UserMedia()
+    , micToRecord = Tone.context.createGain()
+    , micRecorder = new Recorder(micToRecord)
 Tone.Master.connect(nodeToRecord)
+mic.connect(micToRecord)
 ro.observe(document.getElementById('svgResizeObserver'))
 
 let playing = {}
@@ -55,6 +61,22 @@ function toggleRecord(bool) {
         recorder.exportWAV(bl => app.ports.gotRecord.send(URL.createObjectURL(bl)))
         recorder.clear()
     }
+}
+
+function openMic() {
+  Tone.start()
+  mic.open().then(
+    () => app.ports.micOpened.send(null)
+  ).catch(console.error)
+}
+
+function inputRec(name) {
+  if (name) {
+    micRecorder.stop()
+    micRecorder.exportWAV(bl => app.ports.gotNewSample.send(new File([bl], name + ".wav", {type: "audio/wav"})))
+    micRecorder.clear()
+  } else if (mic.state == "started") micRecorder.record()
+  else console.error("won’t record mic if it ain’t opened !")
 }
 
 function cutSample(infos) {

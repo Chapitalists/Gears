@@ -41,6 +41,15 @@ port loadSound : String -> Cmd msg
 port soundLoaded : (D.Value -> msg) -> Sub msg
 
 
+port openMic : () -> Cmd msg
+
+
+port micOpened : (() -> msg) -> Sub msg
+
+
+port inputRec : String -> Cmd msg
+
+
 port gotNewSample : (D.Value -> msg) -> Sub msg
 
 
@@ -72,6 +81,7 @@ main =
 type alias Model =
     { connected : Bool
     , currentUrl : Url.Url
+    , micState : Maybe ( Bool, String )
     , soundList : Dict String SoundListType
     , loadedSoundList : List Sound
     , showDirLoad : Bool
@@ -107,6 +117,7 @@ init screen url _ =
     ( Model
         False
         url
+        Nothing
         Dict.empty
         []
         True
@@ -142,6 +153,11 @@ type Msg
     | GotSavesList (Result Http.Error String)
     | GotLoadedFile String (Result Http.Error Doc)
     | SoundLoaded (Result D.Error Sound)
+    | RequestOpenMic
+    | MicOpened
+    | StartMicRec
+    | EndMicRec String
+    | EnteredNewRecName String
     | ClickedUploadSound
     | UploadSounds File (List File)
     | GotNewSample (Result D.Error File)
@@ -475,6 +491,27 @@ update msg model =
                 Ok s ->
                     ( { model | loadedSoundList = s :: model.loadedSoundList }, Cmd.none )
 
+        RequestOpenMic ->
+            ( model, openMic () )
+
+        MicOpened ->
+            ( { model | micState = Just ( False, "" ) }, Cmd.none )
+
+        StartMicRec ->
+            ( { model | micState = Maybe.map (Tuple.mapFirst <| always True) model.micState }
+            , inputRec ""
+            )
+
+        EndMicRec fileName ->
+            ( { model | micState = Maybe.map (Tuple.mapFirst <| always False) model.micState }
+            , inputRec fileName
+            )
+
+        EnteredNewRecName fileName ->
+            ( { model | micState = Maybe.map (Tuple.mapSecond <| always fileName) model.micState }
+            , Cmd.none
+            )
+
         ClickedUploadSound ->
             ( model, Select.files soundMimeTypes UploadSounds )
 
@@ -677,6 +714,7 @@ subs { doc } =
     Sub.batch <|
         [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
+        , micOpened <| always MicOpened
         , gotNewSample <| (GotNewSample << D.decodeValue File.decoder)
         ]
             ++ List.map (Sub.map DocMsg) (Doc.subs doc)
@@ -824,7 +862,38 @@ viewOpenRefreshButtons openMsg refreshMsg connected =
 viewSounds : Model -> List (Element Msg)
 viewSounds model =
     [ column [ width fill, height <| fillPortion 2, spacing 20, scrollbarY ] <|
-        viewOpenRefreshButtons ClickedUploadSound RequestSoundList model.connected
+        [ row [ width fill, spacing 40 ]
+            [ column [ spacing 20 ] <|
+                viewOpenRefreshButtons ClickedUploadSound RequestSoundList model.connected
+            , column [ width fill, spacing 20 ] <|
+                case model.micState of
+                    Just ( False, name ) ->
+                        [ Input.button []
+                            { onPress =
+                                if String.isEmpty name then
+                                    Nothing
+
+                                else
+                                    Just StartMicRec
+                            , label = text "Rec Mic"
+                            }
+                        , Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
+                            { text = name
+                            , placeholder = Just <| Input.placeholder [] <| text "Nom du fichier"
+                            , label = Input.labelHidden "New File Name"
+                            , onChange = EnteredNewRecName
+                            }
+                        ]
+
+                    Just ( True, name ) ->
+                        [ Input.button [] { onPress = Just <| EndMicRec name, label = text "Stop Mic" }
+                        , text name
+                        ]
+
+                    Nothing ->
+                        [ Input.button [] { onPress = Just RequestOpenMic, label = text "Activer Micro" } ]
+            ]
+        ]
             ++ [ viewLibColumn <| viewLib model [] model.soundList ]
     ]
 
