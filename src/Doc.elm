@@ -303,6 +303,10 @@ view doc =
                 [ width fill
                 , height fill
                 , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
+
+                -- THX to https://discourse.elm-lang.org/t/elm-ui-parent-element-grows-to-encompass-children-instead-of-scrolling/5032
+                , clip
+                , htmlAttribute <| Html.Attributes.style "flex-shrink" "1"
                 ]
                <|
                 viewContent doc
