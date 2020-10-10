@@ -161,18 +161,24 @@ function drawSamples(samples) {
       if (pxPerSample < 0.5) {
         for (let x = 0 ; x < width ; x++) {
           let px = samples.slice(Math.floor(x / pxPerSample), Math.floor((x + 1) / pxPerSample))
+            , minPoint = (Math.min.apply(null, px) + 1) * height / 2
+            , maxPoint = (Math.max.apply(null, px) + 1) * height / 2
           ctx.strokeStyle = 'black'
           ctx.beginPath()
-          ctx.moveTo(x, (Math.min.apply(null, px) + 1) * height / 2)
-          ctx.lineTo(x, (Math.max.apply(null, px) + 1) * height / 2)
+          ctx.moveTo(x, minPoint)
+          ctx.lineTo(x, maxPoint)
           ctx.stroke()
 
           let rms = Math.sqrt(px.reduce((acc,v,i,a) => acc + Math.pow(v, 2)) / px.length)
-          ctx.strokeStyle = 'gray'
-          ctx.beginPath()
-          ctx.moveTo(x, (1 - rms) * height / 2)
-          ctx.lineTo(x, (1 + rms) * height / 2)
-          ctx.stroke()
+            , minRmsPoint = (1 - rms) * height / 2
+            , maxRmsPoint = (1 + rms) * height / 2
+          if (minRmsPoint > minPoint && maxRmsPoint < maxPoint) {
+              ctx.strokeStyle = 'gray'
+              ctx.beginPath()
+              ctx.moveTo(x, minRmsPoint)
+              ctx.lineTo(x, maxRmsPoint)
+              ctx.stroke()
+          }
         }
       } else {
         ctx.strokeStyle = 'black'
