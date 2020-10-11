@@ -10,13 +10,14 @@ if (app.ports.inputRec) app.ports.inputRec.subscribe(inputRec)
 
 const buffers = {}
     , ro = new ResizeObserver(sendSize)
-    , nodeToRecord = Tone.context.createGain()
-    , recorder = new Recorder(nodeToRecord)
-    , mic = new Tone.UserMedia()
-    , micToRecord = Tone.context.createGain()
-    , micRecorder = new Recorder(micToRecord)
-Tone.Master.connect(nodeToRecord)
-mic.connect(micToRecord)
+//    , ctx = new AudioContext()
+//    , nodeToRecord = Tone.context._context.createGain()
+//    , recorder = new Recorder(nodeToRecord)
+//    , mic = new Tone.UserMedia()
+//    , micToRecord = Tone.context.createGain()
+//    , micRecorder = new Recorder(micToRecord)
+//Tone.Master.connect(nodeToRecord)
+//mic.connect(micToRecord)
 ro.observe(document.getElementById('svgResizeObserver'))
 
 let playing = {}
