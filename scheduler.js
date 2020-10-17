@@ -62,24 +62,24 @@ let scheduler = {
   , prepare(model, destination, parentRate) {
     // TODO this is creating a new func instance for each method for each model
     // It’s bad!! Should be in proto ?
-    model.playPauseTimes = [{date : 0, play : false, percentPaused : 0, done : true}] // TODO should replace model.running & isPlayingAt
+    model.playPauseTimes = [{date : 0, play : false, percentPaused : 0, done : true}]
     model.lastScheduledTime = 0
     model.players = []
-    model.getPlayerIndexAt = function(now) { // TODO should be replaced by get last topTime when isPlayingAt is reworked with playPauseTimes
-      now = now || scheduler.getTime()
-      for (let i = 0 ; i < this.players.length ; i++) {
-        let pl = this.players[i]
-        if (pl.startTime <= now && now < pl.stopTime) return i;
-      }
-      return -1;
-    }
-    model.isPlayingAt = function(now) { // not same as running, this is exactly at time asked
-      return this.getPlayerIndexAt(now) != -1
+//    model.getPlayerIndexAt = function(now) {
+//      now = now || scheduler.getTime()
+//      for (let i = 0 ; i < this.players.length ; i++) {
+//        let pl = this.players[i]
+//        if (pl.startTime <= now && now < pl.stopTime) return i;
+//      }
+//      return -1;
+//    }
+    model.lastPlayPauseAt = function(now) {
+      return this.playPauseTimes.slice().reverse().find(v => v.date <= now)
     }
     model.freePlayer = function(startTime) {
       this.players = this.players.filter(v => v.startTime != startTime)
     }
-    model.running = false // not same as isPlaying, this is according to interactions (/w latency)
+//    model.running = false // not same as isPlaying, this is according to interactions (/w latency)
     
     if (model.soundName) {
       model.buffer = buffers[model.soundName]
@@ -126,11 +126,11 @@ let scheduler = {
       if (!this.playingTopModels[model.id]) this.prepare(model, masterGain, 1)
       model = this.playingTopModels[model.id]
 
-      if (model.running) {
-        model.running = false
+      let running = model.playPauseTimes[model.playPauseTimes.length - 1].play
+      
+      if (running) {
         model.playPauseTimes.push({date : t, play : false})
       } else {
-        model.running = model.drawFlag = true
         model.playPauseTimes.push({date : t, play : true})
       }
     }
@@ -244,6 +244,7 @@ let scheduler = {
             let newPlayer = this.scheduleStart(t, model, lastState.percentPaused * model.duration + model.loopStartDur)
             model.players.push(newPlayer)
             scheduleTime = newPlayer.stopTime
+            nextState.percentStarted = lastState.percentPaused
             advanceState()
             
           } else { // And keep pausing
@@ -313,7 +314,7 @@ let scheduler = {
         node : player
       , startTime : t
       , stopTime : t + length
-      , startPosDur : startOffset
+//      , startPosDur : startOffset
     }
   }
   
@@ -322,23 +323,29 @@ let scheduler = {
   , modelsToDraw : []
   
   , draw() {
+    // TODO keeps drawing event when paused. is it bad ?
+    // TODO percent keeps growing, will it overflow ?
     for (let model of this.modelsToDraw) {
-      if (!model.drawFlag) return;
-      
       let now = scheduler.getTime()
-        , cur = model.getPlayerIndexAt(now)
-        , lastTopTime = -1
-        , player = model.players[cur]
+        , lastState = model.lastPlayPauseAt(now)
       
-//      if (!player) lastTopTime = now - model.offsetDur / model.rate // TODO faux, voir percentPaused mtn
-//      else lastTopTime = model.players[cur].topTime
+      let percent = lastState.play ? lastState.percentStarted + (now - lastState.date) / model.length : lastState.percentPaused
       
-//      let percent = (now - lastTopTime) / model.length
       
-      let percent = player ? (now - player.startTime) / model.length + (player.startPosDur - model.offsetDur) / model.duration : 0
+      
+      
+//        , cur = model.getPlayerIndexAt(now)
+//        , player = model.players[cur]
+//      
+////      if (!player) lastTopTime = now - model.offsetDur / model.rate // TODO faux, voir percentPaused mtn
+////      else lastTopTime = model.players[cur].topTime
+//      
+////      let percent = (now - lastTopTime) / model.length
+//      
+//      let percent = player ? (now - player.startTime) / model.length + (player.startPosDur - model.offsetDur) / model.duration : 0
       
       model.view.moveTo(percent)
-      model.drawFlag = model.running || cur != -1
+//      model.drawFlag = model.running || cur != -1
     }
     this.nextRequestId = requestAnimationFrame(() => this.draw())
   }
