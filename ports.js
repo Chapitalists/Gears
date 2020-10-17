@@ -131,17 +131,25 @@ function engine(o) {console.log(JSON.stringify(o, 'utf8', 2))
 //        o.gears.map(g => scheduler.playPause(g, t))
         break;
     case "mute" :
-        model = o.beadIndexes.reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
+//        model = o.beadIndexes.reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
+        model = scheduler.playingTopModels[o.id] // TODO beads inside collars
         if (model) {
-            model.mute = o.value
-            setVolume(model)
+          model.mute = o.value
+          model.updateVolume()
+//            if (o.value) {
+//              model.setVolume(0)
+//            } else {
+//              model.setVolume(model.volume)
+//            }
         }
         break;
     case "volume" :
-        model = o.beadIndexes.reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
+//        model = o.beadIndexes.reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
+        model = scheduler.playingTopModels[o.id] // TODO beads inside collars
         if (model) {
-            model.volume = o.value
-            setVolume(model)
+          model.volume = o.value
+          model.updateVolume()
+//            if (!model.mute) model.setVolume(o.value)
         }
         break;
     }

@@ -97,7 +97,10 @@ let scheduler = {
     let gain = ctx.createGain()
     gain.connect(destination)
     model.gainNode = gain
-    model.setVolume = v => gain.value = v
+    model.updateVolume = function() {
+      this.gainNode.gain.value = this.mute ? 0 : this.volume
+    } // TODO volume should rather be in dB
+    model.updateVolume()
 
     if (model.view && model.id) {
       let el = document.getElementById(model.id)
