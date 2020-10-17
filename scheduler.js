@@ -1,6 +1,6 @@
 let scheduler = {
-    interval : 20
-  , lookAhead : 100
+    interval : 50
+  , lookAhead : 2000
   , running : false
   , intervalId : -1
   , startTime : -1
