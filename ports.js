@@ -22,7 +22,7 @@ ctx.suspend()
 //mic.connect(micToRecord)
 ro.observe(document.getElementById('svgResizeObserver'))
 
-let playing = {}
+//let playing = {}
 
 let deb = null
 
@@ -112,18 +112,23 @@ function cutSample(infos) {
     app.ports.gotNewSample.send(new File([audioBufferToWav(newBuf)], infos.newFileName + ".wav", {type: "audio/wav"}))
 }
 
-function engine(o) {
+let playPauseLatency = .1
+  , masterGain = ctx.createGain()
+masterGain.connect(ctx.destination)
+function engine(o) {console.log(JSON.stringify(o, 'utf8', 2))
   let model = null
   switch ( o.action ) {
     case "stopReset" :
-        for ( id in playing) {
-            stop(playing[id])
-        }
-        playing = {}
+        scheduler.stop()
+//        for ( id in playing) {
+//            stop(playing[id])
+//        }
+//        playing = {}
         break;
     case "playPause" :
-        let t = Tone.now()+0.1
-        o.gears.map(g=>playPause(g,t))
+        scheduler.startThenPlay(o.gears)
+//        let t = scheduler.getTime() + playPauseLatency
+//        o.gears.map(g => scheduler.playPause(g, t))
         break;
     case "mute" :
         model = o.beadIndexes.reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
