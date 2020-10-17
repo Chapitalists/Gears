@@ -158,14 +158,23 @@ let scheduler = {
         }
       if (nextState && nextState.date < scheduleTime) { // If we sheduled ahead of next
         scheduleTime = nextState.date // Bring back the scheduler
+        
         if (!nextState.play) { // If we should’ve pause
-          for (let pl of model.players) {
-            if (pl.startTime <= scheduleTime && scheduleTime < pl.stopTime) {
-              pl.node.stop(this.toCtxTime(scheduleTime))
-              nextState.percentPaused = (scheduleTime - pl.startTime) / model.length
+          
+          if (model.soundName) { // If sound, undo players
+            for (let pl of model.players) {
+              if (pl.startTime <= scheduleTime && scheduleTime < pl.stopTime) {
+                pl.node.stop(this.toCtxTime(scheduleTime))
+                nextState.percentPaused = (scheduleTime - pl.startTime) / model.length
+              }
+              if (pl.startTime > scheduleTime) pl.node.stop()
             }
-            if (pl.startTime > scheduleTime) pl.node.stop()
           }
+          
+          if (model.collar) { // If collar, undo playPause of subWheels
+            // TODO collar undo
+          }
+          
           advanceState()
         }
       }
@@ -180,17 +189,23 @@ let scheduler = {
           
           if (nextState && nextState.date < max) { // And should pause
             
-            let newPlayers = this.scheduleLoop(t, nextState.date - model.length, model)
+            if (model.soundName) {
+              let newPlayers = this.scheduleLoop(t, nextState.date - model.length, model)
+
+                , startTime = newPlayers[newPlayers.length - 1].stopTime
+                , length = nextState.date - startTime
+                , duration = length * model.rate
+
+              newPlayers.push(this.schedulePlayer(startTime, model, model.loopStartDur, duration, length))
+
+              model.players = model.players.concat(newPlayers)
+
+              nextState.percentPaused = length / model.length
+            }
             
-              , startTime = newPlayers[newPlayers.length - 1].stopTime
-              , length = nextState.date - startTime
-              , duration = length * model.rate
-            
-            newPlayers.push(this.schedulePlayer(startTime, model, model.loopStartDur, duration, length))
-            
-            model.players = model.players.concat(newPlayers)
-            
-            nextState.percentPaused = length / model.length
+            if (model.collar) {
+              // TODO collar pause
+            }
             
             scheduleTime = nextState.date
             
@@ -198,9 +213,15 @@ let scheduler = {
             
           } else { // And keep playing
             
-            let newPlayers = this.scheduleLoop(t, max, model)
-            model.players = model.players.concat(newPlayers)
-            scheduleTime = model.players[model.players.length - 1].stopTime
+            if (model.soundName) {
+              let newPlayers = this.scheduleLoop(t, max, model)
+              model.players = model.players.concat(newPlayers)
+              scheduleTime = model.players[model.players.length - 1].stopTime
+            }
+            
+            if (model.collar) {
+              // TODO collar play
+            }
             
           }
           
@@ -208,11 +229,20 @@ let scheduler = {
           
           if (nextState && nextState.date < max) { // And should play
             
-            let newPlayer = this.scheduleStart(t, model, lastState.percentPaused * model.duration + model.loopStartDur)
-            model.players.push(newPlayer)
-            scheduleTime = newPlayer.stopTime
-            nextState.percentStarted = lastState.percentPaused
+            if (model.soundName) {
+              let offsetDur = lastState.percentPaused * model.duration + model.loopStartDur
+                , newPlayer = this.scheduleStart(t, model, offsetDur)
+              model.players.push(newPlayer)
+              scheduleTime = newPlayer.stopTime
+              nextState.percentStarted = lastState.percentPaused
+            }
+            
+            if (model.collar) {
+              // TODO collar start
+            }
+            
             advanceState()
+
             
           } else { // And keep pausing
             
