@@ -65,27 +65,18 @@ let scheduler = {
     model.playPauseTimes = [{date : 0, play : false, percentPaused : 0, done : true}]
     model.lastScheduledTime = 0
     model.players = []
-//    model.getPlayerIndexAt = function(now) {
-//      now = now || scheduler.getTime()
-//      for (let i = 0 ; i < this.players.length ; i++) {
-//        let pl = this.players[i]
-//        if (pl.startTime <= now && now < pl.stopTime) return i;
-//      }
-//      return -1;
-//    }
     model.lastPlayPauseAt = function(now) {
       return this.playPauseTimes.slice().reverse().find(v => v.date <= now)
     }
     model.freePlayer = function(startTime) {
       this.players = this.players.filter(v => v.startTime != startTime)
     }
-//    model.running = false // not same as isPlaying, this is according to interactions (/w latency)
     
     if (model.soundName) {
       model.buffer = buffers[model.soundName]
       // TODO beware, buffer duration could differ from saved duration in Elm model (due to resampling)
       // probably it’s preferable to use saved duration from elm
-      // but, is it compensated by downward TODO ?
+      // but, is it compensated by downward TODO ? (in schedulePlayer)
       model.bufferDuration = model.buffer.duration
       model.loopStartDur = model.loopPercents[0] * model.bufferDuration
       model.loopEndDur = model.loopPercents[1] * model.bufferDuration
@@ -142,16 +133,6 @@ let scheduler = {
     for (let id in this.playingTopModels) {
       let model = this.playingTopModels[id]
         , ppt = model.playPauseTimes
-        , limit = Math.min(now, model.lastScheduledTime)
-//        , keepIndex = 0
-//      model.playPauseTimes = model.playPauseTimes.sort((a,b) => a.date - b.date)
-//      for (let i in model.playPauseTimes) {
-//        if (model.playPauseTimes[i].date >= limit) {
-//          keepIndex = i - 1
-//          break;
-//        }
-//      }
-//      model.playPauseTimes = model.playPauseTimes.slice(keepIndex)
       // For now, considering that playPauseTimes is filled chronologically and alternatively of play and pause
       // This is the assumption of user play and pause
       // collar or another source of play pause should manage their specificities
@@ -182,28 +163,7 @@ let scheduler = {
         }
       }
       
-//      let undoDate = 0
-//      for (let state of model.playPauseTimes) {
-//        if (undoDate) state.done = false
-//        else if (!state.done) undoDate = state.date
-//        
-//      }
-//      
-//      if (undoDate && undoDate < model.lastScheduleTime)
-//      for (let player of model.players) {
-//        // WARNING should be impossible, but if this stops
-//        if (player.startTime <= undoDate && undoDate <= player.stopTime) player.node.stop(this.getCtxTime(undoDate))
-//        else if (player.startTime > undoDate) player.node.stop()
-//      }
-//      
-//      let scheduleTime = Math.min(undoDate, model.lastScheduleTime)
-      
       if (now > scheduleTime) console.error("scheduler is late, now : " + now + " scheduler : " + scheduleTime)
-      
-//      let lastIndexPlayPause = model.playPauseTimes.length - 1
-//      while (model.playPauseTimes[lastIndexPlayPause].date > model.lastScheduledTime) lastIndexPlayPause--
-//      let lastState = model.playPauseTimes[lastIndexPlayPause]
-//        , nextState = model.playPauseTimes[lastIndexPlayPause + 1]
       
       while (scheduleTime < max) {
         
@@ -255,39 +215,6 @@ let scheduler = {
         }
       }
       model.lastScheduledTime = scheduleTime
-      
-//      if (model.timeToStart != -1) {
-//        let t = model.timeToStart // TODO What if timeToStart < now for wathever reason, it’ll make a mess ! Easily tested in debug, as time goes on when in a breakpoint
-//          , duration = model.loopEndDur - model.pauseOffsetDur
-//          , length = duration / model.rate
-//          , stopTime = t + length
-//          , player = this.schedulePlayer(t, model, model.offsetDur, duration, length)
-//        model.players.push({
-//            node : player
-//          , startTime : t
-//          , stopTime : stopTime
-//          , topTime : t - (model.offsetDur / model.rate)
-//        })
-//        // WARNING onended is set after the call to start, so there’s a possibility that it has already ended before setting the callback, hence memory leak, but there’s probably no chance that happens
-//        let closureT = t
-//        player.onended = () => model.players = model.players.filter(v => v.startTime != closureT)
-//        t = stopTime
-//        while (t < max) {
-//          let player = this.schedulePlayer(t, model, model.loopStartDur, model.duration, model.length)
-//          model.players.push({
-//              node : player
-//            , startTime : t
-//            , stopTime : t + model.length
-//            , topTime : t
-//          })
-//          // WARNING same as before, onended added after started, so eventually after ended
-//          let loopClosureT = t
-//          player.onended = () => model.players = model.players.filter(v => v.startTime != loopClosureT)
-//          t += model.length
-//        }
-//        
-//        model.timeToStart = -1
-//      } else {}
     }
   }
   , scheduleLoop(t, maxT, model) {
@@ -309,12 +236,11 @@ let scheduler = {
     player.connect(model.gainNode)
     player.onended = () => model.freePlayer(t)
     player.start(ctxStartTime, startOffset, duration)
-    player.stop(ctxStopTime) // TODO stop and duration in schedulePlayer do the same thing, is it good ? Does it compensate for inexact buffer.duration ? See upward
+    player.stop(ctxStopTime) // TODO stop and duration in schedulePlayer do the same thing, is it good ? Does it compensate for inexact buffer.duration ? See upward in prepare sound
     return {
         node : player
       , startTime : t
       , stopTime : t + length
-//      , startPosDur : startOffset
     }
   }
   
@@ -329,23 +255,11 @@ let scheduler = {
       let now = scheduler.getTime()
         , lastState = model.lastPlayPauseAt(now)
       
-      let percent = lastState.play ? lastState.percentStarted + (now - lastState.date) / model.length : lastState.percentPaused
-      
-      
-      
-      
-//        , cur = model.getPlayerIndexAt(now)
-//        , player = model.players[cur]
-//      
-////      if (!player) lastTopTime = now - model.offsetDur / model.rate // TODO faux, voir percentPaused mtn
-////      else lastTopTime = model.players[cur].topTime
-//      
-////      let percent = (now - lastTopTime) / model.length
-//      
-//      let percent = player ? (now - player.startTime) / model.length + (player.startPosDur - model.offsetDur) / model.duration : 0
+      let percent = lastState.play ?
+          lastState.percentStarted + (now - lastState.date) / model.length :
+          lastState.percentPaused
       
       model.view.moveTo(percent)
-//      model.drawFlag = model.running || cur != -1
     }
     this.nextRequestId = requestAnimationFrame(() => this.draw())
   }
