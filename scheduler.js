@@ -38,14 +38,14 @@ let scheduler = {
     
     this.running = false
     
-    for (id in this.playingTopModels) { // TODO loop also inside collars and mobiles, make a map function walking all sounds in the tree to use also in work and ?
+    for (let id in this.playingTopModels) { // TODO loop also inside collars and mobiles, make a map function walking all sounds in the tree to use also in work and ?
       let model = this.playingTopModels[id]
-      for (player of model.players) {
+      for (let player of model.players) {
         player.node.stop()
       }
     }
     
-    for (model of this.modelsToDraw) {
+    for (let model of this.modelsToDraw) {
       model.view.moveTo(0)
     }
     
@@ -122,7 +122,7 @@ let scheduler = {
   
   , playPause(topGears) {
     let t = this.getTime() + playPauseLatency
-    for (model of topGears) {
+    for (let model of topGears) {
       if (!this.playingTopModels[model.id]) this.prepare(model, masterGain, 1)
       model = this.playingTopModels[model.id]
 
@@ -139,7 +139,7 @@ let scheduler = {
   , work() { // TODO presently specific to soundWheels, todo collar & mobile
     let now = this.getTime()
       , max = now + this.lookAhead / 1000
-    for (id in this.playingTopModels) {
+    for (let id in this.playingTopModels) {
       let model = this.playingTopModels[id]
         , ppt = model.playPauseTimes
         , limit = Math.min(now, model.lastScheduledTime)
@@ -322,7 +322,7 @@ let scheduler = {
   , modelsToDraw : []
   
   , draw() {
-    for (model of this.modelsToDraw) {
+    for (let model of this.modelsToDraw) {
       if (!model.drawFlag) return;
       
       let now = scheduler.getTime()
