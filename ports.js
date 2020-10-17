@@ -5,8 +5,8 @@ if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 if (app.ports.toggleRecord) app.ports.toggleRecord.subscribe(toggleRecord)
 if (app.ports.requestSoundDraw) app.ports.requestSoundDraw.subscribe(drawSound)
 if (app.ports.requestCutSample) app.ports.requestCutSample.subscribe(cutSample)
-if (app.ports.openMic) app.ports.openMic.subscribe(openMic)
-if (app.ports.inputRec) app.ports.inputRec.subscribe(inputRec)
+//if (app.ports.openMic) app.ports.openMic.subscribe(openMic)
+//if (app.ports.inputRec) app.ports.inputRec.subscribe(inputRec)
 
 const buffers = {}
     , ro = new ResizeObserver(sendSize)
@@ -76,21 +76,21 @@ function toggleRecord(bool) {
     }
 }
 
-function openMic() {
-  Tone.start()
-  mic.open().then(
-    () => app.ports.micOpened.send(null)
-  ).catch(console.error)
-}
-
-function inputRec(name) {
-  if (name) {
-    micRecorder.stop()
-    micRecorder.exportWAV(bl => app.ports.gotNewSample.send(new File([bl], name + ".wav", {type: "audio/wav"})))
-    micRecorder.clear()
-  } else if (mic.state == "started") micRecorder.record()
-  else console.error("won’t record mic if it ain’t opened !")
-}
+//function openMic() {
+//  Tone.start()
+//  mic.open().then(
+//    () => app.ports.micOpened.send(null)
+//  ).catch(console.error)
+//}
+//
+//function inputRec(name) {
+//  if (name) {
+//    micRecorder.stop()
+//    micRecorder.exportWAV(bl => app.ports.gotNewSample.send(new File([bl], name + ".wav", {type: "audio/wav"})))
+//    micRecorder.clear()
+//  } else if (mic.state == "started") micRecorder.record()
+//  else console.error("won’t record mic if it ain’t opened !")
+//}
 
 function cutSample(infos) {
     if (!buffers[infos.fromFileName]) {console.error(infos.fromFileName + " ain’t loaded, cannot cut");return;}
