@@ -45,6 +45,10 @@ let scheduler = {
       }
     }
     
+    for (model of this.modelsToDraw) {
+      model.view.moveTo(0)
+    }
+    
     ctx.suspend()
     this.intervalId = -1
     this.nextRequestId = -1
