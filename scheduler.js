@@ -33,6 +33,9 @@ let scheduler = {
   , stop() {
     if (!this.running) return;
     
+    clearInterval(this.intervalId)
+    cancelAnimationFrame(this.nextRequestId)
+    
     this.running = false
     
     for (id in this.playingTopModels) { // TODO loop also inside collars and mobiles, make a map function walking all sounds in the tree to use also in work and ?
@@ -43,8 +46,6 @@ let scheduler = {
     }
     
     ctx.suspend()
-    clearInterval(this.intervalId)
-    cancelAnimationFrame(this.nextRequestId)
     this.intervalId = -1
     this.nextRequestId = -1
     this.startTime = -1
