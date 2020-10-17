@@ -64,15 +64,23 @@ let scheduler = {
     // It’s bad!! Should be in proto ?
     model.playPauseTimes = [{date : 0, play : false, percentPaused : 0, done : true}]
     model.lastScheduledTime = 0
-    model.players = []
     model.lastPlayPauseAt = function(now) {
       return this.playPauseTimes.slice().reverse().find(v => v.date <= now)
     }
-    model.freePlayer = function(startTime) {
-      this.players = this.players.filter(v => v.startTime != startTime)
-    }
+
+    let gain = ctx.createGain()
+    gain.connect(destination)
+    model.gainNode = gain
+    model.updateVolume = function() {
+      this.gainNode.gain.value = this.mute ? 0 : this.volume
+    } // TODO volume should rather be in dB
+    model.updateVolume()
     
     if (model.soundName) {
+      model.players = []
+      model.freePlayer = function(startTime) {
+        this.players = this.players.filter(v => v.startTime != startTime)
+      }
       model.buffer = buffers[model.soundName]
       // TODO beware, buffer duration could differ from saved duration in Elm model (due to resampling)
       // probably it’s preferable to use saved duration from elm
@@ -84,14 +92,13 @@ let scheduler = {
       model.rate = parentRate * model.duration / model.length
       model.offsetDur = model.startPercent * model.duration
     }
-
-    let gain = ctx.createGain()
-    gain.connect(destination)
-    model.gainNode = gain
-    model.updateVolume = function() {
-      this.gainNode.gain.value = this.mute ? 0 : this.volume
-    } // TODO volume should rather be in dB
-    model.updateVolume()
+    
+    if (model.collar) {
+      model.duration = model.collar.length
+      model.rate = parentRate * model.duration / model.length
+      model.offsetDur = model.startPercent * model.duration
+      model.subWheels = model.collar.beads.map(v => this.prepare(v, model.gainNode, model.rate))
+    }
 
     if (model.view && model.id) {
       let el = document.getElementById(model.id)
