@@ -212,38 +212,38 @@ let scheduler = {
         }
       }
       
-      if (model.timeToStart != -1) {
-        let t = model.timeToStart // TODO What if timeToStart < now for wathever reason, it’ll make a mess ! Easily tested in debug, as time goes on when in a breakpoint
-          , duration = model.loopEndDur - model.pauseOffsetDur
-          , length = duration / model.rate
-          , stopTime = t + length
-          , player = this.schedulePlayer(t, model, model.offsetDur, duration, length)
-        model.players.push({
-            node : player
-          , startTime : t
-          , stopTime : stopTime
-          , topTime : t - (model.offsetDur / model.rate)
-        })
-        // WARNING onended is set after the call to start, so there’s a possibility that it has already ended before setting the callback, hence memory leak, but there’s probably no chance that happens
-        let closureT = t
-        player.onended = () => model.players = model.players.filter(v => v.startTime != closureT)
-        t = stopTime
-        while (t < max) {
-          let player = this.schedulePlayer(t, model, model.loopStartDur, model.duration, model.length)
-          model.players.push({
-              node : player
-            , startTime : t
-            , stopTime : t + model.length
-            , topTime : t
-          })
-          // WARNING same as before, onended added after started, so eventually after ended
-          let loopClosureT = t
-          player.onended = () => model.players = model.players.filter(v => v.startTime != loopClosureT)
-          t += model.length
-        }
-        
-        model.timeToStart = -1
-      } else {}
+//      if (model.timeToStart != -1) {
+//        let t = model.timeToStart // TODO What if timeToStart < now for wathever reason, it’ll make a mess ! Easily tested in debug, as time goes on when in a breakpoint
+//          , duration = model.loopEndDur - model.pauseOffsetDur
+//          , length = duration / model.rate
+//          , stopTime = t + length
+//          , player = this.schedulePlayer(t, model, model.offsetDur, duration, length)
+//        model.players.push({
+//            node : player
+//          , startTime : t
+//          , stopTime : stopTime
+//          , topTime : t - (model.offsetDur / model.rate)
+//        })
+//        // WARNING onended is set after the call to start, so there’s a possibility that it has already ended before setting the callback, hence memory leak, but there’s probably no chance that happens
+//        let closureT = t
+//        player.onended = () => model.players = model.players.filter(v => v.startTime != closureT)
+//        t = stopTime
+//        while (t < max) {
+//          let player = this.schedulePlayer(t, model, model.loopStartDur, model.duration, model.length)
+//          model.players.push({
+//              node : player
+//            , startTime : t
+//            , stopTime : t + model.length
+//            , topTime : t
+//          })
+//          // WARNING same as before, onended added after started, so eventually after ended
+//          let loopClosureT = t
+//          player.onended = () => model.players = model.players.filter(v => v.startTime != loopClosureT)
+//          t += model.length
+//        }
+//        
+//        model.timeToStart = -1
+//      } else {}
     }
   }
   , scheduleLoop(t, maxT, model) {
