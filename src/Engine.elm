@@ -149,7 +149,7 @@ encodeGear hasView parentUid coll id =
 encodeMobile : Mobeel -> Bool -> String -> E.Value
 encodeMobile { motor, gears } hasView parentUid =
     E.object
-        [ ( "length", E.float <| Harmo.getLengthId motor gears )
+        [ ( "duration", E.float <| Harmo.getLengthId motor gears )
         , ( "gears", E.list (encodeGear hasView parentUid gears) <| Motor.getMotored motor gears )
         ]
 
@@ -157,7 +157,7 @@ encodeMobile { motor, gears } hasView parentUid =
 encodeCollar : Colleer -> Bool -> String -> E.Value
 encodeCollar c hasView parentUid =
     E.object
-        [ ( "length", E.float <| Collar.getCumulLengthAt c.matrice c )
+        [ ( "duration", E.float <| Collar.getCumulLengthAt c.matrice c )
         , ( "loopStart", E.float c.loop )
         , ( "beads", E.list (encodeBead hasView parentUid) <| List.indexedMap (\i el -> ( i, el )) <| Collar.getBeads c )
         ]
