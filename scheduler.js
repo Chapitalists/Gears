@@ -325,15 +325,17 @@ let scheduler = {
       let now = scheduler.getTime()
         , cur = model.getPlayerIndexAt(now)
         , lastTopTime = -1
-        , playing = cur != -1
+        , player = model.players[cur]
       
-      if (!playing) topTime = now - model.offsetDur / model.rate
-      else topTime = model.players[cur].topTime
+//      if (!player) lastTopTime = now - model.offsetDur / model.rate // TODO faux, voir percentPaused mtn
+//      else lastTopTime = model.players[cur].topTime
       
-      let percent = (now - topTime) / model.length
+//      let percent = (now - lastTopTime) / model.length
+      
+      let percent = player ? (now - player.startTime) / model.length + (player.startPosDur - model.offsetDur) / model.duration : 0
       
       model.view.moveTo(percent)
-      model.drawFlag = model.running || playing
+      model.drawFlag = model.running || cur != -1
     }
     this.nextRequestId = requestAnimationFrame(() => this.draw())
   }
