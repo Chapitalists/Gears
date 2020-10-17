@@ -160,14 +160,22 @@ let scheduler = {
         , nextState = ppt[nextStateIndex]
         , lastState = ppt[nextStateIndex - 1] || ppt[ppt.length - 1]
         , scheduleTime = model.lastScheduledTime
+        , advanceState = () => {
+          nextState.done = true
+          lastState = nextState
+          nextState = ppt[++nextStateIndex]
+        }
       if (nextState && nextState.date < scheduleTime) { // If we sheduled ahead of next
         scheduleTime = nextState.date // Bring back the scheduler
         if (!nextState.play) { // If we should’ve pause
-          // Undo scheduled plays and schedule pause for the last
-          // TODO register paused time or percent in model or nextState
-          nextState.done = true // Pause is done
-          lastState = nextState // Move state forward
-          nextState = ppt[++nextStateIndex]
+          for (let pl of model.players) {
+            if (pl.startTime <= scheduleTime && scheduleTime < pl.stopTime) {
+              pl.node.stop(this.toCtxTime(scheduleTime))
+              nextState.percentPaused = (scheduleTime - pl.startTime) / model.length
+            }
+            if (pl.startTime > scheduleTime) pl.node.stop()
+          }
+          advanceState()
         }
       }
       
@@ -194,23 +202,55 @@ let scheduler = {
 //      let lastState = model.playPauseTimes[lastIndexPlayPause]
 //        , nextState = model.playPauseTimes[lastIndexPlayPause + 1]
       
-      for (let t = model.lastScheduledTime ; t < max ; ) {
+      while (scheduleTime < max) {
+        
+        let t = scheduleTime
+        
         if (lastState.play) { // If we’re playing
+          
           if (nextState && nextState.date < max) { // And should pause
-            // Schedule then pause
+            
+            let newPlayers = this.scheduleLoop(t, nextState.date - model.length, model)
+            
+              , startTime = newPlayers[newPlayers.length - 1].stopTime
+              , length = nextState.date - startTime
+              , duration = length * model.rate
+            
+            newPlayers.push(this.schedulePlayer(startTime, model, model.loopStartDur, duration, length))
+            
+            model.players = model.players.concat(newPlayers)
+            
+            nextState.percentPaused = length / model.length
+            
+            scheduleTime = nextState.date
+            
+            advanceState()
+            
           } else { // And keep playing
-            // Schedule normally
+            
+            let newPlayers = this.scheduleLoop(t, max, model)
+            model.players = model.players.concat(newPlayers)
+            scheduleTime = model.players[model.players.length - 1].stopTime
             
           }
+          
         } else { // If we’re paused
+          
           if (nextState && nextState.date < max) { // And should play
-            // Schedule start
+            
+            let newPlayer = this.scheduleStart(t, model, lastState.percentPaused * model.duration + model.loopStartDur)
+            model.players.push(newPlayer)
+            scheduleTime = newPlayer.stopTime
+            advanceState()
+            
           } else { // And keep pausing
-            // Do nothing
-            t = max
+            
+            scheduleTime = max
+            
           }
         }
       }
+      model.lastScheduledTime = scheduleTime
       
 //      if (model.timeToStart != -1) {
 //        let t = model.timeToStart // TODO What if timeToStart < now for wathever reason, it’ll make a mess ! Easily tested in debug, as time goes on when in a breakpoint
@@ -247,7 +287,14 @@ let scheduler = {
     }
   }
   , scheduleLoop(t, maxT, model) {
-    let player = this.schedulePlayer(t, model, model.loopStartDur, model.duration, model.length)
+    return [
+      this.schedulePlayer(t, model, model.loopStartDur, model.duration, model.length)
+    ].concat(t + model.length >= maxT ? [] : this.scheduleLoop(t + model.length, maxT, model))
+  }
+  , scheduleStart(t, model, offsetDur) {
+    let dur = model.loopEndDur - offsetDur
+      , len = dur / model.rate
+    return this.schedulePlayer(t, model, offsetDur, dur, len)
   }
   , schedulePlayer(t, model, startOffset, duration, length) {
     let player = ctx.createBufferSource()
@@ -259,7 +306,12 @@ let scheduler = {
     player.onended = () => model.freePlayer(t)
     player.start(ctxStartTime, startOffset, duration)
     player.stop(ctxStopTime) // TODO stop and duration in schedulePlayer do the same thing, is it good ? Does it compensate for inexact buffer.duration ? See upward
-    return player
+    return {
+        node : player
+      , startTime : t
+      , stopTime : t + length
+      , startPosDur : startOffset
+    }
   }
   
   
