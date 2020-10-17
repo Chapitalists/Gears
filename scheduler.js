@@ -154,12 +154,12 @@ let scheduler = {
       // collar or another source of play pause should manage their specificities
       
       // Clean play pause events before last
-      ppt.splice(0, ppt.findIndex(v => v.date >= Math.min(now, model.lastScheduleTime)) - 1)
+      ppt.splice(0, ppt.findIndex(v => v.date >= Math.min(now, model.lastScheduledTime)) - 1)
       
       let nextStateIndex = ppt.findIndex(v => !v.done) // Next is first not done
         , nextState = ppt[nextStateIndex]
         , lastState = ppt[nextStateIndex - 1] || ppt[ppt.length - 1]
-        , scheduleTime = model.lastScheduleTime
+        , scheduleTime = model.lastScheduledTime
       if (nextState && nextState.date < scheduleTime) { // If we sheduled ahead of next
         scheduleTime = nextState.date // Bring back the scheduler
         if (!nextState.play) { // If we should’ve pause
