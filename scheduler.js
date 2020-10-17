@@ -90,13 +90,11 @@ let scheduler = {
       model.loopEndDur = model.loopPercents[1] * model.bufferDuration
       model.duration = model.loopEndDur - model.loopStartDur
       model.rate = parentRate * model.duration / model.length
-      model.offsetDur = model.startPercent * model.duration
     }
     
     if (model.collar) {
       model.duration = model.collar.length
       model.rate = parentRate * model.duration / model.length
-      model.offsetDur = model.startPercent * model.duration
       model.subWheels = model.collar.beads.map(v => this.prepare(v, model.gainNode, model.rate))
     }
 
@@ -165,7 +163,7 @@ let scheduler = {
             for (let pl of model.players) {
               if (pl.startTime <= scheduleTime && scheduleTime < pl.stopTime) {
                 pl.node.stop(this.toCtxTime(scheduleTime))
-                nextState.percentPaused = (scheduleTime - pl.startTime) / model.length
+                nextState.percentPaused = clampPercent((scheduleTime - pl.startTime) / model.length - model.startPercent)
               }
               if (pl.startTime > scheduleTime) pl.node.stop()
             }
@@ -200,7 +198,7 @@ let scheduler = {
 
               model.players = model.players.concat(newPlayers)
 
-              nextState.percentPaused = length / model.length
+              nextState.percentPaused = clampPercent(length / model.length - model.startPercent)
             }
             
             if (model.collar) {
@@ -230,7 +228,8 @@ let scheduler = {
           if (nextState && nextState.date < max) { // And should play
             
             if (model.soundName) {
-              let offsetDur = lastState.percentPaused * model.duration + model.loopStartDur
+              let soundPercent = clampPercent(lastState.percentPaused + model.startPercent)
+                , offsetDur = soundPercent * model.duration + model.loopStartDur
                 , newPlayer = this.scheduleStart(t, model, offsetDur)
               model.players.push(newPlayer)
               scheduleTime = newPlayer.stopTime
@@ -292,12 +291,16 @@ let scheduler = {
       let now = scheduler.getTime()
         , lastState = model.lastPlayPauseAt(now)
       
-      let percent = lastState.play ?
+      let percent = clampPercent(lastState.play ?
           lastState.percentStarted + (now - lastState.date) / model.length :
-          lastState.percentPaused
+          lastState.percentPaused)
       
       model.view.moveTo(percent)
     }
     this.nextRequestId = requestAnimationFrame(() => this.draw())
   }
+}
+
+function clampPercent(p) {
+  return p - Math.floor(p)
 }
