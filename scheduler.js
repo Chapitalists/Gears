@@ -155,153 +155,153 @@ let scheduler = {
   }
       
   , schedule(model, now, max) {
-      let ppt = model.playPauseTimes
-      // For now, considering that playPauseTimes is filled chronologically and alternatively of play and pause
-      // This is the assumption of user play and pause
-      // collar or another source of play pause should manage their specificities
-      
-      // Clean play pause events before last
-      ppt.splice(0, ppt.findIndex(v => v.date >= Math.min(now, model.lastScheduledTime)) - 1)
-      
-      let nextStateIndex = ppt.findIndex(v => !v.done) // Next is first not done
-        , nextState = ppt[nextStateIndex]
-        , lastState = ppt[nextStateIndex - 1] || ppt[ppt.length - 1]
-        , scheduleTime = model.lastScheduledTime
-        , advanceState = () => {
-          nextState.done = true
-          lastState = nextState
-          nextState = ppt[++nextStateIndex]
-        }
-      if (nextState && nextState.date < scheduleTime) { // If we sheduled ahead of next
-        scheduleTime = nextState.date // Bring back the scheduler
-        
-        if (!nextState.play) { // If we should’ve pause
-          
-          if (model.soundName) { // If sound, undo players
-            for (let pl of model.players) {
-              if (pl.startTime <= scheduleTime && scheduleTime < pl.stopTime) {
-                pl.node.stop(this.toCtxTime(scheduleTime))
-                nextState.percentPaused = clampPercent((scheduleTime - pl.startTime) / model.length - model.startPercent)
-              }
-              if (pl.startTime > scheduleTime) pl.node.stop()
-            }
-          }
-          
-          if (model.collar) { // If collar, undo playPause of subWheels
-            // TODO collar undo
-          }
-          
-          advanceState()
-        }
+    let ppt = model.playPauseTimes
+    // For now, considering that playPauseTimes is filled chronologically and alternatively of play and pause
+    // This is the assumption of user play and pause
+    // collar or another source of play pause should manage their specificities
+
+    // Clean play pause events before last
+    ppt.splice(0, ppt.findIndex(v => v.date >= Math.min(now, model.lastScheduledTime)) - 1)
+
+    let nextStateIndex = ppt.findIndex(v => !v.done) // Next is first not done
+      , nextState = ppt[nextStateIndex]
+      , lastState = ppt[nextStateIndex - 1] || ppt[ppt.length - 1]
+      , scheduleTime = model.lastScheduledTime
+      , advanceState = () => {
+        nextState.done = true
+        lastState = nextState
+        nextState = ppt[++nextStateIndex]
       }
-      
-      if (now > scheduleTime) console.error("scheduler is late, now : " + now + " scheduler : " + scheduleTime)
-      
-      while (scheduleTime < max) {
-        
-        let t = scheduleTime
-        
-        if (lastState.play) { // If we’re playing
-          
-          if (nextState && nextState.date < max) { // And should pause
-            
-            if (model.soundName) {
-              if (nextState.date <= t) { // No need to play more, even partially
+    if (nextState && nextState.date < scheduleTime) { // If we sheduled ahead of next
+      scheduleTime = nextState.date // Bring back the scheduler
 
-                nextState.percentPaused = clampPercent(0 - model.startPercent)
+      if (!nextState.play) { // If we should’ve pause
 
-              } else {
-                let newPlayers = []
-                  , startTime
-
-                if (nextState.date > t + model.length) { // At least one full play
-                  newPlayers = this.scheduleLoop(t, nextState.date - model.length, model)
-                  startTime = newPlayers[newPlayers.length - 1].stopTime
-                } else { // Just a partial play
-                  startTime = t
-                }
-                let length = nextState.date - startTime
-                  , duration = length * model.rate
-
-                newPlayers.push(this.schedulePlayer(startTime, model, model.loopStartDur, duration, length))
-
-                model.players = model.players.concat(newPlayers)
-
-                nextState.percentPaused = clampPercent(length / model.length - model.startPercent)
-              }
+        if (model.soundName) { // If sound, undo players
+          for (let pl of model.players) {
+            if (pl.startTime <= scheduleTime && scheduleTime < pl.stopTime) {
+              pl.node.stop(this.toCtxTime(scheduleTime))
+              nextState.percentPaused = clampPercent((scheduleTime - pl.startTime) / model.length - model.startPercent)
             }
-            
-            if (model.collar) {
-              // TODO collar pause
-            }
-            
-            t = nextState.date
-            
-            advanceState()
-            
-          } else { // And keep playing
-            
-            if (model.soundName) {
-              let newPlayers = this.scheduleLoop(t, max, model)
-              model.players = model.players.concat(newPlayers)
-              t = model.players[model.players.length - 1].stopTime
-            }
-            
-            if (model.collar) {
-              while (t <= max) {
-                let length = model.beadsDurs[model.nextBead] / model.rate
-                  , beadPPT = model.subWheels[model.nextBead].playPauseTimes
-                beadPPT.push({date : t, play : true})
-                beadPPT.push({date : t + length, play : false})
-                model.nextBead = (model.nextBead + 1) % model.subWheels.length
-                t += length
-              }
-            }
-            
+            if (pl.startTime > scheduleTime) pl.node.stop()
           }
-          
-        } else { // If we’re paused
-          
-          if (nextState && nextState.date < max) { // And should play
-            t = nextState.date
-            
-            let contentPercent = clampPercent(lastState.percentPaused + model.startPercent)
+        }
 
-            if (model.soundName) {
-              let offsetDur = contentPercent * model.duration + model.loopStartDur
-                , newPlayer = this.scheduleStart(t, model, offsetDur)
-              model.players.push(newPlayer)
-              t = newPlayer.stopTime
+        if (model.collar) { // If collar, undo playPause of subWheels
+          // TODO collar undo
+        }
+
+        advanceState()
+      }
+    }
+
+    if (now > scheduleTime) console.error("scheduler is late, now : " + now + " scheduler : " + scheduleTime)
+
+    while (scheduleTime < max) {
+
+      let t = scheduleTime
+
+      if (lastState.play) { // If we’re playing
+
+        if (nextState && nextState.date < max) { // And should pause
+
+          if (model.soundName) {
+            if (nextState.date <= t) { // No need to play more, even partially
+              
+              nextState.percentPaused = clampPercent(0 - model.startPercent)
+              
+            } else {
+              let newPlayers = []
+                , startTime
+              
+              if (nextState.date > t + model.length) { // At least one full play
+                newPlayers = this.scheduleLoop(t, nextState.date - model.length, model)
+                startTime = newPlayers[newPlayers.length - 1].stopTime
+              } else { // Just a partial play
+                startTime = t
+              }
+              let length = nextState.date - startTime
+                , duration = length * model.rate
+
+              newPlayers.push(this.schedulePlayer(startTime, model, model.loopStartDur, duration, length))
+
+              model.players = model.players.concat(newPlayers)
+
+              nextState.percentPaused = clampPercent(length / model.length - model.startPercent)
             }
-            
-            if (model.collar) {
-              let cumulDur = model.beadsCumulDurs[model.nextBead]
-                , offsetDur = contentPercent * model.duration
-                , length = (cumulDur - offsetDur) / model.rate
+          }
+
+          if (model.collar) {
+            // TODO collar pause
+          }
+
+          t = nextState.date
+
+          advanceState()
+
+        } else { // And keep playing
+
+          if (model.soundName) {
+            let newPlayers = this.scheduleLoop(t, max, model)
+            model.players = model.players.concat(newPlayers)
+            t = model.players[model.players.length - 1].stopTime
+          }
+
+          if (model.collar) {
+            while (t <= max) {
+              let length = model.beadsDurs[model.nextBead] / model.rate
                 , beadPPT = model.subWheels[model.nextBead].playPauseTimes
               beadPPT.push({date : t, play : true})
               beadPPT.push({date : t + length, play : false})
               model.nextBead = (model.nextBead + 1) % model.subWheels.length
               t += length
             }
-            
-            nextState.percentStarted = lastState.percentPaused
-            advanceState()
-
-            
-          } else { // And keep pausing
-            
-            t = max
-            
           }
-        }
-        scheduleTime = t
-      }
-      model.lastScheduledTime = scheduleTime
 
-      if (model.collar) {
-        model.subWheels.forEach(v => this.schedule(v, now, max))
+        }
+
+      } else { // If we’re paused
+
+        if (nextState && nextState.date < max) { // And should play
+          t = nextState.date
+          
+          let contentPercent = clampPercent(lastState.percentPaused + model.startPercent)
+
+          if (model.soundName) {
+            let offsetDur = contentPercent * model.duration + model.loopStartDur
+              , newPlayer = this.scheduleStart(t, model, offsetDur)
+            model.players.push(newPlayer)
+            t = newPlayer.stopTime
+          }
+
+          if (model.collar) {
+            let cumulDur = model.beadsCumulDurs[model.nextBead]
+              , offsetDur = contentPercent * model.duration
+              , length = (cumulDur - offsetDur) / model.rate
+              , beadPPT = model.subWheels[model.nextBead].playPauseTimes
+            beadPPT.push({date : t, play : true})
+            beadPPT.push({date : t + length, play : false})
+            model.nextBead = (model.nextBead + 1) % model.subWheels.length
+            t += length
+          }
+
+          nextState.percentStarted = lastState.percentPaused
+          advanceState()
+
+
+        } else { // And keep pausing
+
+          t = max
+
+        }
       }
+      scheduleTime = t
+    }
+    model.lastScheduledTime = scheduleTime
+
+    if (model.collar) {
+      model.subWheels.forEach(v => this.schedule(v, now, max))
+    }
   }
   , scheduleLoop(t, maxT, model) {
     return [
