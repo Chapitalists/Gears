@@ -340,10 +340,13 @@ let scheduler = {
     for (let model of this.modelsToDraw) {
       let now = scheduler.getTime()
         , lastState = model.lastPlayPauseAt(now)
+        , percent = 0
       
-      let percent = clampPercent(lastState.play ?
-          lastState.percentStarted + (now - lastState.date) / model.length :
-          lastState.percentPaused)
+      if (lastState && lastState.done) {
+        percent = clampPercent(lastState.play ?
+            lastState.percentStarted + (now - lastState.date) / model.length :
+            lastState.percentPaused)
+      } else console.error("lastState was not done in draw :", lastState, "time is", now)
       
       model.view.moveTo(percent)
     }
