@@ -97,6 +97,10 @@ let scheduler = {
       model.rate = parentRate * model.duration / model.length
       model.subWheels = model.collar.beads.map(v => this.prepare(v, model.gainNode, model.rate))
     }
+    
+    model.realLength = model.length / parentRate
+    model.lengthBeforeParentRate = model.length
+    model.length = model.realLength
 
     if (model.view && model.id) {
       let el = document.getElementById(model.id)
