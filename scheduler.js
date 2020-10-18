@@ -195,7 +195,7 @@ let scheduler = {
     let nextStateIndex = ppt.findIndex(v => !v.done) // Next is first not done
       , nextState = ppt[nextStateIndex]
       , lastState = ppt[nextStateIndex - 1] || ppt[ppt.length - 1]
-      , scheduleTime = model.lastScheduledTime
+      , scheduleTime = nextState ? Math.min(nextState.date, model.lastScheduledTime) : model.lastScheduledTime
       , advanceState = () => {
         nextState.done = true
         lastState = nextState
@@ -211,7 +211,7 @@ let scheduler = {
 
         if (nextState && nextState.date < max) { // And should pause
 
-          if (nextState.date < t) { // If we sheduled ahead of next
+          if ((nextState.date < t || nextState.date < model.lastScheduledTime) && !model.mobile) { // If we sheduled ahead of next
             t = nextState.date // Bring back the time and undo
             if (t <= now) console.error("undoing the past, now : " + now + " scheduler : " + t)
 
@@ -242,6 +242,10 @@ let scheduler = {
                 if (subLastState.play) {
                   pausingBeadIndex = i
                   beadPlayTime = subLastState.date
+                  sub.playPauseTimes.push({date : t, play : false})
+                } else { // WARNING hack to force the subWheel undoing
+                  // TODO this hack could be replaced generally by transmitting the undo info to subWheels
+                  sub.playPauseTimes.push({date : t, play : true})
                   sub.playPauseTimes.push({date : t, play : false})
                 }
               }
