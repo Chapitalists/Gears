@@ -117,13 +117,14 @@ let scheduler = {
       
       this.modelsToDraw.push(model)
     }
-    this.playingTopModels[model.id] = model
+    return model
   }
   
   , playPause(topGears) {
     let t = this.getTime() + playPauseLatency
     for (let model of topGears) {
-      if (!this.playingTopModels[model.id]) this.prepare(model, masterGain, 1)
+      if (!this.playingTopModels[model.id])
+        this.playingTopModels[model.id] = this.prepare(model, masterGain, 1)
       model = this.playingTopModels[model.id]
 
       let running = model.playPauseTimes[model.playPauseTimes.length - 1].play
@@ -140,8 +141,12 @@ let scheduler = {
     let now = this.getTime()
       , max = now + this.lookAhead / 1000
     for (let id in this.playingTopModels) {
-      let model = this.playingTopModels[id]
-        , ppt = model.playPauseTimes
+      this.schedule(this.playingTopModels[id], now, max)
+    }
+  }
+      
+  , schedule(model, now, max) {
+      let ppt = model.playPauseTimes
       // For now, considering that playPauseTimes is filled chronologically and alternatively of play and pause
       // This is the assumption of user play and pause
       // collar or another source of play pause should manage their specificities
