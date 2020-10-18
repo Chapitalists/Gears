@@ -248,7 +248,14 @@ let scheduler = {
             }
             
             if (model.collar) {
-              // TODO collar play
+              while (t <= max) {
+                let length = model.beadsDurs[model.nextBead] / model.rate
+                  , beadPPT = model.subWheels[model.nextBead].playPauseTimes
+                beadPPT.push({date : t, play : true})
+                beadPPT.push({date : t + length, play : false})
+                model.nextBead = (model.nextBead + 1) % model.subWheels.length
+                t += length
+              }
             }
             
           }
@@ -256,20 +263,29 @@ let scheduler = {
         } else { // If we’re paused
           
           if (nextState && nextState.date < max) { // And should play
+            t = nextState.date
             
+            let contentPercent = clampPercent(lastState.percentPaused + model.startPercent)
+
             if (model.soundName) {
-              let soundPercent = clampPercent(lastState.percentPaused + model.startPercent)
-                , offsetDur = soundPercent * model.duration + model.loopStartDur
+              let offsetDur = contentPercent * model.duration + model.loopStartDur
                 , newPlayer = this.scheduleStart(t, model, offsetDur)
               model.players.push(newPlayer)
               t = newPlayer.stopTime
-              nextState.percentStarted = lastState.percentPaused
             }
             
             if (model.collar) {
-              // TODO collar start
+              let cumulDur = model.beadsCumulDurs[model.nextBead]
+                , offsetDur = contentPercent * model.duration
+                , length = (cumulDur - offsetDur) / model.rate
+                , beadPPT = model.subWheels[model.nextBead].playPauseTimes
+              beadPPT.push({date : t, play : true})
+              beadPPT.push({date : t + length, play : false})
+              model.nextBead = (model.nextBead + 1) % model.subWheels.length
+              t += length
             }
             
+            nextState.percentStarted = lastState.percentPaused
             advanceState()
 
             
@@ -282,7 +298,10 @@ let scheduler = {
         scheduleTime = t
       }
       model.lastScheduledTime = scheduleTime
-    }
+
+      if (model.collar) {
+        model.subWheels.forEach(v => this.schedule(v, now, max))
+      }
   }
   , scheduleLoop(t, maxT, model) {
     return [
