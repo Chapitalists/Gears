@@ -235,7 +235,7 @@ let scheduler = {
               // TODO collar pause
             }
             
-            scheduleTime = nextState.date
+            t = nextState.date
             
             advanceState()
             
@@ -244,7 +244,7 @@ let scheduler = {
             if (model.soundName) {
               let newPlayers = this.scheduleLoop(t, max, model)
               model.players = model.players.concat(newPlayers)
-              scheduleTime = model.players[model.players.length - 1].stopTime
+              t = model.players[model.players.length - 1].stopTime
             }
             
             if (model.collar) {
@@ -262,7 +262,7 @@ let scheduler = {
                 , offsetDur = soundPercent * model.duration + model.loopStartDur
                 , newPlayer = this.scheduleStart(t, model, offsetDur)
               model.players.push(newPlayer)
-              scheduleTime = newPlayer.stopTime
+              t = newPlayer.stopTime
               nextState.percentStarted = lastState.percentPaused
             }
             
@@ -275,10 +275,11 @@ let scheduler = {
             
           } else { // And keep pausing
             
-            scheduleTime = max
+            t = max
             
           }
         }
+        scheduleTime = t
       }
       model.lastScheduledTime = scheduleTime
     }
