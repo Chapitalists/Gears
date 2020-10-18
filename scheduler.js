@@ -85,7 +85,10 @@ let scheduler = {
     if (model.soundName) {
       model.players = []
       model.freePlayer = function(startTime) {
-        this.players = this.players.filter(v => v.startTime != startTime)
+        setTimeout(
+          () => this.players = this.players.filter(v => v.startTime != startTime)
+          , scheduler.lookAhead
+        )
       }
       model.buffer = buffers[model.soundName]
       // TODO beware, buffer duration could differ from saved duration in Elm model (due to resampling)
