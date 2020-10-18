@@ -206,17 +206,29 @@ let scheduler = {
           if (nextState && nextState.date < max) { // And should pause
             
             if (model.soundName) {
-              let newPlayers = this.scheduleLoop(t, nextState.date - model.length, model)
+              if (nextState.date <= t) { // No need to play more, even partially
 
-                , startTime = newPlayers[newPlayers.length - 1].stopTime
-                , length = nextState.date - startTime
-                , duration = length * model.rate
+                nextState.percentPaused = clampPercent(0 - model.startPercent)
 
-              newPlayers.push(this.schedulePlayer(startTime, model, model.loopStartDur, duration, length))
+              } else {
+                let newPlayers = []
+                  , startTime
 
-              model.players = model.players.concat(newPlayers)
+                if (nextState.date > t + model.length) { // At least one full play
+                  newPlayers = this.scheduleLoop(t, nextState.date - model.length, model)
+                  startTime = newPlayers[newPlayers.length - 1].stopTime
+                } else { // Just a partial play
+                  startTime = t
+                }
+                let length = nextState.date - startTime
+                  , duration = length * model.rate
 
-              nextState.percentPaused = clampPercent(length / model.length - model.startPercent)
+                newPlayers.push(this.schedulePlayer(startTime, model, model.loopStartDur, duration, length))
+
+                model.players = model.players.concat(newPlayers)
+
+                nextState.percentPaused = clampPercent(length / model.length - model.startPercent)
+              }
             }
             
             if (model.collar) {
