@@ -1,3 +1,9 @@
+const playPauseLatency = .1
+    , ctx = new AudioContext()
+    , masterGain = ctx.createGain()
+ctx.suspend()
+masterGain.connect(ctx.destination)
+
 let scheduler = {
     interval : 50
   , lookAhead : 2000

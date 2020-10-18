@@ -10,8 +10,8 @@ if (app.ports.requestCutSample) app.ports.requestCutSample.subscribe(cutSample)
 
 const buffers = {}
     , ro = new ResizeObserver(sendSize)
-    , ctx = new AudioContext()
-ctx.suspend()
+//    , ctx = new AudioContext()
+//ctx.suspend()
 //    , ctx = new AudioContext()
 //    , nodeToRecord = Tone.context._context.createGain()
 //    , recorder = new Recorder(nodeToRecord)
@@ -112,9 +112,9 @@ function cutSample(infos) {
     app.ports.gotNewSample.send(new File([audioBufferToWav(newBuf)], infos.newFileName + ".wav", {type: "audio/wav"}))
 }
 
-let playPauseLatency = .1
-  , masterGain = ctx.createGain()
-masterGain.connect(ctx.destination)
+//let playPauseLatency = .1
+//  , masterGain = ctx.createGain()
+//masterGain.connect(ctx.destination)
 function engine(o) {console.log(JSON.stringify(o, 'utf8', 2))
   let model = null
   switch ( o.action ) {
