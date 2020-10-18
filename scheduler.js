@@ -224,7 +224,31 @@ let scheduler = {
             }
 
             if (model.collar) { // If collar, undo playPause of subWheels
-              // TODO collar undo
+              let pausingBeadIndex = -1
+                , beadPlayTime
+              for (let i = 0 ; i < model.subWheels.length ; i++) {
+                let sub = model.subWheels[i]
+                  , lastStateIndex = sub.lastPlayPauseIndexAt(t)
+                  , subLastState = sub.playPauseTimes[lastStateIndex]
+                
+                sub.playPauseTimes = sub.playPauseTimes.slice(0, lastStateIndex + 1)
+                
+                if (subLastState.play) {
+                  pausingBeadIndex = i
+                  beadPlayTime = subLastState.date
+                  sub.playPauseTimes.push({date : t, play : false})
+                }
+              }
+              if (pausingBeadIndex == -1) {
+                console.error("couldn’t find pausing bead, unknown pause percent and next Bead", now, nextState)
+                nextState.percent = 0
+                model.nextBead = 0
+              } else {
+                let length = t - beadPlayTime
+                  , cumul = model.beadsCumulDurs[pausingBeadIndex - 1] / model.rate || 0
+                nextState.percent = clampPercent((cumul + length) / model.length)
+                model.nextBead = pausingBeadIndex
+              }
             }
 
           } else { // Normal pause
@@ -256,7 +280,19 @@ let scheduler = {
             }
 
             if (model.collar) {
-              // TODO collar pause
+              
+              let nextLength = model.beadsDurs[model.nextBead] / model.rate
+              while (t + nextLength <= nextState.date) {
+                this.scheduleBead(t, model, nextLength)
+                t += nextLength
+                nextLength = model.beadsDurs[model.nextBead] / model.rate
+              }
+              
+              let length = nextState.date - t
+                , cumul = model.beadsCumulDurs[model.nextBead - 1] / model.rate || 0
+              this.scheduleBead(t, model, length, false)
+              
+              nextState.percent = clampPercent((cumul + length) / model.length)
             }
 
             t = nextState.date
