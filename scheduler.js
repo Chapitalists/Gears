@@ -1,3 +1,6 @@
+// TODO to prevent rounding, all calculations making time progress should be in scheduler timespace
+// presently, scheduling values get sometimes incremented by values coming from durations
+
 const playPauseLatency = .1
     , ctx = new AudioContext()
     , masterGain = ctx.createGain()
@@ -28,15 +31,15 @@ let scheduler = {
 
       ctx.resume().then(() => {
         this.startTime = ctx.currentTime
+        this.playPause(topGears)
         this.intervalId = setInterval(() => this.work(), this.interval)
         this.work()
         this.nextRequestId = requestAnimationFrame(() => this.draw())
-        this.playPause(topGears)
       })
     }
   }
   
-  , stop() {
+  , stop() { // TODO presently specific to soundWheels, todo mobile
     if (!this.running) return;
     
     clearInterval(this.intervalId)
@@ -70,7 +73,7 @@ let scheduler = {
   
   
   , playingTopModels : {}
-  , prepare(t, model, destination, parentRate) {
+  , prepare(t, model, destination, parentRate) { // TODO presently specific to soundWheels, todo mobile
     // TODO this is creating a new func instance for each method for each model
     // It’s bad!! Should be in proto ?
     model.lastScheduledTime = t
@@ -166,7 +169,7 @@ let scheduler = {
     }
   }
   
-  , work() { // TODO presently specific to soundWheels, todo collar & mobile
+  , work() {
     let now = this.getTime()
       , max = now + this.lookAhead / 1000
     for (let id in this.playingTopModels) {
@@ -174,7 +177,7 @@ let scheduler = {
     }
   }
       
-  , schedule(model, now, max) {
+  , schedule(model, now, max) { // TODO presently specific to soundWheels, todo mobile
     let ppt = model.playPauseTimes
     // For now, considering that playPauseTimes is filled chronologically and alternatively of play and pause
     // This is the assumption of user play and pause
@@ -215,7 +218,7 @@ let scheduler = {
                 if (pl.startTime > t) pl.node.stop()
               }
               if (!isFinite(nextState.percent)) {
-                console.error("couldn’t find current player, unknown pause percent", now, nextState)
+                console.error("couldn’t find pausing player, unknown pause percent", now, nextState)
                 nextState.percent = 0
               }
             }
@@ -361,9 +364,9 @@ let scheduler = {
   , draw() {
     // TODO keeps drawing event when paused. is it bad ?
     // TODO percent keeps growing, will it overflow ?
+    let now = scheduler.getTime()
     for (let model of this.modelsToDraw) {
-      let now = scheduler.getTime()
-        , lastStateIndex = model.lastPlayPauseIndexAt(now)
+      let lastStateIndex = model.lastPlayPauseIndexAt(now)
         , lastState = model.playPauseTimes[lastStateIndex]
         , percent = 0
       
@@ -373,7 +376,7 @@ let scheduler = {
         percent = clampPercent(lastState.play ?
             lastState.percent + (now - lastState.date) / model.length :
             lastState.percent)
-      } else console.error("lastState was not done in draw :", lastState, "time is", now)
+      } else console.error("lastState was not done in draw :", lastState, "time is", now, "model", model)
       
       model.view.moveTo(percent)
     }
