@@ -70,11 +70,14 @@ let scheduler = {
   
   
   , playingTopModels : {}
-  , prepare(model, destination, parentRate) {
+  , prepare(t, model, destination, parentRate) {
     // TODO this is creating a new func instance for each method for each model
     // It’s bad!! Should be in proto ?
-    model.lastScheduledTime = this.getTime()
-    model.playPauseTimes = [{date : model.lastScheduledTime, play : false, percent : 0, done : true}]
+    model.lastScheduledTime = t
+    model.playPauseTimes = [
+        {date : 0, play : false, percent : 0, done : true} // used by draw
+      , {date : t, play : false, percent : 0, done : true} // and one at t to prevent past scheduling warn
+    ]
     model.lastPlayPauseIndexAt = function(now) {
       for (let i = this.playPauseTimes.length - 1 ; i >= 0 ; i--)
         if (this.playPauseTimes[i].date <= now)
@@ -121,7 +124,7 @@ let scheduler = {
         model.beadsCumulDurs.push(cumul)
       }
       model.rate = parentRate * model.duration / model.length
-      model.subWheels = model.collar.beads.map(v => this.prepare(v, model.gainNode, model.rate))
+      model.subWheels = model.collar.beads.map(v => this.prepare(t, v, model.gainNode, model.rate))
     }
     
     model.realLength = model.length / parentRate
@@ -150,7 +153,7 @@ let scheduler = {
     let t = this.getTime() + playPauseLatency
     for (let model of topGears) {
       if (!this.playingTopModels[model.id])
-        this.playingTopModels[model.id] = this.prepare(model, masterGain, 1)
+        this.playingTopModels[model.id] = this.prepare(t, model, masterGain, 1)
       model = this.playingTopModels[model.id]
 
       let running = model.playPauseTimes[model.playPauseTimes.length - 1].play
