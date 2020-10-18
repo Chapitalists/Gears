@@ -93,7 +93,16 @@ let scheduler = {
     }
     
     if (model.collar) {
-      model.duration = model.collar.length
+      // WARNING collarOffset : ignore collar startPercent because it’s broken now (see todolist)
+      model.startPercent = 0
+      model.nextBead = 0
+      model.duration = model.collar.duration
+      model.beadsDurs = model.collar.beads.map(v => v.length)
+      model.beadsCumulDurs = []
+      for (let cumul = 0, i = 0 ; i < model.beadsDurs.length ; i++) {
+        cumul += model.beadsDurs[i]
+        model.beadsCumulDurs.push(cumul)
+      }
       model.rate = parentRate * model.duration / model.length
       model.subWheels = model.collar.beads.map(v => this.prepare(v, model.gainNode, model.rate))
     }
