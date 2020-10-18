@@ -5,7 +5,7 @@ ctx.suspend()
 masterGain.connect(ctx.destination)
 
 let scheduler = {
-    interval : 50
+    interval : playPauseLatency * 250
   , lookAhead : 2000
   , running : false
   , intervalId : -1
