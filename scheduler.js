@@ -276,10 +276,7 @@ let scheduler = {
           if (model.collar) {
             while (t <= max) {
               let length = model.beadsDurs[model.nextBead] / model.rate
-                , beadPPT = model.subWheels[model.nextBead].playPauseTimes
-              beadPPT.push({date : t, play : true})
-              beadPPT.push({date : t + length, play : false})
-              model.nextBead = (model.nextBead + 1) % model.subWheels.length
+              this.scheduleBead(t, model, length)
               t += length
             }
           }
@@ -305,10 +302,7 @@ let scheduler = {
             let cumulDur = model.beadsCumulDurs[model.nextBead]
               , offsetDur = contentPercent * model.duration
               , length = (cumulDur - offsetDur) / model.rate
-              , beadPPT = model.subWheels[model.nextBead].playPauseTimes
-            beadPPT.push({date : t, play : true})
-            beadPPT.push({date : t + length, play : false})
-            model.nextBead = (model.nextBead + 1) % model.subWheels.length
+            this.scheduleBead(t, model, length)
             t += length
           }
 
@@ -329,6 +323,12 @@ let scheduler = {
     if (model.collar) {
       model.subWheels.forEach(v => this.schedule(v, now, max))
     }
+  }
+  , scheduleBead(t, model, length, advanceBead = true) {
+    let beadPPT = model.subWheels[model.nextBead].playPauseTimes
+    beadPPT.push({date : t, play : true})
+    beadPPT.push({date : t + length, play : false})
+    if (advanceBead) model.nextBead = (model.nextBead + 1) % model.subWheels.length
   }
   , scheduleLoop(t, maxT, model) {
     return [
