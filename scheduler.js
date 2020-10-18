@@ -39,7 +39,7 @@ let scheduler = {
     }
   }
   
-  , stop() { // TODO presently specific to soundWheels, todo mobile
+  , stop() {
     if (!this.running) return;
     
     clearInterval(this.intervalId)
@@ -51,11 +51,11 @@ let scheduler = {
       if (model.soundName) {
         model.players.forEach(pl => pl.node.stop())
       }
-      if (model.collar) {
+      if (model.collar || model.mobile) {
         model.subWheels.forEach(stopWheel)
       }
     }
-    for (let id in this.playingTopModels) { // TODO make a map function walking all sounds in the tree to use also in work and ?
+    for (let id in this.playingTopModels) {
       stopWheel(this.playingTopModels[id])
     }
     
@@ -73,7 +73,7 @@ let scheduler = {
   
   
   , playingTopModels : {}
-  , prepare(t, model, destination, parentRate) { // TODO presently specific to soundWheels, todo mobile
+  , prepare(t, model, destination, parentRate) {
     // TODO this is creating a new func instance for each method for each model
     // It’s bad!! Should be in proto ?
     model.lastScheduledTime = t
@@ -130,6 +130,12 @@ let scheduler = {
       model.subWheels = model.collar.beads.map(v => this.prepare(t, v, model.gainNode, model.rate))
     }
     
+    if (model.mobile) {
+      model.duration = model.mobile.duration
+      model.rate = parentRate * model.duration / model.length
+      model.subWheels = model.mobile.gears.map(v => this.prepare(t, v, model.gainNode, model.rate))
+    }
+    
     model.realLength = model.length / parentRate
     model.lengthBeforeParentRate = model.length
     model.length = model.realLength
@@ -177,7 +183,7 @@ let scheduler = {
     }
   }
       
-  , schedule(model, now, max) { // TODO presently specific to soundWheels, todo mobile
+  , schedule(model, now, max) {
     let ppt = model.playPauseTimes
     // For now, considering that playPauseTimes is filled chronologically and alternatively of play and pause
     // This is the assumption of user play and pause
@@ -294,6 +300,14 @@ let scheduler = {
               
               nextState.percent = clampPercent((cumul + length) / model.length)
             }
+            
+            if (model.mobile) {
+              model.subWheels.forEach(v => v.playPauseTimes.push({date : nextState.date, play : false}))
+              nextState.percent = clampPercent(
+                lastState.percent
+                + (nextState.date - model.lastStartTime) / model.length
+              )
+            }
 
             t = nextState.date
 
@@ -315,6 +329,10 @@ let scheduler = {
               this.scheduleBead(t, model, length)
               t += length
             }
+          }
+          
+          if (model.mobile) {
+            t = max
           }
 
         }
@@ -341,10 +359,18 @@ let scheduler = {
             this.scheduleBead(t, model, length)
             t += length
           }
+          
+          if (model.mobile) {
+            model.lastStartTime = t
+            model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
+          }
 
           nextState.percent = lastState.percent
           advanceState()
-
+          if (model.mobile) {
+            if (nextState) t = nextState.date
+            else t = max
+          }
 
         } else { // And keep pausing
 
@@ -356,7 +382,7 @@ let scheduler = {
     }
     model.lastScheduledTime = scheduleTime
 
-    if (model.collar) {
+    if (model.collar || model.mobile) {
       model.subWheels.forEach(v => this.schedule(v, now, max))
     }
   }
