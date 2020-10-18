@@ -70,8 +70,11 @@ let scheduler = {
     // It’s bad!! Should be in proto ?
     model.lastScheduledTime = this.getTime()
     model.playPauseTimes = [{date : model.lastScheduledTime, play : false, percent : 0, done : true}]
-    model.lastPlayPauseAt = function(now) {
-      return this.playPauseTimes.slice().reverse().find(v => v.date <= now)
+    model.lastPlayPauseIndexAt = function(now) {
+      for (let i = this.playPauseTimes.length - 1 ; i >= 0 ; i--)
+        if (this.playPauseTimes[i].date <= now)
+          return i
+      return -1
     }
 
     let gain = ctx.createGain()
@@ -348,13 +351,16 @@ let scheduler = {
     // TODO percent keeps growing, will it overflow ?
     for (let model of this.modelsToDraw) {
       let now = scheduler.getTime()
-        , lastState = model.lastPlayPauseAt(now)
+        , lastStateIndex = model.lastPlayPauseIndexAt(now)
+        , lastState = model.playPauseTimes[lastStateIndex]
         , percent = 0
       
-      if (lastState && lastState.done) {
+      if (!lastState || !lastState.done) lastState = model.playPauseTimes[--lastStateIndex]
+      
+      if (lastState && isFinite(lastState.percent)) {
         percent = clampPercent(lastState.play ?
-            lastState.percentStarted + (now - lastState.date) / model.length :
-            lastState.percentPaused)
+            lastState.percent + (now - lastState.date) / model.length :
+            lastState.percent)
       } else console.error("lastState was not done in draw :", lastState, "time is", now)
       
       model.view.moveTo(percent)
