@@ -44,11 +44,16 @@ let scheduler = {
     
     this.running = false
     
-    for (let id in this.playingTopModels) { // TODO loop also inside collars and mobiles, make a map function walking all sounds in the tree to use also in work and ?
-      let model = this.playingTopModels[id]
-      for (let player of model.players) {
-        player.node.stop()
+    let stopWheel = model => {
+      if (model.soundName) {
+        model.players.forEach(pl => pl.node.stop())
       }
+      if (model.collar) {
+        model.subWheels.forEach(stopWheel)
+      }
+    }
+    for (let id in this.playingTopModels) { // TODO make a map function walking all sounds in the tree to use also in work and ?
+      stopWheel(this.playingTopModels[id])
     }
     
     for (let model of this.modelsToDraw) {
