@@ -68,8 +68,8 @@ let scheduler = {
   , prepare(model, destination, parentRate) {
     // TODO this is creating a new func instance for each method for each model
     // It’s bad!! Should be in proto ?
-    model.playPauseTimes = [{date : 0, play : false, percentPaused : 0, done : true}]
-    model.lastScheduledTime = 0
+    model.lastScheduledTime = this.getTime()
+    model.playPauseTimes = [{date : model.lastScheduledTime, play : false, percent : 0, done : true}]
     model.lastPlayPauseAt = function(now) {
       return this.playPauseTimes.slice().reverse().find(v => v.date <= now)
     }
@@ -197,11 +197,11 @@ let scheduler = {
 
             if (model.soundName) {
               for (let pl of model.players) {
-                if (pl.startTime <= t && t < pl.stopTime) {
+                if (pl.startTime < t && t <= pl.stopTime) {
                   pl.node.stop(this.toCtxTime(t))
-                  nextState.percentPaused = clampPercent((t - pl.startTime) / model.length - model.startPercent)
+                  nextState.percent = clampPercent((t - pl.startTime) / model.length - model.startPercent)
                 }
-                if (pl.startTime > t) pl.node.stop()
+                if (pl.startTime >= t) pl.node.stop()
               }
             }
 
@@ -214,7 +214,7 @@ let scheduler = {
             if (model.soundName) {
               if (nextState.date <= t) { // No need to play more, even partially
 
-                nextState.percentPaused = clampPercent(0 - model.startPercent)
+                nextState.percent = clampPercent(0 - model.startPercent)
 
               } else {
                 let newPlayers = []
@@ -233,7 +233,7 @@ let scheduler = {
 
                 model.players = model.players.concat(newPlayers)
 
-                nextState.percentPaused = clampPercent(length / model.length - model.startPercent)
+                nextState.percent = clampPercent(length / model.length - model.startPercent)
               }
             }
 
@@ -274,7 +274,7 @@ let scheduler = {
           t = nextState.date
           if (t <= now) console.error("starting in the past, now : " + now + " scheduler : " + t)
           
-          let contentPercent = clampPercent(lastState.percentPaused + model.startPercent)
+          let contentPercent = clampPercent(lastState.percent + model.startPercent)
 
           if (model.soundName) {
             let offsetDur = contentPercent * model.duration + model.loopStartDur
@@ -294,7 +294,7 @@ let scheduler = {
             t += length
           }
 
-          nextState.percentStarted = lastState.percentPaused
+          nextState.percent = lastState.percent
           advanceState()
 
 
