@@ -172,71 +172,70 @@ let scheduler = {
         lastState = nextState
         nextState = ppt[++nextStateIndex]
       }
-    if (nextState && nextState.date < scheduleTime) { // If we sheduled ahead of next
-      scheduleTime = nextState.date // Bring back the scheduler
-
-      if (!nextState.play) { // If we should’ve pause
-
-        if (model.soundName) { // If sound, undo players
-          for (let pl of model.players) {
-            if (pl.startTime <= scheduleTime && scheduleTime < pl.stopTime) {
-              pl.node.stop(this.toCtxTime(scheduleTime))
-              nextState.percentPaused = clampPercent((scheduleTime - pl.startTime) / model.length - model.startPercent)
-            }
-            if (pl.startTime > scheduleTime) pl.node.stop()
-          }
-        }
-
-        if (model.collar) { // If collar, undo playPause of subWheels
-          // TODO collar undo
-        }
-
-        advanceState()
-      }
-    }
-
-    if (now > scheduleTime) console.error("scheduler is late, now : " + now + " scheduler : " + scheduleTime)
 
     while (scheduleTime < max) {
 
       let t = scheduleTime
+      if (now > scheduleTime) console.error("scheduler is late, now : " + now + " scheduler : " + t)
 
       if (lastState.play) { // If we’re playing
 
         if (nextState && nextState.date < max) { // And should pause
 
-          if (model.soundName) {
-            if (nextState.date <= t) { // No need to play more, even partially
-              
-              nextState.percentPaused = clampPercent(0 - model.startPercent)
-              
-            } else {
-              let newPlayers = []
-                , startTime
-              
-              if (nextState.date > t + model.length) { // At least one full play
-                newPlayers = this.scheduleLoop(t, nextState.date - model.length, model)
-                startTime = newPlayers[newPlayers.length - 1].stopTime
-              } else { // Just a partial play
-                startTime = t
+          if (nextState.date < t) { // If we sheduled ahead of next
+            t = nextState.date // Bring back the time and undo
+            if (t <= now) console.error("undoing the past, now : " + now + " scheduler : " + t)
+
+            if (model.soundName) {
+              for (let pl of model.players) {
+                if (pl.startTime <= t && t < pl.stopTime) {
+                  pl.node.stop(this.toCtxTime(t))
+                  nextState.percentPaused = clampPercent((t - pl.startTime) / model.length - model.startPercent)
+                }
+                if (pl.startTime > t) pl.node.stop()
               }
-              let length = nextState.date - startTime
-                , duration = length * model.rate
-
-              newPlayers.push(this.schedulePlayer(startTime, model, model.loopStartDur, duration, length))
-
-              model.players = model.players.concat(newPlayers)
-
-              nextState.percentPaused = clampPercent(length / model.length - model.startPercent)
             }
+
+            if (model.collar) { // If collar, undo playPause of subWheels
+              // TODO collar undo
+            }
+
+          } else { // Normal pause
+          
+            if (model.soundName) {
+              if (nextState.date <= t) { // No need to play more, even partially
+
+                nextState.percentPaused = clampPercent(0 - model.startPercent)
+
+              } else {
+                let newPlayers = []
+                  , startTime
+
+                if (nextState.date > t + model.length) { // At least one full play
+                  newPlayers = this.scheduleLoop(t, nextState.date - model.length, model)
+                  startTime = newPlayers[newPlayers.length - 1].stopTime
+                } else { // Just a partial play
+                  startTime = t
+                }
+                let length = nextState.date - startTime
+                  , duration = length * model.rate
+
+                newPlayers.push(this.schedulePlayer(startTime, model, model.loopStartDur, duration, length))
+
+                model.players = model.players.concat(newPlayers)
+
+                nextState.percentPaused = clampPercent(length / model.length - model.startPercent)
+              }
+            }
+
+            if (model.collar) {
+              // TODO collar pause
+            }
+
+            t = nextState.date
+
           }
-
-          if (model.collar) {
-            // TODO collar pause
-          }
-
-          t = nextState.date
-
+          
           advanceState()
 
         } else { // And keep playing
@@ -264,6 +263,7 @@ let scheduler = {
 
         if (nextState && nextState.date < max) { // And should play
           t = nextState.date
+          if (t <= now) console.error("starting in the past, now : " + now + " scheduler : " + t)
           
           let contentPercent = clampPercent(lastState.percentPaused + model.startPercent)
 
