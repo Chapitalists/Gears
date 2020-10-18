@@ -208,11 +208,15 @@ let scheduler = {
 
             if (model.soundName) {
               for (let pl of model.players) {
-                if (pl.startTime < t && t <= pl.stopTime) {
+                if (pl.startTime <= t && t <= pl.stopTime) {
                   pl.node.stop(this.toCtxTime(t))
                   nextState.percent = clampPercent((t - pl.startTime) / model.length - model.startPercent)
                 }
-                if (pl.startTime >= t) pl.node.stop()
+                if (pl.startTime > t) pl.node.stop()
+              }
+              if (!isFinite(nextState.percent)) {
+                console.error("couldn’t find current player, unknown pause percent", now, nextState)
+                nextState.percent = 0
               }
             }
 
