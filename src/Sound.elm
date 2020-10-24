@@ -47,9 +47,9 @@ fileName (S { path }) =
                             String.split "/" path
 
 
-getLoopPoints : Sound -> List Float
-getLoopPoints (S { startPercent, endPercent, duration }) =
-    [ startPercent * duration, endPercent * duration ]
+getLoopPercentsList : Sound -> List Float
+getLoopPercentsList (S { startPercent, endPercent }) =
+    [ startPercent, endPercent ]
 
 
 getLoopPercents : Sound -> ( Float, Float )

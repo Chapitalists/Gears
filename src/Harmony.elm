@@ -134,7 +134,11 @@ getLength harmo coll =
                     unit * Fract.toFloat harmo.fract
 
                 Other _ ->
-                    Debug.log "IMPOSSIBLE Ref isn’t a base" 0
+                    let
+                        _ =
+                            Debug.log "IMPOSSIBLE Ref isn’t a base" ( harmo, coll )
+                    in
+                    0
 
 
 newSelf : Float -> Harmony
@@ -236,7 +240,11 @@ isActiveLink : Link (Harmonized g) -> Harmony -> Bool
 isActiveLink l h =
     case h.ref of
         Other _ ->
-            Debug.log "Can’t check active links if not base" False
+            let
+                _ =
+                    Debug.log "Can’t check active links if not base" h
+            in
+            False
 
         Self { links } ->
             List.any (Link.equal <| Link.map l) links

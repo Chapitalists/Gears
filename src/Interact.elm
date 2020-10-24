@@ -256,6 +256,7 @@ subs (S { click }) =
             [ BE.onMouseUp <| D.succeed <| EndClick
             , BE.onVisibilityChange
                 (\v ->
+                    -- TODO check bug visibility hidden not emitted on window change but on tab change
                     Debug.log (Debug.toString v) <|
                         case v of
                             BE.Hidden ->

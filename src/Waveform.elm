@@ -106,7 +106,11 @@ update msg wave =
                             ( wave, Cmd.none )
 
                 Err err ->
-                    Debug.log ("Error while drawing " ++ D.errorToString err) ( wave, Cmd.none )
+                    let
+                        _ =
+                            Debug.log ("Error while drawing " ++ D.errorToString err) wave
+                    in
+                    ( wave, Cmd.none )
 
         Select ( centerPx, percentLength ) ->
             let

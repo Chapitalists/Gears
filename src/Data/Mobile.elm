@@ -101,7 +101,11 @@ rm id m =
         -- TODO check and use harmo clean
         if Harmo.hasHarmonics harmo then
             -- TODO delete base ?
-            Debug.log "TODO delete base" m
+            let
+                _ =
+                    Debug.log "TODO delete base" []
+            in
+            m
 
         else
             case Harmo.getBaseId harmo of

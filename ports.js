@@ -1,6 +1,6 @@
 const app = Elm.Main.init({flags : {width : window.innerWidth, height : window.innerHeight}})
 
-if (app.ports.loadSound) app.ports.loadSound.subscribe(createBuffer)
+if (app.ports.loadSound) app.ports.loadSound.subscribe(loadSound)
 if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 if (app.ports.toggleRecord) app.ports.toggleRecord.subscribe(toggleRecord)
 if (app.ports.requestSoundDraw) app.ports.requestSoundDraw.subscribe(drawSound)
@@ -10,17 +10,8 @@ if (app.ports.inputRec) app.ports.inputRec.subscribe(inputRec)
 
 const buffers = {}
     , ro = new ResizeObserver(sendSize)
-//    , ctx = new AudioContext()
-//    , nodeToRecord = Tone.context._context.createGain()
-//    , recorder = new Recorder(nodeToRecord)
-//    , mic = new Tone.UserMedia()
-//    , micToRecord = Tone.context.createGain()
-//    , micRecorder = new Recorder(micToRecord)
-//Tone.Master.connect(nodeToRecord)
-//mic.connect(micToRecord)
+    , recorder = new Recorder(masterGain)
 ro.observe(document.getElementById('svgResizeObserver'))
-
-let playing = {}
 
 let deb = null
 
@@ -30,17 +21,27 @@ function sendSize(entries) {
 
 function drawSound(soundName) {
   if (buffers[soundName]) {
-    drawSamples(Array.from(buffers[soundName].getChannelData()))
+    drawSamples(Array.from(buffers[soundName].getChannelData(0))) // TODO mix channels ?
     app.ports.soundDrawn.send(soundName)
   } else console.log(soundName + ' isn’t loaded, cannot draw')
 }
 
-function createBuffer(soundName) {
+function loadSound(soundName) {
   if (buffers[soundName]) {
     app.ports.soundLoaded.send(soundName + ' already Loaded')
   } else {
-    buffers[soundName] = new Tone.Buffer('./sons/' + soundName, ()=>loadOk(soundName), e=>loadErr(e, soundName))
+    createBuffer(soundName).then(b => {
+      buffers[soundName] = b
+      loadOk(soundName)
+    }).catch(err => loadErr(err, soundName))
   }
+}
+
+async function createBuffer(soundName) {
+  const response = await fetch('./sons/' + soundName)
+      , arrayBuffer = await response.arrayBuffer()
+      , audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+  return audioBuffer
 }
 
 function loadOk(soundName) {
@@ -51,7 +52,7 @@ function loadOk(soundName) {
 }
 
 function loadErr(err, soundName) {
-  console.log(err)
+  console.error(err)
   app.ports.soundLoaded.send(soundName + ' got ' + err)
 }
 
@@ -64,11 +65,17 @@ function toggleRecord(bool) {
     }
 }
 
+let mic
+  , micToRecord
+  , micRecorder
+  , recording
 function openMic() {
-  Tone.start()
-  mic.open().then(
-    () => app.ports.micOpened.send(null)
-  ).catch(console.error)
+  navigator.mediaDevices.getUserMedia({audio : true}).then(stream => {
+    mic = stream
+    micToRecord = ctx.createMediaStreamSource(mic)
+    micRecorder = new Recorder(micToRecord)
+    app.ports.micOpened.send(null)
+  }).catch(console.error)
 }
 
 function inputRec(name) {
@@ -76,14 +83,21 @@ function inputRec(name) {
     micRecorder.stop()
     micRecorder.exportWAV(bl => app.ports.gotNewSample.send(new File([bl], name + ".wav", {type: "audio/wav"})))
     micRecorder.clear()
-  } else if (mic.state == "started") micRecorder.record()
-  else console.error("won’t record mic if it ain’t opened !")
+    recording = false
+    if (!scheduler.running) ctx.suspend()
+  } else {
+    if (mic) {
+      ctx.resume()
+      micRecorder.record()
+      recording = true
+    } else console.error("won’t record mic if it ain’t opened !")
+  }
 }
 
 function cutSample(infos) {
     if (!buffers[infos.fromFileName]) {console.error(infos.fromFileName + " ain’t loaded, cannot cut");return;}
 
-    let buf = buffers[infos.fromFileName]._buffer
+    let buf = buffers[infos.fromFileName]
       , start = infos.percents[0] * buf.length - 1
       , end = infos.percents[1] * buf.length + 1
       , newBuf = new AudioBuffer(
@@ -100,45 +114,39 @@ function cutSample(infos) {
     app.ports.gotNewSample.send(new File([audioBufferToWav(newBuf)], infos.newFileName + ".wav", {type: "audio/wav"}))
 }
 
-function engine(o) {
+function engine(o) {console.log(JSON.stringify(o, 'utf8', 2))
   let model = null
   switch ( o.action ) {
     case "stopReset" :
-        for ( id in playing) {
-            stop(playing[id])
-        }
-        playing = {}
+        scheduler.stop()
         break;
     case "playPause" :
-        let t = Tone.now()+0.1
-        o.gears.map(g=>playPause(g,t))
+        scheduler.startThenPlay(o.gears)
         break;
     case "mute" :
-        model = o.beadIndexes.reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
+        model = o.beadIndexes.reduce(
+            (acc, v) => {
+              if (acc && acc.subWheels) return acc.subWheels[v]
+            }
+          , scheduler.playingTopModels[o.id]
+          )
         if (model) {
-            model.mute = o.value
-            setVolume(model)
+          model.mute = o.value
+          model.updateVolume()
         }
         break;
     case "volume" :
-        model = o.beadIndexes.reduce((acc, v) => {if (acc && acc.players) return acc.players[v]}, playing[o.id])
+        model = o.beadIndexes.reduce(
+            (acc, v) => {
+              if (acc && acc.subWheels) return acc.subWheels[v]
+            }
+          , scheduler.playingTopModels[o.id]
+          )
         if (model) {
-            model.volume = o.value
-            setVolume(model)
+          model.volume = o.value
+          model.updateVolume()
         }
         break;
-    }
-}
-
-function playPause(model,t) {
-    if (!playing[model.id]) {
-        playing[model.id] = prepare(model)
-    }
-    if (playing[model.id].paused) {
-        play(playing[model.id], t, model)
-    }
-    else {
-        pause(playing[model.id], t)
     }
 }
 

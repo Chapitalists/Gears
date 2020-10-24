@@ -111,7 +111,7 @@ encodeWheel w hasView parentUid =
         ++ (case Wheel.getWheelContent w of
                 Content.S s ->
                     [ ( "soundName", E.string <| Sound.toString s )
-                    , ( "loopPoints", E.list E.float <| Sound.getLoopPoints s )
+                    , ( "loopPercents", E.list E.float <| Sound.getLoopPercentsList s )
                     ]
 
                 Content.M m ->
@@ -135,7 +135,11 @@ encodeGear hasView parentUid coll id =
             parentUid ++ Gear.toUID id
     in
     if length == 0 then
-        Debug.log (uid ++ "’s length is 0") E.null
+        let
+            _ =
+                Debug.log (uid ++ "’s length is 0") g
+        in
+        E.null
 
     else
         E.object
@@ -149,7 +153,7 @@ encodeGear hasView parentUid coll id =
 encodeMobile : Mobeel -> Bool -> String -> E.Value
 encodeMobile { motor, gears } hasView parentUid =
     E.object
-        [ ( "length", E.float <| Harmo.getLengthId motor gears )
+        [ ( "duration", E.float <| Harmo.getLengthId motor gears )
         , ( "gears", E.list (encodeGear hasView parentUid gears) <| Motor.getMotored motor gears )
         ]
 
@@ -157,7 +161,7 @@ encodeMobile { motor, gears } hasView parentUid =
 encodeCollar : Colleer -> Bool -> String -> E.Value
 encodeCollar c hasView parentUid =
     E.object
-        [ ( "length", E.float <| Collar.getCumulLengthAt c.matrice c )
+        [ ( "duration", E.float <| Collar.getCumulLengthAt c.matrice c )
         , ( "loopStart", E.float c.loop )
         , ( "beads", E.list (encodeBead hasView parentUid) <| List.indexedMap (\i el -> ( i, el )) <| Collar.getBeads c )
         ]

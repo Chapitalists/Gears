@@ -55,7 +55,6 @@ port gotNewSample : (D.Value -> msg) -> Sub msg
 
 
 -- TODO refactor existing Debug.log with "key" value
--- TODO check bug visibility hidden not emitted on window change but on tab change
 -- TODO check msg or Msg in types, if unused, maybe replace by x
 -- TODO clean all module exposings decl
 -- TODO is "No error handling in update, everything comes Checked before" is a good pattern ?
@@ -432,10 +431,18 @@ update msg model =
                             ( { mod | soundList = newSL }, Cmd.batch <| cmd :: cmds )
 
                         _ ->
-                            Debug.log "Cannot load, sound not found" ( model, Cmd.none )
+                            let
+                                _ =
+                                    Debug.log "Cannot load, sound not found" m
+                            in
+                            ( model, Cmd.none )
 
                 Err (Http.BadBody err) ->
-                    Debug.log err ( model, Cmd.none )
+                    let
+                        _ =
+                            Debug.log ("Error loading " ++ name ++ " : " ++ err) result
+                    in
+                    ( model, Cmd.none )
 
                 Err _ ->
                     ( { model | connected = False }, Cmd.none )
@@ -486,7 +493,11 @@ update msg model =
         SoundLoaded res ->
             case res of
                 Err e ->
-                    Debug.log (D.errorToString e) ( model, Cmd.none )
+                    let
+                        _ =
+                            Debug.log (D.errorToString e) res
+                    in
+                    ( model, Cmd.none )
 
                 Ok s ->
                     ( { model | loadedSoundList = s :: model.loadedSoundList }, Cmd.none )
@@ -542,7 +553,11 @@ update msg model =
                     update (UploadSounds file []) model
 
                 Err err ->
-                    Debug.log (D.errorToString err) ( model, Cmd.none )
+                    let
+                        _ =
+                            Debug.log (D.errorToString err) res
+                    in
+                    ( model, Cmd.none )
 
         ClickedUploadSave ->
             ( model, Select.files [] UploadSaves )
