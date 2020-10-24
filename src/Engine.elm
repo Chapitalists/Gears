@@ -135,7 +135,11 @@ encodeGear hasView parentUid coll id =
             parentUid ++ Gear.toUID id
     in
     if length == 0 then
-        Debug.log (uid ++ "’s length is 0") E.null
+        let
+            _ =
+                Debug.log (uid ++ "’s length is 0") g
+        in
+        E.null
 
     else
         E.object

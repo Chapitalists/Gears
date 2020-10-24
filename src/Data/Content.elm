@@ -119,7 +119,11 @@ getBead i c =
             b
 
         Nothing ->
-            Debug.log ("Cannot get Bead " ++ String.fromInt i) <| c.head
+            let
+                _ =
+                    Debug.log ("Cannot get Bead " ++ String.fromInt i) ( i, c )
+            in
+            c.head
 
 
 updateBead : Int -> (Bead item -> Bead item) -> Collar item -> Collar item

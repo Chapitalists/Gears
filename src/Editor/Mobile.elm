@@ -337,7 +337,11 @@ update msg ( model, mobile ) =
                     { return | cmd = DL.url url }
 
                 Err err ->
-                    Debug.log (D.errorToString err) return
+                    let
+                        _ =
+                            Debug.log (D.errorToString err) res
+                    in
+                    return
 
         PlayGear ->
             case model.tool of
@@ -874,7 +878,11 @@ update msg ( model, mobile ) =
         SVGSize res ->
             case res of
                 Result.Err e ->
-                    Debug.log (D.errorToString e) return
+                    let
+                        _ =
+                            Debug.log (D.errorToString e) res
+                    in
+                    return
 
                 Result.Ok s ->
                     let

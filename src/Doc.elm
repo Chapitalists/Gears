@@ -478,7 +478,11 @@ getViewingHelper l mob =
                     ViewRes mobile (Common.toUid next ++ parentUid) <| ( str, next ) :: cleanedView
 
                 _ ->
-                    Debug.log ("No mobile to view in " ++ str) <| ViewRes mob "" []
+                    let
+                        _ =
+                            Debug.log ("No mobile to view in " ++ str) mob
+                    in
+                    ViewRes mob "" []
 
         _ ->
             ViewRes mob "" []
@@ -495,7 +499,11 @@ updateViewing l f mobile =
                         mobile
 
                 _ ->
-                    Debug.log "IMPOSSIBLE View isn’t correct, should’ve been cleaned" mobile
+                    let
+                        _ =
+                            Debug.log "IMPOSSIBLE View isn’t correct, should’ve been cleaned" ( l, mobile )
+                    in
+                    mobile
 
         _ ->
             f mobile
