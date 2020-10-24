@@ -190,7 +190,13 @@ let scheduler = {
     // collar or another source of play pause should manage their specificities
 
     // Clean play pause events before last
-    ppt.splice(0, ppt.findIndex(v => v.date >= Math.min(now, model.lastScheduledTime)) - 1)
+    ppt.splice(
+      0,
+      Math.min(
+        ppt.findIndex(v => !v.done),
+        ppt.findIndex(v => v.date >= Math.min(now, model.lastScheduledTime))
+      ) - 1
+    )
 
     let nextStateIndex = ppt.findIndex(v => !v.done) // Next is first not done
       , nextState = ppt[nextStateIndex]
@@ -219,7 +225,7 @@ let scheduler = {
               for (let pl of model.players) {
                 if (pl.startTime <= t && t <= pl.stopTime) {
                   pl.node.stop(this.toCtxTime(t))
-                  nextState.percent = clampPercent((t - pl.startTime) / model.length - model.startPercent)
+                  nextState.percent = clampPercent((t - pl.startTime) / model.length + pl.startOffsetDur / model.duration - model.startPercent)
                 }
                 if (pl.startTime > t) pl.node.stop()
               }
@@ -420,6 +426,7 @@ let scheduler = {
         node : player
       , startTime : t
       , stopTime : t + length
+      , startOffsetDur : startOffset
     }
   }
   
