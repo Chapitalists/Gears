@@ -2,14 +2,14 @@
 , "pkg":
   { "scripts":  []
   , "assets":
-    [ "playable.js"
+    [ "scheduler.js"
     , "ports.html"
+    , "style.css"
+    , "icone.svg"
     , "ports.js"
     , "elmApp.js"
     , "lib/recorder.js"
     , "lib/audiobuffer-to-wav.js"
-    , "lib/svg.js"
-    , "lib/Tone.js"
     , "LICENSE.md"
     ]
   }
