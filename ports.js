@@ -10,13 +10,8 @@ if (app.ports.inputRec) app.ports.inputRec.subscribe(inputRec)
 
 const buffers = {}
     , ro = new ResizeObserver(sendSize)
-//    , ctx = new AudioContext()
-//ctx.suspend()
-//    , ctx = new AudioContext()
     , recorder = new Recorder(masterGain)
 ro.observe(document.getElementById('svgResizeObserver'))
-
-//let playing = {}
 
 let deb = null
 
@@ -57,7 +52,7 @@ function loadOk(soundName) {
 }
 
 function loadErr(err, soundName) {
-  console.log(err)
+  console.error(err)
   app.ports.soundLoaded.send(soundName + ' got ' + err)
 }
 
@@ -119,23 +114,14 @@ function cutSample(infos) {
     app.ports.gotNewSample.send(new File([audioBufferToWav(newBuf)], infos.newFileName + ".wav", {type: "audio/wav"}))
 }
 
-//let playPauseLatency = .1
-//  , masterGain = ctx.createGain()
-//masterGain.connect(ctx.destination)
 function engine(o) {console.log(JSON.stringify(o, 'utf8', 2))
   let model = null
   switch ( o.action ) {
     case "stopReset" :
         scheduler.stop()
-//        for ( id in playing) {
-//            stop(playing[id])
-//        }
-//        playing = {}
         break;
     case "playPause" :
         scheduler.startThenPlay(o.gears)
-//        let t = scheduler.getTime() + playPauseLatency
-//        o.gears.map(g => scheduler.playPause(g, t))
         break;
     case "mute" :
         model = o.beadIndexes.reduce(
@@ -161,18 +147,6 @@ function engine(o) {console.log(JSON.stringify(o, 'utf8', 2))
           model.updateVolume()
         }
         break;
-    }
-}
-
-function playPause(model,t) {
-    if (!playing[model.id]) {
-        playing[model.id] = prepare(model)
-    }
-    if (playing[model.id].paused) {
-        play(playing[model.id], t, model)
-    }
-    else {
-        pause(playing[model.id], t)
     }
 }
 

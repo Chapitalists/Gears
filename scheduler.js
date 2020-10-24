@@ -64,7 +64,7 @@ let scheduler = {
     }
     
     if (!recording) ctx.suspend()
-    
+
     this.intervalId = -1
     this.nextRequestId = -1
     this.startTime = -1
