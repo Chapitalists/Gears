@@ -53,6 +53,19 @@ update msg state =
 
 subs : List (Sub Msg)
 subs =
-    [ BE.onKeyDown <| D.andThen (\str -> D.succeed <| HoldDown str) <| D.field "code" D.string
+    [ BE.onKeyDown <|
+        D.andThen
+            (\node ->
+                if node == "INPUT" || node == "TEXTAREA" then
+                    D.fail "ignored from text input"
+
+                else
+                    D.andThen
+                        (\str -> D.succeed <| HoldDown str)
+                    <|
+                        D.field "code" D.string
+            )
+        <|
+            D.at [ "target", "nodeName" ] D.string
     , BE.onKeyUp <| D.andThen (\str -> D.succeed <| HoldUp str) <| D.field "code" D.string
     ]
