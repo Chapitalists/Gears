@@ -133,7 +133,7 @@ type alias LinkInfo =
 
 
 type FractInput
-    = FractionInput Fraction
+    = FractionInput Fraction Bool Bool -- non empty numerator then denominator
     | TextInput String
 
 
@@ -539,9 +539,9 @@ update msg ( model, mobile ) =
             }
 
         EnteredFract isNumerator str ->
-            Maybe.map2 Tuple.pair model.link (String.toInt str)
+            Maybe.map2 Tuple.pair model.link (toIntOrEmpty str)
                 |> Maybe.map
-                    (\( link, i ) ->
+                    (\( link, iOr ) ->
                         { return
                             | model =
                                 { model
@@ -550,12 +550,17 @@ update msg ( model, mobile ) =
                                             { link
                                                 | fractInput =
                                                     case link.fractInput of
-                                                        FractionInput fract ->
-                                                            if isNumerator then
-                                                                FractionInput { fract | num = i }
+                                                        FractionInput fract numB denB ->
+                                                            case iOr of
+                                                                Empty ->
+                                                                    FractionInput fract (not isNumerator) isNumerator
 
-                                                            else
-                                                                FractionInput { fract | den = i }
+                                                                Int i ->
+                                                                    if isNumerator then
+                                                                        FractionInput { fract | num = i } True denB
+
+                                                                    else
+                                                                        FractionInput { fract | den = i } numB True
 
                                                         TextInput s ->
                                                             TextInput s
@@ -576,17 +581,21 @@ update msg ( model, mobile ) =
             }
 
         EnteredTextFract str ->
-            case model.link of
-                Nothing ->
-                    return
+            if String.all (\c -> Char.isDigit c || c == '/') str then
+                case model.link of
+                    Nothing ->
+                        return
 
-                Just link ->
-                    case link.fractInput of
-                        FractionInput _ ->
-                            return
+                    Just link ->
+                        case link.fractInput of
+                            FractionInput _ _ _ ->
+                                return
 
-                        TextInput _ ->
-                            { return | model = { model | link = Just { link | fractInput = TextInput str } } }
+                            TextInput _ ->
+                                { return | model = { model | link = Just { link | fractInput = TextInput str } } }
+
+            else
+                return
 
         ForcedFract l fract ->
             -- TODO FIXME URGENTLY Abuses Harmo internals, as Gear.copy
@@ -680,7 +689,7 @@ update msg ( model, mobile ) =
                 , model =
                     case model.link of
                         Just link ->
-                            { model | link = Just { link | fractInput = FractionInput fract } }
+                            { model | link = Just { link | fractInput = FractionInput fract True True } }
 
                         Nothing ->
                             model
@@ -691,14 +700,14 @@ update msg ( model, mobile ) =
                 |> Maybe.map
                     (\link ->
                         case link.fractInput of
-                            FractionInput fract ->
+                            FractionInput fract numB denB ->
                                 { return
                                     | model =
                                         { model
                                             | link =
                                                 Just
                                                     { link
-                                                        | fractInput = FractionInput <| Fract.simplify fract
+                                                        | fractInput = FractionInput (Fract.simplify fract) numB denB
                                                     }
                                         }
                                 }
@@ -1344,7 +1353,7 @@ viewContent ( model, mobile ) =
                                                 Just { link, fractInput } ->
                                                     Link.viewSelectedLink (Gear.toDrawLink mobile.gears link) <|
                                                         case fractInput of
-                                                            FractionInput _ ->
+                                                            FractionInput _ _ _ ->
                                                                 Just <|
                                                                     Fract.simplify <|
                                                                         Fract.division
@@ -1730,19 +1739,29 @@ viewHarmonizeDetails model mobile =
             [ viewDetailsColumn (rgb 0.5 0.5 0.5)
                 ([ text <| (Gear.toUID <| Tuple.first link) ++ (Gear.toUID <| Tuple.second link) ]
                     ++ (case fractInput of
-                            FractionInput fract ->
+                            FractionInput fract numB denB ->
                                 [ Input.text [ Font.color (rgb 0 0 0) ]
-                                    { text = String.fromInt fract.num
+                                    { text =
+                                        if numB then
+                                            String.fromInt fract.num
+
+                                        else
+                                            ""
                                     , onChange = EnteredFract True
                                     , label = Input.labelHidden "Numerator"
-                                    , placeholder = Nothing
+                                    , placeholder = Just <| Input.placeholder [] <| text <| String.fromInt fract.num
                                     }
                                 , text "/"
                                 , Input.text [ Font.color (rgb 0 0 0) ]
-                                    { text = String.fromInt fract.den
+                                    { text =
+                                        if denB then
+                                            String.fromInt fract.den
+
+                                        else
+                                            ""
                                     , onChange = EnteredFract False
                                     , label = Input.labelHidden "Denominator"
-                                    , placeholder = Nothing
+                                    , placeholder = Just <| Input.placeholder [] <| text <| String.fromInt fract.den
                                     }
                                 , Input.button []
                                     { label = text "Change"
@@ -2439,7 +2458,9 @@ interactHarmonize event model mobile =
                         , link =
                             Just
                                 { link = l
-                                , fractInput = Maybe.withDefault (TextInput "") <| Maybe.map FractionInput mayFract
+                                , fractInput =
+                                    Maybe.withDefault (TextInput "") <|
+                                        Maybe.map (\f -> FractionInput f True True) mayFract
                                 }
                     }
                 , mobile = { mobile | gears = newGears }
@@ -2741,3 +2762,17 @@ hexToInt s =
 hexToFloat : String -> Float
 hexToFloat s =
     toFloat (hexToInt (String.slice 0 1 s) * 16 + (hexToInt <| String.slice 1 2 s)) / 255
+
+
+type IntOrEmpty
+    = Int Int
+    | Empty
+
+
+toIntOrEmpty : String -> Maybe IntOrEmpty
+toIntOrEmpty str =
+    if String.isEmpty str then
+        Just Empty
+
+    else
+        Maybe.map Int <| String.toInt str
