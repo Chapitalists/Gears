@@ -47,6 +47,15 @@ fromWheel w l =
     }
 
 
+fromWheelMult : Wheel -> Int -> Float -> Colleer
+fromWheelMult w m l =
+    { matrice = m
+    , loop = l * toFloat m
+    , head = { length = l, wheel = w }
+    , beads = List.repeat (m - 1) { length = l, wheel = w }
+    }
+
+
 length : Colleer -> Int
 length =
     List.length << getBeads

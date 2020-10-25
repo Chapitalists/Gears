@@ -81,6 +81,7 @@ type alias Model =
     , edit : List (Id Geer)
     , beadCursor : Int
     , link : Maybe LinkInfo
+    , collarMult : ( Int, Bool )
     , newSampleName : String
     , parentUid : String -- TODO Two sources of truth !! same in Engine
     , engine : Engine
@@ -165,6 +166,7 @@ init =
     , edit = []
     , beadCursor = 0
     , link = Nothing
+    , collarMult = ( 4, True )
     , newSampleName = ""
     , parentUid = ""
     , engine = Engine.init
@@ -218,8 +220,9 @@ type Msg
     | SimplifyFractView
     | ResizeToContent (Id Geer)
     | Capsuled (List (Id Geer))
-    | Collared (Id Geer)
+    | Collared (Id Geer) Collaring
     | UnCollar (Id Geer)
+    | EnteredCollarMult String
     | EnteredNewSampleName String
     | CutNewSample
     | Blink
@@ -254,6 +257,11 @@ type ToUndo
     | Group
     | Cancel
     | NOOP
+
+
+type Collaring
+    = Simple
+    | Mult Int
 
 
 update : Msg -> ( Model, Mobeel ) -> Return
@@ -779,16 +787,35 @@ update msg ( model, mobile ) =
                 , toUndo = Do
             }
 
-        Collared id ->
+        Collared id collaring ->
             let
                 g =
                     Coll.get id mobile.gears
 
+                l =
+                    Harmo.getLength g.harmony mobile.gears
+
                 collar =
-                    Collar.fromWheel g.wheel <| Harmo.getLength g.harmony mobile.gears
+                    case collaring of
+                        Simple ->
+                            Collar.fromWheel g.wheel l
+
+                        Mult i ->
+                            Collar.fromWheelMult g.wheel i l
+
+                tmp =
+                    Coll.update id (Wheel.setContent <| Content.C collar) mobile.gears
+
+                res =
+                    case collaring of
+                        Mult i ->
+                            Harmo.changeSelf id (toFloat i * l) tmp
+
+                        _ ->
+                            tmp
             in
             { return
-                | mobile = { mobile | gears = Coll.update id (Wheel.setContent <| Content.C collar) mobile.gears }
+                | mobile = { mobile | gears = res }
                 , toUndo = Do
             }
 
@@ -803,6 +830,21 @@ update msg ( model, mobile ) =
                         | mobile = Mobile.updateGear id (Wheel.setContent <| Wheel.getContent col.head) mobile
                         , toUndo = Do
                     }
+
+                _ ->
+                    return
+
+        EnteredCollarMult str ->
+            case toIntOrEmpty str of
+                Just (Int i) ->
+                    if i >= 2 then
+                        { return | model = { model | collarMult = ( i, True ) } }
+
+                    else
+                        return
+
+                Just Empty ->
+                    { return | model = { model | collarMult = Tuple.mapSecond (always False) model.collarMult } }
 
                 _ ->
                     return
@@ -1586,7 +1628,43 @@ viewEditDetails model mobile =
                         { label = text "Encapsuler"
                         , onPress = Just <| Capsuled [ id ]
                         }
-                    , case Wheel.getContent g of
+                    , let
+                        multBtns =
+                            Input.button []
+                                { label = text "x"
+                                , onPress = Just <| Collared id <| Mult <| Tuple.first model.collarMult
+                                }
+                                :: [ Input.text
+                                        [ paddingXY 0 0
+                                        , width <| minimum 40 <| fill
+                                        , Font.color <| rgb 0 0 0
+                                        , htmlAttribute <| Html.Attributes.type_ "number"
+                                        , htmlAttribute <| Html.Attributes.min "2"
+                                        ]
+                                        { onChange = EnteredCollarMult
+                                        , text =
+                                            if Tuple.second model.collarMult then
+                                                String.fromInt <| Tuple.first model.collarMult
+
+                                            else
+                                                ""
+                                        , placeholder =
+                                            Just <|
+                                                Input.placeholder [] <|
+                                                    text <|
+                                                        String.fromInt <|
+                                                            Tuple.first model.collarMult
+                                        , label = Input.labelHidden "Collar Multiplier"
+                                        }
+                                   ]
+
+                        simpleBtn =
+                            Input.button []
+                                { label = text "Collier"
+                                , onPress = Just <| Collared id Simple
+                                }
+                      in
+                      case Wheel.getContent g of
                         Content.C col ->
                             if List.length col.beads == 0 then
                                 Input.button []
@@ -1595,16 +1673,14 @@ viewEditDetails model mobile =
                                     }
 
                             else
-                                Input.button []
-                                    { label = text "Collier"
-                                    , onPress = Just <| Collared id
-                                    }
+                                row [ spacing 16 ] <|
+                                    simpleBtn
+                                        :: multBtns
 
                         _ ->
-                            Input.button []
-                                { label = text "Collier"
-                                , onPress = Just <| Collared id
-                                }
+                            row [ spacing 16 ] <|
+                                simpleBtn
+                                    :: multBtns
                     , if id == mobile.motor then
                         Input.button []
                             { onPress = Just <| ChangedMode SelectMotor
