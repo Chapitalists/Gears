@@ -114,7 +114,7 @@ function cutSample(infos) {
     app.ports.gotNewSample.send(new File([audioBufferToWav(newBuf)], infos.newFileName + ".wav", {type: "audio/wav"}))
 }
 
-function engine(o) {console.log(JSON.stringify(o, 'utf8', 2))
+function engine(o) {
   let model = null
   switch ( o.action ) {
     case "stopReset" :
