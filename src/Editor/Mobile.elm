@@ -82,6 +82,7 @@ type alias Model =
     , beadCursor : Int
     , link : Maybe LinkInfo
     , collarMult : ( Int, Bool )
+    , collarDiv : ( Int, Bool )
     , newSampleName : String
     , parentUid : String -- TODO Two sources of truth !! same in Engine
     , engine : Engine
@@ -167,6 +168,7 @@ init =
     , beadCursor = 0
     , link = Nothing
     , collarMult = ( 4, True )
+    , collarDiv = ( 4, True )
     , newSampleName = ""
     , parentUid = ""
     , engine = Engine.init
@@ -223,6 +225,7 @@ type Msg
     | Collared (Id Geer) Collaring
     | UnCollar (Id Geer)
     | EnteredCollarMult String
+    | EnteredCollarDiv String
     | EnteredNewSampleName String
     | CutNewSample
     | Blink
@@ -262,6 +265,7 @@ type ToUndo
 type Collaring
     = Simple
     | Mult Int
+    | Div Sound Int
 
 
 update : Msg -> ( Model, Mobeel ) -> Return
@@ -803,6 +807,9 @@ update msg ( model, mobile ) =
                         Mult i ->
                             Collar.fromWheelMult g.wheel i l
 
+                        Div s i ->
+                            Collar.fromSoundDiv s i l
+
                 tmp =
                     Coll.update id (Wheel.setContent <| Content.C collar) mobile.gears
 
@@ -845,6 +852,21 @@ update msg ( model, mobile ) =
 
                 Just Empty ->
                     { return | model = { model | collarMult = Tuple.mapSecond (always False) model.collarMult } }
+
+                _ ->
+                    return
+
+        EnteredCollarDiv str ->
+            case toIntOrEmpty str of
+                Just (Int i) ->
+                    if i >= 2 then
+                        { return | model = { model | collarDiv = ( i, True ) } }
+
+                    else
+                        return
+
+                Just Empty ->
+                    { return | model = { model | collarDiv = Tuple.mapSecond (always False) model.collarDiv } }
 
                 _ ->
                     return
@@ -1629,10 +1651,10 @@ viewEditDetails model mobile =
                         , onPress = Just <| Capsuled [ id ]
                         }
                     , let
-                        multBtns =
+                        btns label pressMsg changeMsg tuple =
                             Input.button []
-                                { label = text "x"
-                                , onPress = Just <| Collared id <| Mult <| Tuple.first model.collarMult
+                                { label = text label
+                                , onPress = Just <| Collared id <| pressMsg <| Tuple.first tuple
                                 }
                                 :: [ Input.text
                                         [ paddingXY 0 0
@@ -1641,10 +1663,10 @@ viewEditDetails model mobile =
                                         , htmlAttribute <| Html.Attributes.type_ "number"
                                         , htmlAttribute <| Html.Attributes.min "2"
                                         ]
-                                        { onChange = EnteredCollarMult
+                                        { onChange = changeMsg
                                         , text =
-                                            if Tuple.second model.collarMult then
-                                                String.fromInt <| Tuple.first model.collarMult
+                                            if Tuple.second tuple then
+                                                String.fromInt <| Tuple.first tuple
 
                                             else
                                                 ""
@@ -1653,10 +1675,16 @@ viewEditDetails model mobile =
                                                 Input.placeholder [] <|
                                                     text <|
                                                         String.fromInt <|
-                                                            Tuple.first model.collarMult
-                                        , label = Input.labelHidden "Collar Multiplier"
+                                                            Tuple.first tuple
+                                        , label = Input.labelHidden <| "Collar " ++ label
                                         }
                                    ]
+
+                        multBtns =
+                            btns "x" Mult EnteredCollarMult model.collarMult
+
+                        divBtns s =
+                            btns "/" (Div s) EnteredCollarDiv model.collarDiv
 
                         simpleBtn =
                             Input.button []
@@ -1676,6 +1704,12 @@ viewEditDetails model mobile =
                                 row [ spacing 16 ] <|
                                     simpleBtn
                                         :: multBtns
+
+                        Content.S s ->
+                            row [ spacing 16 ] <|
+                                simpleBtn
+                                    :: multBtns
+                                    ++ divBtns s
 
                         _ ->
                             row [ spacing 16 ] <|

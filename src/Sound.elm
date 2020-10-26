@@ -77,6 +77,24 @@ setLoop mays (S s) =
             S s
 
 
+division : Int -> Sound -> List Sound
+division n (S s) =
+    let
+        durPercent =
+            s.endPercent - s.startPercent
+
+        loopPoints ( f1, f2 ) =
+            ( Just <| s.startPercent + f1 * durPercent, Just <| s.startPercent + f2 * durPercent )
+
+        nn =
+            toFloat n
+    in
+    List.range 1 n
+        |> List.map toFloat
+        |> List.map (\i -> ( (i - 1) / nn, i / nn ))
+        |> List.map (\fs -> setLoop (loopPoints fs) <| S s)
+
+
 chgPath : Sound -> String -> Sound
 chgPath (S s) p =
     S { s | path = p }

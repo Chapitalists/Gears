@@ -5,6 +5,7 @@ import Data.Content as Content exposing (Bead, Collar, Content)
 import Data.Wheel as Wheel exposing (Conteet, Wheel)
 import Json.Decode as D
 import Json.Encode as E
+import Sound exposing (Sound)
 
 
 type alias Colleer =
@@ -54,6 +55,30 @@ fromWheelMult w m l =
     , head = { length = l, wheel = w }
     , beads = List.repeat (m - 1) { length = l, wheel = w }
     }
+
+
+fromSoundDiv : Sound -> Int -> Float -> Colleer
+fromSoundDiv s d l =
+    let
+        sounds =
+            Sound.division d s
+
+        contents =
+            List.map Content.S sounds
+
+        beads =
+            List.map beadFromContent contents
+    in
+    case beads of
+        head :: rest ->
+            { matrice = d
+            , loop = l
+            , head = head
+            , beads = rest
+            }
+
+        _ ->
+            fromWheel (Wheel.fromContent <| Content.S s) l
 
 
 length : Colleer -> Int
