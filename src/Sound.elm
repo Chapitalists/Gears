@@ -77,22 +77,31 @@ setLoop mays (S s) =
             S s
 
 
-division : Int -> Sound -> List Sound
-division n (S s) =
+divide : Int -> Sound -> ( List Sound, List Float )
+divide n (S s) =
     let
         durPercent =
             s.endPercent - s.startPercent
 
-        loopPoints ( f1, f2 ) =
-            ( Just <| s.startPercent + f1 * durPercent, Just <| s.startPercent + f2 * durPercent )
+        mapPercent f =
+            s.startPercent + f * durPercent
 
         nn =
             toFloat n
+
+        fs =
+            List.range 1 n
+                |> List.map toFloat
+                |> List.map (\i -> ( (i - 1) / nn, i / nn ))
+                |> List.map (Tuple.mapBoth mapPercent mapPercent)
+
+        divs =
+            List.map Tuple.first <| List.drop 1 fs
+
+        sounds =
+            List.map (\tfs -> setLoop (Tuple.mapBoth Just Just tfs) <| S s) fs
     in
-    List.range 1 n
-        |> List.map toFloat
-        |> List.map (\i -> ( (i - 1) / nn, i / nn ))
-        |> List.map (\fs -> setLoop (loopPoints fs) <| S s)
+    ( sounds, divs )
 
 
 chgPath : Sound -> String -> Sound

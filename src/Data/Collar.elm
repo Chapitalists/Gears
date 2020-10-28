@@ -45,6 +45,7 @@ fromWheel w l =
     , loop = l
     , head = { length = l, wheel = w }
     , beads = []
+    , oneSound = Nothing
     }
 
 
@@ -54,14 +55,18 @@ fromWheelMult w m l =
     , loop = l * toFloat m
     , head = { length = l, wheel = w }
     , beads = List.repeat (m - 1) { length = l, wheel = w }
+    , oneSound = Nothing
     }
 
 
 fromSoundDiv : Sound -> Int -> Float -> Colleer
 fromSoundDiv s d l =
     let
-        sounds =
-            Sound.division d s
+        ( sounds, divs ) =
+            Sound.divide d s
+
+        loopPercents =
+            Sound.getLoopPercents s
 
         contents =
             List.map Content.S sounds
@@ -75,6 +80,13 @@ fromSoundDiv s d l =
             , loop = l
             , head = head
             , beads = rest
+            , oneSound =
+                Just
+                    { soundName = Sound.toString s
+                    , start = Tuple.first loopPercents
+                    , end = Tuple.second loopPercents
+                    , divs = divs
+                    }
             }
 
         _ ->
@@ -123,12 +135,14 @@ add i b c =
             | head = b
             , beads = c.head :: c.beads
             , matrice = c.matrice + 1
+            , oneSound = Nothing
         }
 
     else
         { c
             | beads = List.concat [ List.take (i - 1) c.beads, [ b ], List.drop (i - 1) c.beads ]
             , matrice = c.matrice + 1
+            , oneSound = Nothing
         }
 
 
@@ -144,6 +158,7 @@ rm i c =
                     | head = head
                     , beads = beads
                     , matrice = c.matrice - 1
+                    , oneSound = Nothing
                 }
 
             ( j, beads ) ->
@@ -155,6 +170,7 @@ rm i c =
 
                         else
                             c.matrice
+                    , oneSound = Nothing
                 }
 
 

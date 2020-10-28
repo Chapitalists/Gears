@@ -1144,9 +1144,9 @@ viewExtraTools model =
 viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
-        ( wavePoints, viewWave ) =
-            case model.edit of
-                [ id ] ->
+        mayWavePoints =
+            case ( model.tool, model.edit ) of
+                ( Edit _, [ id ] ) ->
                     let
                         g =
                             Coll.get id mobile.gears
@@ -1154,18 +1154,36 @@ viewContent ( model, mobile ) =
                         ( start, end ) =
                             Wheel.getLoopPercents g
                     in
-                    ( { offset = g.wheel.startPercent, start = start, end = end }
-                    , case ( model.tool, Wheel.getContent g ) of
-                        ( Edit _, Content.S s ) ->
-                            (model.wave.drawn == (Waveform.SoundDrawn <| Sound.toString s))
-                                && g.wheel.viewContent
+                    case ( g.wheel.viewContent, Wheel.getContent g ) of
+                        ( True, Content.S s ) ->
+                            if model.wave.drawn == (Waveform.SoundDrawn <| Sound.toString s) then
+                                Just <| Waveform.Sound { offset = g.wheel.startPercent, start = start, end = end }
+
+                            else
+                                Nothing
+
+                        ( True, Content.C c ) ->
+                            case c.oneSound of
+                                Just oneSound ->
+                                    if model.wave.drawn == Waveform.SoundDrawn oneSound.soundName then
+                                        Just <|
+                                            Waveform.CollarDiv
+                                                { start = oneSound.start
+                                                , end = oneSound.end
+                                                , divs = oneSound.divs
+                                                }
+
+                                    else
+                                        Nothing
+
+                                _ ->
+                                    Nothing
 
                         _ ->
-                            False
-                    )
+                            Nothing
 
                 _ ->
-                    ( { offset = 0, start = 0, end = 0 }, False )
+                    Nothing
 
         getMod : Id Geer -> Wheel.Mod
         getMod id =
@@ -1234,9 +1252,8 @@ viewContent ( model, mobile ) =
                 InteractMsg
         , Element.inFront <|
             Waveform.view
-                viewWave
                 model.wave
-                wavePoints
+                mayWavePoints
                 model.interact
                 InteractMsg
         ]
@@ -2813,6 +2830,9 @@ interactWave g event model mobile =
 
                 StartOffset ->
                     Just <| Wheel.ChangeStart <| move absD <| g.wheel.startPercent
+
+                Divide i ->
+                    Nothing
 
         ( IWaveSel, Interact.Dragged { absD } _ _ ) ->
             let

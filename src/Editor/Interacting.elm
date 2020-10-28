@@ -30,3 +30,4 @@ type Cursor
     = LoopStart
     | LoopEnd
     | StartOffset
+    | Divide Int

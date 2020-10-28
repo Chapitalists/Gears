@@ -100,7 +100,14 @@ beadDecoder wheelDecoder =
 
 
 type alias Collar item =
-    { matrice : Int, loop : Float, head : Bead item, beads : List (Bead item) }
+    { matrice : Int
+    , loop : Float
+    , head : Bead item
+    , beads : List (Bead item)
+
+    -- WARNING second source of truth, just a shortcut to sounds internals
+    , oneSound : Maybe { soundName : String, start : Float, end : Float, divs : List Float }
+    }
 
 
 getBeads : Collar item -> List (Bead item)
@@ -159,13 +166,24 @@ getMatriceLength c =
 
 collarEncoder : (item -> List ( String, E.Value )) -> Collar item -> E.Value
 collarEncoder wheelEncoder c =
-    E.object
+    E.object <|
         [ ( "matriceSize", E.int c.matrice )
         , ( "loopStart", E.float c.loop )
         , ( "beads"
           , E.list (beadEncoder wheelEncoder) <| getBeads c
           )
         ]
+            ++ (Maybe.withDefault [] <|
+                    Maybe.map
+                        (\oneSound ->
+                            [ ( "oneSoundName", E.string oneSound.soundName )
+                            , ( "divs", E.list E.float oneSound.divs )
+                            , ( "start", E.float oneSound.start )
+                            , ( "end", E.float oneSound.end )
+                            ]
+                        )
+                        c.oneSound
+               )
 
 
 collarDecoder : D.Decoder item -> D.Decoder (Collar item)
@@ -176,13 +194,39 @@ collarDecoder wheelDecoder =
                 \loop ->
                     Field.require "beads" (D.list <| beadDecoder wheelDecoder) <|
                         \beads ->
-                            let
-                                matrice =
-                                    Maybe.withDefault (List.length beads) mayMatrice
-                            in
-                            case beads of
-                                head :: list ->
-                                    D.succeed { matrice = matrice, loop = loop, head = head, beads = list }
+                            Field.attempt "oneSoundName" D.string <|
+                                \oneSoundStr ->
+                                    Field.attempt "divs" (D.list D.float) <|
+                                        \oneSoundDivs ->
+                                            Field.attempt "start" D.float <|
+                                                \oneSoundStart ->
+                                                    Field.attempt "end" D.float <|
+                                                        \oneSoundEnd ->
+                                                            let
+                                                                matrice =
+                                                                    Maybe.withDefault (List.length beads) mayMatrice
+                                                            in
+                                                            case beads of
+                                                                head :: list ->
+                                                                    D.succeed
+                                                                        { matrice = matrice
+                                                                        , loop = loop
+                                                                        , head = head
+                                                                        , beads = list
+                                                                        , oneSound =
+                                                                            Maybe.map4
+                                                                                (\str start end divs ->
+                                                                                    { soundName = str
+                                                                                    , start = start
+                                                                                    , end = end
+                                                                                    , divs = divs
+                                                                                    }
+                                                                                )
+                                                                                oneSoundStr
+                                                                                oneSoundStart
+                                                                                oneSoundEnd
+                                                                                oneSoundDivs
+                                                                        }
 
-                                _ ->
-                                    D.fail "Collar should have at least one bead"
+                                                                _ ->
+                                                                    D.fail "Collar should have at least one bead"

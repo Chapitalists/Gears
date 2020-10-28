@@ -134,6 +134,20 @@ deleteWheel ( id, l ) mobile gRm bRm =
 updateWheel : Identifier -> Wheel.Msg -> Mobile Wheel -> Mobile Wheel
 updateWheel ( id, list ) msg m =
     let
+        modify =
+            case msg of
+                Wheel.ChangeContent _ ->
+                    True
+
+                Wheel.ChangeStart _ ->
+                    True
+
+                Wheel.ChangeLoop _ ->
+                    True
+
+                _ ->
+                    False
+
         rec : List Int -> Wheel -> Wheel
         rec l w =
             case l of
@@ -144,10 +158,18 @@ updateWheel ( id, list ) msg m =
                 i :: ll ->
                     case Wheel.getWheelContent w of
                         Content.C col ->
-                            (Wheel.setContent
-                                (Content.C <| Content.updateBead i (\bead -> { bead | wheel = rec ll bead.wheel }) col)
-                                { wheel = w }
-                            ).wheel
+                            let
+                                upCol =
+                                    Content.updateBead i (\bead -> { bead | wheel = rec ll bead.wheel }) col
+
+                                newCol =
+                                    if modify then
+                                        { upCol | oneSound = Nothing }
+
+                                    else
+                                        upCol
+                            in
+                            (Wheel.setContent (Content.C newCol) { wheel = w }).wheel
 
                         _ ->
                             let
