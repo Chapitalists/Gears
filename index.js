@@ -3,6 +3,7 @@ Copyright ou © ou Copr. Clément Bossut, (2018)
 <bossut.clement@gmail.com>
 */
 
+process.chdir(__dirname)
 
 console.log('args : port soundDir saveDir backUpDir')
 
@@ -147,6 +148,7 @@ const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
 
 
     , callback = (req, res) => {
+        console.log(new Date(), req.method + ' ' + req.headers.host + req.url)
         const dir = req.url.split('/')[1]
             , cb = (dir == 'sons' || dir == 'saves') ? externCallback : dynamicCallbacks[dir]
         ;(cb || internCallback)(req, res)

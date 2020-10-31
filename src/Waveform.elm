@@ -32,6 +32,7 @@ border =
 
 type alias Waveform =
     { size : Int
+    , height : Int
     , drawn : Drawing
     , sel : Maybe ( Int, Int )
     }
@@ -46,6 +47,7 @@ type Drawing
 init : Waveform
 init =
     { size = 1000
+    , height = 150
     , drawn = None
     , sel = Nothing
     }
@@ -104,7 +106,11 @@ update msg wave =
                             ( wave, Cmd.none )
 
                 Err err ->
-                    Debug.log ("Error while drawing " ++ D.errorToString err) ( wave, Cmd.none )
+                    let
+                        _ =
+                            Debug.log ("Error while drawing " ++ D.errorToString err) wave
+                    in
+                    ( wave, Cmd.none )
 
         Select ( centerPx, percentLength ) ->
             let
@@ -137,65 +143,77 @@ sub =
     soundDrawn (GotDrawn << D.decodeValue D.string)
 
 
+type Cursors
+    = Sound { offset : Float, start : Float, end : Float }
+    | CollarDiv { start : Float, end : Float, divs : List Float }
+
+
 view :
-    Bool
-    -> Waveform
-    -> { offset : Float, start : Float, end : Float }
+    Waveform
+    -> Maybe Cursors
     -> Interact.State Interactable Zone
     -> (Interact.Msg Interactable Zone -> msg)
     -> Element msg
-view visible wave cursors interState wrapInter =
+view wave mayCursors interState wrapInter =
     let
         toPx =
             round << ((*) <| toFloat wave.size)
     in
     el
-        (if visible then
-            (List.map (htmlAttribute << Attr.map wrapInter) <| Interact.dragSpaceEvents interState ZWave)
-                ++ [ Border.color <| rgb 0 0 0
-                   , Border.width border
-                   , Bg.color <| rgb 1 1 1
-                   , alignBottom
-                   ]
-                ++ List.map (mapAttribute wrapInter)
-                    ([ selection ( toPx 0, toPx cursors.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                     , selection ( toPx cursors.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                     , selection ( toPx cursors.start, toPx cursors.end ) (Just IWaveSel) <| rgba 0 0 0 0
-                     , cursor (toPx cursors.start) LoopStart
-                     , cursor (toPx cursors.end) LoopEnd
-                     , cursor (toPx cursors.offset) StartOffset
-                     ]
-                        ++ (case wave.sel of
-                                Just points ->
-                                    [ selection points Nothing <| rgba 0.3 0.3 0.3 0.3 ]
+        (case mayCursors of
+            Just cursors ->
+                (List.map (htmlAttribute << Attr.map wrapInter) <| Interact.dragSpaceEvents interState ZWave)
+                    ++ [ Border.color <| rgb 0 0 0
+                       , Border.width border
+                       , Bg.color <| rgb 1 1 1
+                       , alignBottom
+                       ]
+                    ++ (List.map (mapAttribute wrapInter) <|
+                            case cursors of
+                                Sound c ->
+                                    [ selection ( toPx 0, toPx c.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                    , selection ( toPx c.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                    , selection ( toPx c.start, toPx c.end ) (Just IWaveSel) <| rgba 0 0 0 0
+                                    , cursor (toPx c.start) LoopStart wave.height
+                                    , cursor (toPx c.end) LoopEnd wave.height
+                                    , cursor (toPx c.offset) StartOffset wave.height
+                                    ]
+                                        ++ (case wave.sel of
+                                                Just points ->
+                                                    [ selection points Nothing <| rgba 0.3 0.3 0.3 0.3 ]
 
-                                Nothing ->
-                                    []
-                           )
-                    )
+                                                Nothing ->
+                                                    []
+                                           )
 
-         else
-            []
+                                CollarDiv c ->
+                                    [ selection ( toPx 0, toPx c.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                    , selection ( toPx c.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                    , cursor (toPx c.start) LoopStart wave.height
+                                    , cursor (toPx c.end) LoopEnd wave.height
+                                    ]
+                                        ++ List.indexedMap (\i div -> cursor (toPx div) (Divide i) wave.height) c.divs
+                       )
+
+            Nothing ->
+                []
         )
     <|
         html <|
             canvas
-                [ Attr.hidden <| not visible
+                [ Attr.hidden <| mayCursors == Nothing
                 , Attr.id canvasId
                 , Attr.width wave.size
+                , Attr.height wave.height
                 ]
                 []
 
 
-cursor : Int -> Cursor -> Attribute (Interact.Msg Interactable zone)
-cursor pos cur =
-    inFront <|
-        el
-            ([ htmlAttribute <| Attr.style "cursor" "ew-resize"
-             , Border.width <| border
-             , height fill
-             , moveRight <| toFloat <| pos - border
-             , inFront <|
+cursor : Int -> Cursor -> Int -> Attribute (Interact.Msg Interactable zone)
+cursor pos cur h =
+    let
+        handle attrs =
+            inFront <|
                 el
                     ([ htmlAttribute <| Attr.style "cursor" "grab"
                      , height <| px <| border * 8
@@ -204,19 +222,34 @@ cursor pos cur =
                      , Bg.color <| rgb 0 0 0
                      , moveLeft <| toFloat <| border * 4
                      ]
-                        ++ (case cur of
-                                LoopStart ->
-                                    [ alignTop, moveUp <| toFloat border ]
-
-                                LoopEnd ->
-                                    [ alignBottom, moveDown <| toFloat border ]
-
-                                StartOffset ->
-                                    [ centerY ]
-                           )
+                        ++ attrs
                     )
                     none
+    in
+    inFront <|
+        el
+            ([ htmlAttribute <| Attr.style "cursor" "ew-resize"
+             , Border.width <| border
+             , height fill
+             , moveRight <| toFloat <| pos - border
              ]
+                ++ (case cur of
+                        LoopStart ->
+                            [ handle [ alignTop, moveUp <| toFloat border ] ]
+
+                        LoopEnd ->
+                            [ handle [ alignBottom, moveDown <| toFloat border ] ]
+
+                        StartOffset ->
+                            [ handle [ centerY, moveDown <| toFloat h / 4 ]
+                            , handle [ centerY, moveUp <| toFloat h / 4 ]
+                            ]
+
+                        Divide int ->
+                            [ handle [ alignTop, moveUp <| toFloat border ]
+                            , handle [ alignBottom, moveDown <| toFloat border ]
+                            ]
+                   )
                 ++ (List.map htmlAttribute <| Interact.draggableEvents <| IWaveCursor cur)
             )
             none

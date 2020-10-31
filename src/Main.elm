@@ -41,9 +41,20 @@ port loadSound : String -> Cmd msg
 port soundLoaded : (D.Value -> msg) -> Sub msg
 
 
+port openMic : () -> Cmd msg
+
+
+port micOpened : (() -> msg) -> Sub msg
+
+
+port inputRec : String -> Cmd msg
+
+
+port gotNewSample : (D.Value -> msg) -> Sub msg
+
+
 
 -- TODO refactor existing Debug.log with "key" value
--- TODO check bug visibility hidden not emitted on window change but on tab change
 -- TODO check msg or Msg in types, if unused, maybe replace by x
 -- TODO clean all module exposings decl
 -- TODO is "No error handling in update, everything comes Checked before" is a good pattern ?
@@ -69,12 +80,15 @@ main =
 type alias Model =
     { connected : Bool
     , currentUrl : Url.Url
+    , micState : Maybe ( Bool, String )
     , soundList : Dict String SoundListType
     , loadedSoundList : List Sound
+    , showDirLoad : Bool
     , savesList : Set String
     , doc : Doc.Model
     , screenSize : ScreenSize
     , fileExplorerTab : ExTab
+    , fileFilter : String
     , mode : Mode
     , keys : Keys.State
     }
@@ -102,12 +116,15 @@ init screen url _ =
     ( Model
         False
         url
+        Nothing
         Dict.empty
         []
+        True
         Set.empty
         (Doc.init <| Just url)
         screen
         Sounds
+        ""
         NoMode
         Keys.init
     , Cmd.batch [ fetchSoundList url, fetchSavesList url ]
@@ -135,11 +152,19 @@ type Msg
     | GotSavesList (Result Http.Error String)
     | GotLoadedFile String (Result Http.Error Doc)
     | SoundLoaded (Result D.Error Sound)
+    | RequestOpenMic
+    | MicOpened
+    | StartMicRec
+    | EndMicRec String
+    | EnteredNewRecName String
     | ClickedUploadSound
     | UploadSounds File (List File)
+    | GotNewSample (Result D.Error File)
     | ClickedUploadSave
     | UploadSaves File (List File)
     | ChangedExplorerTab ExTab
+    | ToggleShowDirLoad Bool
+    | ChgFilter String
     | ChangedMode Mode
     | GotScreenSize ScreenSize
     | DocMsg Doc.Msg
@@ -406,10 +431,18 @@ update msg model =
                             ( { mod | soundList = newSL }, Cmd.batch <| cmd :: cmds )
 
                         _ ->
-                            Debug.log "Cannot load, sound not found" ( model, Cmd.none )
+                            let
+                                _ =
+                                    Debug.log "Cannot load, sound not found" m
+                            in
+                            ( model, Cmd.none )
 
                 Err (Http.BadBody err) ->
-                    Debug.log err ( model, Cmd.none )
+                    let
+                        _ =
+                            Debug.log ("Error loading " ++ name ++ " : " ++ err) result
+                    in
+                    ( model, Cmd.none )
 
                 Err _ ->
                     ( { model | connected = False }, Cmd.none )
@@ -460,10 +493,35 @@ update msg model =
         SoundLoaded res ->
             case res of
                 Err e ->
-                    Debug.log (D.errorToString e) ( model, Cmd.none )
+                    let
+                        _ =
+                            Debug.log (D.errorToString e) res
+                    in
+                    ( model, Cmd.none )
 
                 Ok s ->
                     ( { model | loadedSoundList = s :: model.loadedSoundList }, Cmd.none )
+
+        RequestOpenMic ->
+            ( model, openMic () )
+
+        MicOpened ->
+            ( { model | micState = Just ( False, "" ) }, Cmd.none )
+
+        StartMicRec ->
+            ( { model | micState = Maybe.map (Tuple.mapFirst <| always True) model.micState }
+            , inputRec ""
+            )
+
+        EndMicRec fileName ->
+            ( { model | micState = Maybe.map (Tuple.mapFirst <| always False) model.micState }
+            , inputRec fileName
+            )
+
+        EnteredNewRecName fileName ->
+            ( { model | micState = Maybe.map (Tuple.mapSecond <| always fileName) model.micState }
+            , Cmd.none
+            )
 
         ClickedUploadSound ->
             ( model, Select.files soundMimeTypes UploadSounds )
@@ -488,6 +546,18 @@ update msg model =
                     )
                     (f :: lf)
             )
+
+        GotNewSample res ->
+            case res of
+                Ok file ->
+                    update (UploadSounds file []) model
+
+                Err err ->
+                    let
+                        _ =
+                            Debug.log (D.errorToString err) res
+                    in
+                    ( model, Cmd.none )
 
         ClickedUploadSave ->
             ( model, Select.files [] UploadSaves )
@@ -558,6 +628,12 @@ update msg model =
 
         ChangedExplorerTab tab ->
             ( { model | fileExplorerTab = tab }, Cmd.none )
+
+        ToggleShowDirLoad b ->
+            ( { model | showDirLoad = b }, Cmd.none )
+
+        ChgFilter s ->
+            ( { model | fileFilter = s }, Cmd.none )
 
         -- FIXME Code smell?
         ChangedMode mode ->
@@ -653,6 +729,8 @@ subs { doc } =
     Sub.batch <|
         [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
+        , micOpened <| always MicOpened
+        , gotNewSample <| (GotNewSample << D.decodeValue File.decoder)
         ]
             ++ List.map (Sub.map DocMsg) (Doc.subs doc)
             ++ List.map (Sub.map KeysMsg) Keys.subs
@@ -738,40 +816,18 @@ viewFileExplorer model =
                     rgb 0.5 0.5 0.5
     in
     column [ height fill, Bg.color bgColor, Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ] <|
-        ([ row [ Font.size 14, spacing 20 ]
-            [ Input.button
-                (if model.fileExplorerTab == Sounds then
-                    [ padding 5, Bg.color (rgb 0.2 0.2 0.2) ]
-
-                 else
-                    [ padding 5 ]
-                )
-                { label = text "Sons"
-                , onPress = Just <| ChangedExplorerTab Sounds
-                }
-            , Input.button
-                (if model.fileExplorerTab == LoadedSounds then
-                    [ padding 5, Bg.color (rgb 0.1 0.1 0.1) ]
-
-                 else
-                    [ padding 5 ]
-                )
-                { label = text "Chargés"
-                , onPress = Just <| ChangedExplorerTab LoadedSounds
-                }
-            , Input.button
-                (if model.fileExplorerTab == Saves then
-                    [ padding 5, Bg.color (rgb 0.1 0.1 0.1) ]
-
-                 else
-                    [ padding 5 ]
-                )
-                { label = text "Saves"
-                , onPress = Just <| ChangedExplorerTab Saves
-                }
+        (row [ Font.size 14, spacing 20 ]
+            [ viewExplorerTab model.fileExplorerTab Sounds "Sons"
+            , viewExplorerTab model.fileExplorerTab LoadedSounds "Chargés"
+            , viewExplorerTab model.fileExplorerTab Saves "Saves"
             ]
-         ]
-            ++ (case model.fileExplorerTab of
+            :: Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
+                { label = Input.labelLeft [] <| text "Filtrer\u{202F}:"
+                , text = model.fileFilter
+                , placeholder = Nothing
+                , onChange = ChgFilter
+                }
+            :: (case model.fileExplorerTab of
                     Sounds ->
                         viewSounds model
 
@@ -782,6 +838,20 @@ viewFileExplorer model =
                         viewSaveFiles model
                )
         )
+
+
+viewExplorerTab : ExTab -> ExTab -> String -> Element Msg
+viewExplorerTab seled tab name =
+    Input.button
+        (if seled == tab then
+            [ padding 5, Bg.color (rgb 0.2 0.2 0.2) ]
+
+         else
+            [ padding 5 ]
+        )
+        { label = text name
+        , onPress = Just <| ChangedExplorerTab tab
+        }
 
 
 viewOpenRefreshButtons : Msg -> Msg -> Bool -> List (Element Msg)
@@ -807,32 +877,86 @@ viewOpenRefreshButtons openMsg refreshMsg connected =
 viewSounds : Model -> List (Element Msg)
 viewSounds model =
     [ column [ width fill, height <| fillPortion 2, spacing 20, scrollbarY ] <|
-        viewOpenRefreshButtons ClickedUploadSound RequestSoundList model.connected
-            ++ [ viewLib model [] model.soundList ]
+        [ row [ width fill, spacing 40 ]
+            [ column [ spacing 20 ] <|
+                viewOpenRefreshButtons ClickedUploadSound RequestSoundList model.connected
+            , column [ width fill, spacing 20 ] <|
+                case model.micState of
+                    Just ( False, name ) ->
+                        [ Input.button []
+                            { onPress =
+                                if String.isEmpty name then
+                                    Nothing
+
+                                else
+                                    Just StartMicRec
+                            , label = text "Rec Mic"
+                            }
+                        , Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
+                            { text = name
+                            , placeholder = Just <| Input.placeholder [] <| text "Nom du fichier"
+                            , label = Input.labelHidden "New File Name"
+                            , onChange = EnteredNewRecName
+                            }
+                        ]
+
+                    Just ( True, name ) ->
+                        [ Input.button [] { onPress = Just <| EndMicRec name, label = text "Stop Mic" }
+                        , text name
+                        ]
+
+                    Nothing ->
+                        [ Input.button [] { onPress = Just RequestOpenMic, label = text "Activer Micro" } ]
+            ]
+        ]
+            ++ [ viewLibColumn <| viewLib model [] model.soundList ]
     ]
 
 
-viewLib : Model -> List String -> Dict String SoundListType -> Element Msg
+viewLibColumn : List (Element Msg) -> Element Msg
+viewLibColumn =
+    column [ width fill, spacing 5, padding 2, scrollbarY ]
+
+
+viewLib : Model -> List String -> Dict String SoundListType -> List (Element Msg)
 viewLib model id dict =
-    column [ width fill, spacing 5, padding 2, scrollbarY ] <|
-        List.concatMap
-            (\( s, sType ) ->
-                case sType of
-                    Stopped ->
-                        [ viewSoundInLib model s (id ++ [ s ]) False False ]
+    List.concatMap
+        (\( s, sType ) ->
+            let
+                newId =
+                    id ++ [ s ]
 
-                    Playing ->
-                        [ viewSoundInLib model s (id ++ [ s ]) True False ]
+                filterOut =
+                    not <| String.contains (String.toLower model.fileFilter) <| String.toLower <| String.join "/" newId
+            in
+            case sType of
+                Stopped ->
+                    if filterOut then
+                        []
 
-                    Loading ->
-                        [ viewSoundInLib model s (id ++ [ s ]) False True ]
+                    else
+                        [ viewSoundInLib model s newId False False ]
 
-                    Directory opened dir ->
-                        viewDirInLib model s (id ++ [ s ]) dir opened
-            )
-        <|
-            List.sortWith (\t1 t2 -> Natural.compare (Tuple.first t1) (Tuple.first t2)) <|
-                Dict.toList dict
+                Playing ->
+                    if filterOut then
+                        []
+
+                    else
+                        [ viewSoundInLib model s newId True False ]
+
+                Loading ->
+                    if filterOut then
+                        []
+
+                    else
+                        [ viewSoundInLib model s newId False True ]
+
+                Directory opened dir ->
+                    viewDirInLib model s newId dir opened
+        )
+    <|
+        List.sortWith (\t1 t2 -> Natural.compare (Tuple.first t1) (Tuple.first t2)) <|
+            Dict.toList dict
 
 
 viewSoundInLib : Model -> String -> List String -> Bool -> Bool -> Element Msg
@@ -849,7 +973,7 @@ viewSoundInLib model s id playing loading =
                 else
                     rgb 1 1 1
             ]
-            { label = text s
+            { label = text <| cutExtension s
             , onPress =
                 Just <|
                     if model.mode == Downloading then
@@ -889,40 +1013,66 @@ viewSoundInLib model s id playing loading =
 
 viewDirInLib : Model -> String -> List String -> Dict String SoundListType -> Bool -> List (Element Msg)
 viewDirInLib model str id dict opened =
-    Input.button [ Font.color <| rgb 1 1 1 ]
-        { label =
-            el [ Font.bold ] <|
-                text <|
-                    (if opened then
-                        "▽"
+    let
+        subView =
+            viewLib model id dict
+    in
+    if not <| List.isEmpty subView then
+        Input.button [ Font.color <| rgb 1 1 1 ]
+            { label =
+                el [ Font.bold ] <|
+                    text <|
+                        (if opened then
+                            "▽"
 
-                     else
-                        "◿"
-                    )
-                        ++ " "
-                        ++ str
-        , onPress = Just <| ExpandDir id
-        }
-        :: (if opened then
-                [ el [ moveRight 10 ] <| viewLib model id dict ]
+                         else
+                            "◿"
+                        )
+                            ++ " "
+                            ++ str
+            , onPress = Just <| ExpandDir id
+            }
+            :: (if opened then
+                    [ el [ moveRight 10 ] <| viewLibColumn subView ]
 
-            else
-                []
-           )
+                else
+                    []
+               )
+
+    else
+        []
 
 
 viewLoaded : Model -> List (Element Msg)
 viewLoaded model =
-    [ column [ width fill, height <| fillPortion 3, spacing 10, padding 2, scrollbarY ] <|
-        List.map soundView <|
-            List.sortWith
-                (\s t -> Natural.compare (Sound.toString s) (Sound.toString t))
-                model.loadedSoundList
+    [ column [ width fill, height <| fillPortion 3, spacing 10, padding 2, scrollbarY ]
+        ([ Input.checkbox []
+            { label = Input.labelLeft [] <| text "Voir dossiers"
+            , checked = model.showDirLoad
+            , onChange = ToggleShowDirLoad
+            , icon = Input.defaultCheckbox
+            }
+         ]
+            ++ (List.map (soundView model.showDirLoad) <|
+                    List.sortWith (\s t -> Natural.compare (Sound.toString s) (Sound.toString t)) <|
+                        filterFiles model.fileFilter Sound.toString model.loadedSoundList
+               )
+        )
     ]
 
 
-soundView : Sound -> Element Msg
-soundView s =
+soundView : Bool -> Sound -> Element Msg
+soundView showDir s =
+    let
+        fullPath =
+            cutExtension <| Sound.toString s
+
+        l =
+            List.concatMap (String.split "/") <| String.split "\\" fullPath
+
+        justName =
+            String.join "/" <| List.drop (List.length l - 1) l
+    in
     el
         (List.map
             (Element.htmlAttribute
@@ -931,7 +1081,13 @@ soundView s =
          <|
             Interact.draggableEvents (Interacting.ISound s)
         )
-        (text (Sound.toString s))
+        (text <|
+            if showDir then
+                fullPath
+
+            else
+                justName
+        )
 
 
 viewSaveFiles : Model -> List (Element Msg)
@@ -939,9 +1095,10 @@ viewSaveFiles model =
     [ column [ height <| fillPortion 1, width fill, spacing 20, scrollbarY ] <|
         viewOpenRefreshButtons ClickedUploadSave RequestSavesList model.connected
             ++ [ column [ width fill, spacing 5, padding 2, scrollbarY ] <|
-                    (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutGearsExtension s)) <|
+                    (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutExtension s)) <|
                         List.sortWith Natural.compare <|
-                            Set.toList model.savesList
+                            filterFiles model.fileFilter identity <|
+                                Set.toList model.savesList
                     )
                ]
     ]
@@ -1006,12 +1163,24 @@ fetchSaveFile url name =
         , headers = [ Http.header "Cache-Control" "no-cache" ]
         , url = Url.toString { url | path = "/saves/" ++ name }
         , body = Http.emptyBody
-        , expect = Http.expectJson (GotLoadedFile <| cutGearsExtension name) Doc.decoder
+        , expect = Http.expectJson (GotLoadedFile <| cutExtension name) Doc.decoder
         , timeout = Nothing
         , tracker = Nothing
         }
 
 
-cutGearsExtension : String -> String
-cutGearsExtension =
-    String.dropRight 6
+filterFiles : String -> (a -> String) -> List a -> List a
+filterFiles filter toString =
+    List.filter <|
+        (String.contains <| String.toLower filter)
+            << String.toLower
+            << toString
+
+
+cutExtension : String -> String
+cutExtension fullName =
+    let
+        l =
+            String.split "." fullName
+    in
+    String.join "." <| List.take (List.length l - 1) l

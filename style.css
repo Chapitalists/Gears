@@ -1,16 +1,25 @@
+* {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
 
-svg {
+body {
+  overscroll-behavior: contain;
+}
+
+div {
+  overscroll-behavior: contain;
+}
+
+input {
+  user-select: auto;
+  -webkit-user-select: auto;
+  -moz-user-select: auto;
+  -ms-user-select: auto;
+}
+
+#svgResizeObserver {
   touch-action: none;
-}
-
-
-
-#gear {
-  transition: 5s
-}
-
-.rotate {
-  transition: 5s;
-  transform-origin: center;
-  transform: rotate(36deg);
 }

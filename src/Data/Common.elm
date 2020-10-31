@@ -67,7 +67,11 @@ getWheel ( id, list ) m =
                             f ll (Content.getBead i col).wheel
 
                         _ ->
-                            Debug.log ("Wrong identifier to get " ++ (String.concat <| List.map String.fromInt l)) w
+                            let
+                                _ =
+                                    Debug.log ("Wrong identifier to get " ++ (String.concat <| List.map String.fromInt l)) ( id, list, m )
+                            in
+                            w
     in
     f list (Content.getGear id m).wheel
 
@@ -92,7 +96,11 @@ deleteWheel ( id, l ) mobile gRm bRm =
                             Content.updateBead index (Wheel.setContent <| Content.C <| rec i rest subCol) col
 
                         _ ->
-                            Debug.log "Wrong identifier to delete bead" col
+                            let
+                                _ =
+                                    Debug.log "Wrong identifier to delete bead" ( id, l, mobile )
+                            in
+                            col
     in
     case l of
         [] ->
@@ -104,7 +112,11 @@ deleteWheel ( id, l ) mobile gRm bRm =
                     Content.updateGear id (Wheel.setContent <| Content.C <| bRm i col) mobile
 
                 _ ->
-                    Debug.log "Wrong identifier to delete bead" mobile
+                    let
+                        _ =
+                            Debug.log "Wrong identifier to delete bead" ( id, l, mobile )
+                    in
+                    mobile
 
         i :: rest ->
             case Wheel.getContent <| Coll.get id mobile.gears of
@@ -112,12 +124,30 @@ deleteWheel ( id, l ) mobile gRm bRm =
                     Content.updateGear id (Wheel.setContent <| Content.C <| rec i rest col) mobile
 
                 _ ->
-                    Debug.log "Wrong identifier to delete bead" mobile
+                    let
+                        _ =
+                            Debug.log "Wrong identifier to delete bead" ( id, l, mobile )
+                    in
+                    mobile
 
 
 updateWheel : Identifier -> Wheel.Msg -> Mobile Wheel -> Mobile Wheel
 updateWheel ( id, list ) msg m =
     let
+        modify =
+            case msg of
+                Wheel.ChangeContent _ ->
+                    True
+
+                Wheel.ChangeStart _ ->
+                    True
+
+                Wheel.ChangeLoop _ ->
+                    True
+
+                _ ->
+                    False
+
         rec : List Int -> Wheel -> Wheel
         rec l w =
             case l of
@@ -128,13 +158,25 @@ updateWheel ( id, list ) msg m =
                 i :: ll ->
                     case Wheel.getWheelContent w of
                         Content.C col ->
-                            (Wheel.setContent
-                                (Content.C <| Content.updateBead i (\bead -> { bead | wheel = rec ll bead.wheel }) col)
-                                { wheel = w }
-                            ).wheel
+                            let
+                                upCol =
+                                    Content.updateBead i (\bead -> { bead | wheel = rec ll bead.wheel }) col
+
+                                newCol =
+                                    if modify then
+                                        { upCol | oneSound = Nothing }
+
+                                    else
+                                        upCol
+                            in
+                            (Wheel.setContent (Content.C newCol) { wheel = w }).wheel
 
                         _ ->
-                            Debug.log ("Wrong identifier to update " ++ (String.concat <| List.map String.fromInt l)) w
+                            let
+                                _ =
+                                    Debug.log "Wrong identifier to delete bead" ( ( id, l ), msg, m )
+                            in
+                            w
     in
     Content.updateGear id (\gear -> { gear | wheel = rec list gear.wheel }) m
 

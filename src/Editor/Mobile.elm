@@ -2,7 +2,7 @@ port module Editor.Mobile exposing (..)
 
 import Coll exposing (Coll, Id)
 import Color
-import Data.Collar as Collar
+import Data.Collar as Collar exposing (Beed)
 import Data.Common as CommonData exposing (Identifier)
 import Data.Content as Content exposing (Content)
 import Data.Gear as Gear
@@ -47,6 +47,9 @@ port toggleRecord : Bool -> Cmd msg
 port gotRecord : (D.Value -> msg) -> Sub msg
 
 
+port requestCutSample : { fromFileName : String, newFileName : String, percents : ( Float, Float ) } -> Cmd msg
+
+
 
 -- TODO Maybe delegate Coll dependence to Data.Mobile (except Id)
 
@@ -54,6 +57,11 @@ port gotRecord : (D.Value -> msg) -> Sub msg
 svgId : String
 svgId =
     "svg"
+
+
+charsInFile : List Char
+charsInFile =
+    [ '_', '-', ' ' ]
 
 
 blinkOnTime : Float
@@ -73,6 +81,9 @@ type alias Model =
     , edit : List (Id Geer)
     , beadCursor : Int
     , link : Maybe LinkInfo
+    , collarMult : ( Int, Bool )
+    , collarDiv : ( Int, Bool )
+    , newSampleName : String
     , parentUid : String -- TODO Two sources of truth !! same in Engine
     , engine : Engine
     , interact : Interact.State Interactable Zone
@@ -124,7 +135,7 @@ type alias LinkInfo =
 
 
 type FractInput
-    = FractionInput Fraction
+    = FractionInput Fraction Bool Bool -- non empty numerator then denominator
     | TextInput String
 
 
@@ -156,6 +167,9 @@ init =
     , edit = []
     , beadCursor = 0
     , link = Nothing
+    , collarMult = ( 4, True )
+    , collarDiv = ( 4, True )
+    , newSampleName = ""
     , parentUid = ""
     , engine = Engine.init
     , interact = Interact.init
@@ -208,8 +222,12 @@ type Msg
     | SimplifyFractView
     | ResizeToContent (Id Geer)
     | Capsuled (List (Id Geer))
-    | Collared (Id Geer)
+    | Collared (Id Geer) Collaring
     | UnCollar (Id Geer)
+    | EnteredCollarMult String
+    | EnteredCollarDiv String
+    | EnteredNewSampleName String
+    | CutNewSample
     | Blink
     | InteractMsg (Interact.Msg Interactable Zone)
     | SvgMsg PanSvg.Msg
@@ -242,6 +260,12 @@ type ToUndo
     | Group
     | Cancel
     | NOOP
+
+
+type Collaring
+    = Simple
+    | Mult Int
+    | Div Sound Int
 
 
 update : Msg -> ( Model, Mobeel ) -> Return
@@ -325,14 +349,22 @@ update msg ( model, mobile ) =
                     { return | cmd = DL.url url }
 
                 Err err ->
-                    Debug.log (D.errorToString err) return
+                    let
+                        _ =
+                            Debug.log (D.errorToString err) res
+                    in
+                    return
 
         PlayGear ->
             case model.tool of
                 Edit _ ->
                     let
+                        demutedMobile =
+                            model.edit
+                                |> List.foldl (\id mob -> CommonData.updateWheel ( id, [] ) (Wheel.Mute False) mob) mobile
+
                         ( engine, v ) =
-                            Engine.addPlaying model.edit mobile.gears model.engine
+                            Engine.addPlaying model.edit demutedMobile.gears model.engine
                     in
                     { return | model = { model | engine = engine, tool = Edit True }, toEngine = v }
 
@@ -374,57 +406,41 @@ update msg ( model, mobile ) =
                     return
 
         NewBead c ->
-            case model.edit of
-                [ id ] ->
-                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
-                        Content.C col ->
-                            { return
-                                | mobile =
-                                    CommonData.updateWheel ( id, [] )
-                                        (Wheel.ChangeContent <| Content.C <| Collar.add model.beadCursor (Collar.beadFromContent c) col)
-                                        mobile
-                                , toUndo = Group
-                                , model = { model | beadCursor = model.beadCursor + 1 }
-                                , cmd = Random.generate (\color -> WheelMsgs [ ( ( id, [ model.beadCursor ] ), Wheel.ChangeColor color ) ]) colorGen
-                            }
-
-                        _ ->
-                            return
+            case addBead model mobile <| Collar.beadFromContent c of
+                Just ( newModel, newMobile, id ) ->
+                    { return
+                        | model = newModel
+                        , mobile = newMobile
+                        , toUndo = Group
+                        , cmd = Random.generate (\color -> WheelMsgs [ ( ( id, [ model.beadCursor ] ), Wheel.ChangeColor color ) ]) colorGen
+                    }
 
                 _ ->
                     return
 
         UnpackBead ( w, l ) new ->
-            case model.edit of
-                [ id ] ->
-                    case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
-                        Content.C col ->
-                            if new then
-                                { return
-                                    | mobile =
-                                        CommonData.updateWheel ( id, [] )
-                                            (Wheel.ChangeContent <| Content.C <| Collar.add model.beadCursor { wheel = w, length = l } col)
-                                            mobile
-                                    , toUndo = Do
-                                    , model = { model | beadCursor = model.beadCursor + 1 }
-                                }
+            if new then
+                case addBead model mobile { wheel = w, length = l } of
+                    Just ( newModel, newMobile, _ ) ->
+                        { return
+                            | model = newModel
+                            , mobile = newMobile
+                            , toUndo = Do
+                        }
 
-                            else
-                                Debug.todo "ChangeContent of bead, has to select bead"
+                    _ ->
+                        return
 
-                        {- case model.common.edit of
-                           [ B i ] ->
-                               update (WheelMsg ( i, Wheel.ChangeContent <| Wheel.getContent { wheel = w } )) ( model, collar )
+            else
+                Debug.todo "ChangeContent of bead, has to select bead"
 
-                           _ ->
-                               return
-                        -}
-                        _ ->
-                            return
+        {- case model.common.edit of
+           [ B i ] ->
+               update (WheelMsg ( i, Wheel.ChangeContent <| Wheel.getContent { wheel = w } )) ( model, collar )
 
-                _ ->
-                    return
-
+           _ ->
+               return
+        -}
         CopyGear id ->
             { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
 
@@ -452,6 +468,52 @@ update msg ( model, mobile ) =
             }
 
         DeleteWheel ( id, l ) ->
+            let
+                newMob =
+                    CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
+
+                finalMob =
+                    case l of
+                        [ i ] ->
+                            let
+                                colId =
+                                    ( id, [] )
+
+                                mayOldCol =
+                                    case Wheel.getWheelContent <| CommonData.getWheel colId mobile of
+                                        Content.C col ->
+                                            Just col
+
+                                        _ ->
+                                            Nothing
+
+                                mayNewCol =
+                                    case Wheel.getWheelContent <| CommonData.getWheel colId newMob of
+                                        Content.C col ->
+                                            Just col
+
+                                        _ ->
+                                            Nothing
+
+                                mayOldContentLength =
+                                    Maybe.map Collar.getTotalLength mayOldCol
+
+                                mayNewContentLength =
+                                    Maybe.map Collar.getTotalLength mayNewCol
+
+                                oldLength =
+                                    Harmo.getLengthId id mobile.gears
+                            in
+                            case Maybe.map2 Tuple.pair mayOldContentLength mayNewContentLength of
+                                Just ( oldCL, newCL ) ->
+                                    { newMob | gears = Harmo.changeSelf id (newCL * oldLength / oldCL) newMob.gears }
+
+                                Nothing ->
+                                    newMob
+
+                        _ ->
+                            newMob
+            in
             { return
                 | model =
                     { model
@@ -485,13 +547,13 @@ update msg ( model, mobile ) =
                     }
                 , toUndo = Do
                 , toEngine = [ Engine.stop ]
-                , mobile = CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
+                , mobile = finalMob
             }
 
         EnteredFract isNumerator str ->
-            Maybe.map2 Tuple.pair model.link (String.toInt str)
+            Maybe.map2 Tuple.pair model.link (toIntOrEmpty str)
                 |> Maybe.map
-                    (\( link, i ) ->
+                    (\( link, iOr ) ->
                         { return
                             | model =
                                 { model
@@ -500,12 +562,17 @@ update msg ( model, mobile ) =
                                             { link
                                                 | fractInput =
                                                     case link.fractInput of
-                                                        FractionInput fract ->
-                                                            if isNumerator then
-                                                                FractionInput { fract | num = i }
+                                                        FractionInput fract numB denB ->
+                                                            case iOr of
+                                                                Empty ->
+                                                                    FractionInput fract (not isNumerator) isNumerator
 
-                                                            else
-                                                                FractionInput { fract | den = i }
+                                                                Int i ->
+                                                                    if isNumerator then
+                                                                        FractionInput { fract | num = i } True denB
+
+                                                                    else
+                                                                        FractionInput { fract | den = i } numB True
 
                                                         TextInput s ->
                                                             TextInput s
@@ -526,17 +593,21 @@ update msg ( model, mobile ) =
             }
 
         EnteredTextFract str ->
-            case model.link of
-                Nothing ->
-                    return
+            if String.all (\c -> Char.isDigit c || c == '/') str then
+                case model.link of
+                    Nothing ->
+                        return
 
-                Just link ->
-                    case link.fractInput of
-                        FractionInput _ ->
-                            return
+                    Just link ->
+                        case link.fractInput of
+                            FractionInput _ _ _ ->
+                                return
 
-                        TextInput _ ->
-                            { return | model = { model | link = Just { link | fractInput = TextInput str } } }
+                            TextInput _ ->
+                                { return | model = { model | link = Just { link | fractInput = TextInput str } } }
+
+            else
+                return
 
         ForcedFract l fract ->
             -- TODO FIXME URGENTLY Abuses Harmo internals, as Gear.copy
@@ -630,7 +701,7 @@ update msg ( model, mobile ) =
                 , model =
                     case model.link of
                         Just link ->
-                            { model | link = Just { link | fractInput = FractionInput fract } }
+                            { model | link = Just { link | fractInput = FractionInput fract True True } }
 
                         Nothing ->
                             model
@@ -641,14 +712,14 @@ update msg ( model, mobile ) =
                 |> Maybe.map
                     (\link ->
                         case link.fractInput of
-                            FractionInput fract ->
+                            FractionInput fract numB denB ->
                                 { return
                                     | model =
                                         { model
                                             | link =
                                                 Just
                                                     { link
-                                                        | fractInput = FractionInput <| Fract.simplify fract
+                                                        | fractInput = FractionInput (Fract.simplify fract) numB denB
                                                     }
                                         }
                                 }
@@ -720,16 +791,38 @@ update msg ( model, mobile ) =
                 , toUndo = Do
             }
 
-        Collared id ->
+        Collared id collaring ->
             let
                 g =
                     Coll.get id mobile.gears
 
+                l =
+                    Harmo.getLength g.harmony mobile.gears
+
                 collar =
-                    Collar.fromWheel g.wheel <| Harmo.getLength g.harmony mobile.gears
+                    case collaring of
+                        Simple ->
+                            Collar.fromWheel g.wheel l
+
+                        Mult i ->
+                            Collar.fromWheelMult g.wheel i l
+
+                        Div s i ->
+                            Collar.fromSoundDiv s i l
+
+                tmp =
+                    Coll.update id (Wheel.setContent <| Content.C collar) mobile.gears
+
+                res =
+                    case collaring of
+                        Mult i ->
+                            Harmo.changeSelf id (toFloat i * l) tmp
+
+                        _ ->
+                            tmp
             in
             { return
-                | mobile = { mobile | gears = Coll.update id (Wheel.setContent <| Content.C collar) mobile.gears }
+                | mobile = { mobile | gears = res }
                 , toUndo = Do
             }
 
@@ -744,6 +837,66 @@ update msg ( model, mobile ) =
                         | mobile = Mobile.updateGear id (Wheel.setContent <| Wheel.getContent col.head) mobile
                         , toUndo = Do
                     }
+
+                _ ->
+                    return
+
+        EnteredCollarMult str ->
+            case toIntOrEmpty str of
+                Just (Int i) ->
+                    if i >= 2 then
+                        { return | model = { model | collarMult = ( i, True ) } }
+
+                    else
+                        return
+
+                Just Empty ->
+                    { return | model = { model | collarMult = Tuple.mapSecond (always False) model.collarMult } }
+
+                _ ->
+                    return
+
+        EnteredCollarDiv str ->
+            case toIntOrEmpty str of
+                Just (Int i) ->
+                    if i >= 2 then
+                        { return | model = { model | collarDiv = ( i, True ) } }
+
+                    else
+                        return
+
+                Just Empty ->
+                    { return | model = { model | collarDiv = Tuple.mapSecond (always False) model.collarDiv } }
+
+                _ ->
+                    return
+
+        EnteredNewSampleName str ->
+            { return
+                | model =
+                    { model
+                        | newSampleName =
+                            if String.all (\c -> Char.isAlphaNum c || List.member c charsInFile) str then
+                                str
+
+                            else
+                                model.newSampleName
+                    }
+            }
+
+        CutNewSample ->
+            case model.edit of
+                [ id ] ->
+                    let
+                        g =
+                            Coll.get id mobile.gears
+                    in
+                    case Wheel.getContent g of
+                        Content.S s ->
+                            { return | cmd = requestCutSample { fromFileName = Sound.toString s, newFileName = model.newSampleName, percents = Wheel.getLoopPercents g } }
+
+                        _ ->
+                            return
 
                 _ ->
                     return
@@ -798,7 +951,11 @@ update msg ( model, mobile ) =
         SVGSize res ->
             case res of
                 Result.Err e ->
-                    Debug.log (D.errorToString e) return
+                    let
+                        _ =
+                            Debug.log (D.errorToString e) res
+                    in
+                    return
 
                 Result.Ok s ->
                     let
@@ -892,10 +1049,11 @@ update msg ( model, mobile ) =
 
 subs : Model -> List (Sub Msg)
 subs { interact, dragging } =
-    PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
-        :: Sub.map WaveMsg Waveform.sub
-        :: (gotRecord <| (GotRecord << D.decodeValue D.string))
-        :: (List.map (Sub.map InteractMsg) <| Interact.subs interact)
+    [ PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
+    , Sub.map WaveMsg Waveform.sub
+    , gotRecord <| (GotRecord << D.decodeValue D.string)
+    ]
+        ++ (List.map (Sub.map InteractMsg) <| Interact.subs interact)
         ++ (case dragging of
                 Alterning _ _ ( _, t ) ->
                     [ Time.every t <| always <| Blink ]
@@ -986,9 +1144,9 @@ viewExtraTools model =
 viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
-        ( wavePoints, viewWave ) =
-            case model.edit of
-                [ id ] ->
+        mayWavePoints =
+            case ( model.tool, model.edit ) of
+                ( Edit _, [ id ] ) ->
                     let
                         g =
                             Coll.get id mobile.gears
@@ -996,18 +1154,36 @@ viewContent ( model, mobile ) =
                         ( start, end ) =
                             Wheel.getLoopPercents g
                     in
-                    ( { offset = g.wheel.startPercent, start = start, end = end }
-                    , case ( model.tool, Wheel.getContent g ) of
-                        ( Edit _, Content.S s ) ->
-                            (model.wave.drawn == (Waveform.SoundDrawn <| Sound.toString s))
-                                && g.wheel.viewContent
+                    case ( g.wheel.viewContent, Wheel.getContent g ) of
+                        ( True, Content.S s ) ->
+                            if model.wave.drawn == (Waveform.SoundDrawn <| Sound.toString s) then
+                                Just <| Waveform.Sound { offset = g.wheel.startPercent, start = start, end = end }
+
+                            else
+                                Nothing
+
+                        ( True, Content.C c ) ->
+                            case c.oneSound of
+                                Just oneSound ->
+                                    if model.wave.drawn == Waveform.SoundDrawn oneSound.soundName then
+                                        Just <|
+                                            Waveform.CollarDiv
+                                                { start = oneSound.start
+                                                , end = oneSound.end
+                                                , divs = oneSound.divs
+                                                }
+
+                                    else
+                                        Nothing
+
+                                _ ->
+                                    Nothing
 
                         _ ->
-                            False
-                    )
+                            Nothing
 
                 _ ->
-                    ( { offset = 0, start = 0, end = 0 }, False )
+                    Nothing
 
         getMod : Id Geer -> Wheel.Mod
         getMod id =
@@ -1076,9 +1252,8 @@ viewContent ( model, mobile ) =
                 InteractMsg
         , Element.inFront <|
             Waveform.view
-                viewWave
                 model.wave
-                wavePoints
+                mayWavePoints
                 model.interact
                 InteractMsg
         ]
@@ -1259,7 +1434,7 @@ viewContent ( model, mobile ) =
                                                 Just { link, fractInput } ->
                                                     Link.viewSelectedLink (Gear.toDrawLink mobile.gears link) <|
                                                         case fractInput of
-                                                            FractionInput _ ->
+                                                            FractionInput _ _ _ ->
                                                                 Just <|
                                                                     Fract.simplify <|
                                                                         Fract.division
@@ -1492,7 +1667,49 @@ viewEditDetails model mobile =
                         { label = text "Encapsuler"
                         , onPress = Just <| Capsuled [ id ]
                         }
-                    , case Wheel.getContent g of
+                    , let
+                        btns label pressMsg changeMsg tuple =
+                            Input.button []
+                                { label = text label
+                                , onPress = Just <| Collared id <| pressMsg <| Tuple.first tuple
+                                }
+                                :: [ Input.text
+                                        [ paddingXY 0 0
+                                        , width <| minimum 40 <| fill
+                                        , Font.color <| rgb 0 0 0
+                                        , htmlAttribute <| Html.Attributes.type_ "number"
+                                        , htmlAttribute <| Html.Attributes.min "2"
+                                        ]
+                                        { onChange = changeMsg
+                                        , text =
+                                            if Tuple.second tuple then
+                                                String.fromInt <| Tuple.first tuple
+
+                                            else
+                                                ""
+                                        , placeholder =
+                                            Just <|
+                                                Input.placeholder [] <|
+                                                    text <|
+                                                        String.fromInt <|
+                                                            Tuple.first tuple
+                                        , label = Input.labelHidden <| "Collar " ++ label
+                                        }
+                                   ]
+
+                        multBtns =
+                            btns "x" Mult EnteredCollarMult model.collarMult
+
+                        divBtns s =
+                            btns "/" (Div s) EnteredCollarDiv model.collarDiv
+
+                        simpleBtn =
+                            Input.button []
+                                { label = text "Collier"
+                                , onPress = Just <| Collared id Simple
+                                }
+                      in
+                      case Wheel.getContent g of
                         Content.C col ->
                             if List.length col.beads == 0 then
                                 Input.button []
@@ -1501,16 +1718,20 @@ viewEditDetails model mobile =
                                     }
 
                             else
-                                Input.button []
-                                    { label = text "Collier"
-                                    , onPress = Just <| Collared id
-                                    }
+                                row [ spacing 16 ] <|
+                                    simpleBtn
+                                        :: multBtns
+
+                        Content.S s ->
+                            row [ spacing 16 ] <|
+                                simpleBtn
+                                    :: multBtns
+                                    ++ divBtns s
 
                         _ ->
-                            Input.button []
-                                { label = text "Collier"
-                                , onPress = Just <| Collared id
-                                }
+                            row [ spacing 16 ] <|
+                                simpleBtn
+                                    :: multBtns
                     , if id == mobile.motor then
                         Input.button []
                             { onPress = Just <| ChangedMode SelectMotor
@@ -1587,6 +1808,41 @@ viewEditDetails model mobile =
                     "Contenu : "
                         ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)
                 ]
+                    ++ (case Wheel.getContent g of
+                            Content.S s ->
+                                let
+                                    ok =
+                                        model.newSampleName
+                                            /= Sound.toString s
+                                            && (not <| String.isEmpty model.newSampleName)
+                                in
+                                [ Input.button
+                                    [ Font.color <|
+                                        if ok then
+                                            rgb 1 1 1
+
+                                        else
+                                            rgb 0 0 0
+                                    ]
+                                    { label = text "Couper en tant que"
+                                    , onPress =
+                                        if ok then
+                                            Just <| CutNewSample
+
+                                        else
+                                            Nothing
+                                    }
+                                , Input.text [ Font.color <| rgb 0 0 0 ]
+                                    { label = Input.labelHidden "Nouveau nom"
+                                    , text = model.newSampleName
+                                    , placeholder = Just <| Input.placeholder [] <| text "Nouveau nom"
+                                    , onChange = EnteredNewSampleName
+                                    }
+                                ]
+
+                            _ ->
+                                []
+                       )
             ]
 
         _ :: _ ->
@@ -1610,19 +1866,29 @@ viewHarmonizeDetails model mobile =
             [ viewDetailsColumn (rgb 0.5 0.5 0.5)
                 ([ text <| (Gear.toUID <| Tuple.first link) ++ (Gear.toUID <| Tuple.second link) ]
                     ++ (case fractInput of
-                            FractionInput fract ->
+                            FractionInput fract numB denB ->
                                 [ Input.text [ Font.color (rgb 0 0 0) ]
-                                    { text = String.fromInt fract.num
+                                    { text =
+                                        if numB then
+                                            String.fromInt fract.num
+
+                                        else
+                                            ""
                                     , onChange = EnteredFract True
                                     , label = Input.labelHidden "Numerator"
-                                    , placeholder = Nothing
+                                    , placeholder = Just <| Input.placeholder [] <| text <| String.fromInt fract.num
                                     }
                                 , text "/"
                                 , Input.text [ Font.color (rgb 0 0 0) ]
-                                    { text = String.fromInt fract.den
+                                    { text =
+                                        if denB then
+                                            String.fromInt fract.den
+
+                                        else
+                                            ""
                                     , onChange = EnteredFract False
                                     , label = Input.labelHidden "Denominator"
-                                    , placeholder = Nothing
+                                    , placeholder = Just <| Input.placeholder [] <| text <| String.fromInt fract.den
                                     }
                                 , Input.button []
                                     { label = text "Change"
@@ -1799,6 +2065,43 @@ doChangeContent id c mayColor model mobile =
                 , model = newModel
                 , cmd = Random.generate (WheelMsgs << colorToMsgs) colorGen
             }
+
+
+addBead : Model -> Mobeel -> Beed -> Maybe ( Model, Mobeel, Id Geer )
+addBead model mobile bead =
+    case model.edit of
+        [ id ] ->
+            case Wheel.getWheelContent <| CommonData.getWheel ( id, [] ) mobile of
+                Content.C col ->
+                    let
+                        newCol =
+                            Collar.add model.beadCursor bead col
+
+                        newMob =
+                            CommonData.updateWheel ( id, [] )
+                                (Wheel.ChangeContent <| Content.C newCol)
+                                mobile
+
+                        oldLength =
+                            Harmo.getLengthId id mobile.gears
+
+                        oldContentLength =
+                            Collar.getTotalLength col
+
+                        newContentLength =
+                            Collar.getTotalLength newCol
+                    in
+                    Just
+                        ( { model | beadCursor = model.beadCursor + 1 }
+                        , { newMob | gears = Harmo.changeSelf id (newContentLength * oldLength / oldContentLength) newMob.gears }
+                        , id
+                        )
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
 
 
 computeCuts : ( Vec2, Vec2 ) -> Coll Geer -> List (Link Geer)
@@ -2081,7 +2384,27 @@ manageInteractEvent event model mobile =
                                                     in
                                                     case interactWave g event model mobile of
                                                         Just subMsg ->
-                                                            update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
+                                                            let
+                                                                ret =
+                                                                    update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
+
+                                                                newMob =
+                                                                    ret.mobile
+
+                                                                oldPercents =
+                                                                    Wheel.getLoopPercents (Coll.get id mobile.gears)
+
+                                                                newPercents =
+                                                                    Wheel.getLoopPercents (Coll.get id newMob.gears)
+
+                                                                ratio =
+                                                                    (Tuple.second newPercents - Tuple.first newPercents)
+                                                                        / (Tuple.second oldPercents - Tuple.first oldPercents)
+
+                                                                oldLength =
+                                                                    Harmo.getLengthId id mobile.gears
+                                                            in
+                                                            { ret | mobile = { newMob | gears = Harmo.changeSelf id (ratio * oldLength) newMob.gears } }
 
                                                         Nothing ->
                                                             return
@@ -2262,7 +2585,9 @@ interactHarmonize event model mobile =
                         , link =
                             Just
                                 { link = l
-                                , fractInput = Maybe.withDefault (TextInput "") <| Maybe.map FractionInput mayFract
+                                , fractInput =
+                                    Maybe.withDefault (TextInput "") <|
+                                        Maybe.map (\f -> FractionInput f True True) mayFract
                                 }
                     }
                 , mobile = { mobile | gears = newGears }
@@ -2506,6 +2831,9 @@ interactWave g event model mobile =
                 StartOffset ->
                     Just <| Wheel.ChangeStart <| move absD <| g.wheel.startPercent
 
+                Divide i ->
+                    Nothing
+
         ( IWaveSel, Interact.Dragged { absD } _ _ ) ->
             let
                 mv =
@@ -2564,3 +2892,17 @@ hexToInt s =
 hexToFloat : String -> Float
 hexToFloat s =
     toFloat (hexToInt (String.slice 0 1 s) * 16 + (hexToInt <| String.slice 1 2 s)) / 255
+
+
+type IntOrEmpty
+    = Int Int
+    | Empty
+
+
+toIntOrEmpty : String -> Maybe IntOrEmpty
+toIntOrEmpty str =
+    if String.isEmpty str then
+        Just Empty
+
+    else
+        Maybe.map Int <| String.toInt str

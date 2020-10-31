@@ -56,7 +56,7 @@ view : Id (Harmonized g) -> Coll (Harmonized g) -> (Id (Harmonized g) -> String)
 view id coll getName =
     let
         harmo =
-            (Coll.get id coll).harmony
+            getHarmo id coll
     in
     Fract.toString harmo.fract
         ++ " de "
@@ -81,11 +81,7 @@ defaultRef =
 
 clean : Id (Harmonized g) -> Coll (Harmonized g) -> Coll (Harmonized g)
 clean id coll =
-    let
-        harmo =
-            (Coll.get id coll).harmony
-    in
-    case harmo.ref of
+    case (getHarmo id coll).ref of
         Other rId ->
             Coll.update (Coll.idMap rId) (remove id) coll
 
@@ -114,28 +110,12 @@ changeSelf id length coll =
 
 resizeFree : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
 resizeFree id length coll =
-    let
-        g =
-            Coll.get id coll
-
-        harmo =
-            g.harmony
-    in
-    case harmo.ref of
-        Self r ->
-            Coll.update id
-                (always { g | harmony = { harmo | ref = Self { r | unit = length / Fract.toFloat harmo.fract } } })
-                coll
-
-        Other rId ->
-            coll
-                |> Coll.update id (always { g | harmony = newSelf length })
-                |> Coll.update (Coll.idMap rId) (remove id)
+    changeSelf id (length / Fract.toFloat (getHarmo id coll).fract) coll
 
 
 getLengthId : Id (Harmonized g) -> Coll (Harmonized g) -> Float
 getLengthId id coll =
-    getLength (Coll.get id coll).harmony coll
+    getLength (getHarmo id coll) coll
 
 
 getLength : Harmony -> Coll (Harmonized g) -> Float
@@ -154,7 +134,11 @@ getLength harmo coll =
                     unit * Fract.toFloat harmo.fract
 
                 Other _ ->
-                    Debug.log "IMPOSSIBLE Ref isn’t a base" 0
+                    let
+                        _ =
+                            Debug.log "IMPOSSIBLE Ref isn’t a base" ( harmo, coll )
+                    in
+                    0
 
 
 newSelf : Float -> Harmony
@@ -178,7 +162,7 @@ hasHarmonics h =
 
 getHarmonicGroup : Id (Harmonized g) -> Coll (Harmonized g) -> List (Id (Harmonized g))
 getHarmonicGroup id coll =
-    case (Coll.get id coll).harmony.ref of
+    case (getHarmo id coll).ref of
         Self { group } ->
             id :: List.map Coll.idMap group
 
@@ -256,7 +240,11 @@ isActiveLink : Link (Harmonized g) -> Harmony -> Bool
 isActiveLink l h =
     case h.ref of
         Other _ ->
-            Debug.log "Can’t check active links if not base" False
+            let
+                _ =
+                    Debug.log "Can’t check active links if not base" h
+            in
+            False
 
         Self { links } ->
             List.any (Link.equal <| Link.map l) links
@@ -270,6 +258,11 @@ getLinks h =
 
         Self { links } ->
             List.map Link.map links
+
+
+getHarmo : Id (Harmonized g) -> Coll (Harmonized g) -> Harmony
+getHarmo id coll =
+    (Coll.get id coll).harmony
 
 
 encoder : Harmony -> List ( String, E.Value )

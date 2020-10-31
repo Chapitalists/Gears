@@ -90,7 +90,11 @@ get : Id item -> Coll item -> item
 get id (C coll) =
     case maybeGet id (C coll) of
         Nothing ->
-            Debug.log ("No " ++ coll.typeString ++ " for id " ++ (String.fromInt <| getIdInternal id)) coll.default
+            let
+                _ =
+                    Debug.log ("No " ++ coll.typeString ++ " for id " ++ (String.fromInt <| getIdInternal id)) coll
+            in
+            coll.default
 
         Just item ->
             item

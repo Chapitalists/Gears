@@ -47,9 +47,9 @@ fileName (S { path }) =
                             String.split "/" path
 
 
-getLoopPoints : Sound -> List Float
-getLoopPoints (S { startPercent, endPercent, duration }) =
-    [ startPercent * duration, endPercent * duration ]
+getLoopPercentsList : Sound -> List Float
+getLoopPercentsList (S { startPercent, endPercent }) =
+    [ startPercent, endPercent ]
 
 
 getLoopPercents : Sound -> ( Float, Float )
@@ -75,6 +75,33 @@ setLoop mays (S s) =
 
         _ ->
             S s
+
+
+divide : Int -> Sound -> ( List Sound, List Float )
+divide n (S s) =
+    let
+        durPercent =
+            s.endPercent - s.startPercent
+
+        mapPercent f =
+            s.startPercent + f * durPercent
+
+        nn =
+            toFloat n
+
+        fs =
+            List.range 1 n
+                |> List.map toFloat
+                |> List.map (\i -> ( (i - 1) / nn, i / nn ))
+                |> List.map (Tuple.mapBoth mapPercent mapPercent)
+
+        divs =
+            List.map Tuple.first <| List.drop 1 fs
+
+        sounds =
+            List.map (\tfs -> setLoop (Tuple.mapBoth Just Just tfs) <| S s) fs
+    in
+    ( sounds, divs )
 
 
 chgPath : Sound -> String -> Sound

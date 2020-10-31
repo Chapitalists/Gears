@@ -303,6 +303,10 @@ view doc =
                 [ width fill
                 , height fill
                 , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
+
+                -- THX to https://discourse.elm-lang.org/t/elm-ui-parent-element-grows-to-encompass-children-instead-of-scrolling/5032
+                , clip
+                , htmlAttribute <| Html.Attributes.style "flex-shrink" "1"
                 ]
                <|
                 viewContent doc
@@ -474,7 +478,11 @@ getViewingHelper l mob =
                     ViewRes mobile (Common.toUid next ++ parentUid) <| ( str, next ) :: cleanedView
 
                 _ ->
-                    Debug.log ("No mobile to view in " ++ str) <| ViewRes mob "" []
+                    let
+                        _ =
+                            Debug.log ("No mobile to view in " ++ str) mob
+                    in
+                    ViewRes mob "" []
 
         _ ->
             ViewRes mob "" []
@@ -491,7 +499,11 @@ updateViewing l f mobile =
                         mobile
 
                 _ ->
-                    Debug.log "IMPOSSIBLE View isn’t correct, should’ve been cleaned" mobile
+                    let
+                        _ =
+                            Debug.log "IMPOSSIBLE View isn’t correct, should’ve been cleaned" ( l, mobile )
+                    in
+                    mobile
 
         _ ->
             f mobile

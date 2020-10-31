@@ -21,7 +21,7 @@ type alias Wheeled a =
 
 type alias Wheel =
     { name : String
-    , startPercent : Float -- Percent of whole sound, not just looped part
+    , startPercent : Float --TODO Makes no sense, if specific to sound, should be in sound -- Percent of whole sound, not just looped part
     , volume : Float
     , content : WheelContent
     , viewContent : Bool
@@ -85,7 +85,7 @@ default =
 
 fromContent : Conteet -> Wheel
 fromContent c =
-    { default | content = C c }
+    (update (ChangeStart 0) { wheel = { default | content = C c } }).wheel
 
 
 type Mod
@@ -231,7 +231,12 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
             getLoopPercents { wheel = w }
 
         tickPercent =
-            (w.startPercent - loopStart) / (loopEnd - loopStart)
+            case w.content of
+                C (Content.S _) ->
+                    (w.startPercent - loopStart) / (loopEnd - loopStart)
+
+                _ ->
+                    0
 
         ( hoverAttrs, dragAttrs ) =
             Maybe.withDefault ( [], [] ) <|

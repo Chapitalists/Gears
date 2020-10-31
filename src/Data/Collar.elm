@@ -5,6 +5,7 @@ import Data.Content as Content exposing (Bead, Collar, Content)
 import Data.Wheel as Wheel exposing (Conteet, Wheel)
 import Json.Decode as D
 import Json.Encode as E
+import Sound exposing (Sound)
 
 
 type alias Colleer =
@@ -44,7 +45,52 @@ fromWheel w l =
     , loop = l
     , head = { length = l, wheel = w }
     , beads = []
+    , oneSound = Nothing
     }
+
+
+fromWheelMult : Wheel -> Int -> Float -> Colleer
+fromWheelMult w m l =
+    { matrice = m
+    , loop = l * toFloat m
+    , head = { length = l, wheel = w }
+    , beads = List.repeat (m - 1) { length = l, wheel = w }
+    , oneSound = Nothing
+    }
+
+
+fromSoundDiv : Sound -> Int -> Float -> Colleer
+fromSoundDiv s d l =
+    let
+        ( sounds, divs ) =
+            Sound.divide d s
+
+        loopPercents =
+            Sound.getLoopPercents s
+
+        contents =
+            List.map Content.S sounds
+
+        beads =
+            List.map beadFromContent contents
+    in
+    case beads of
+        head :: rest ->
+            { matrice = d
+            , loop = l
+            , head = head
+            , beads = rest
+            , oneSound =
+                Just
+                    { soundName = Sound.toString s
+                    , start = Tuple.first loopPercents
+                    , end = Tuple.second loopPercents
+                    , divs = divs
+                    }
+            }
+
+        _ ->
+            fromWheel (Wheel.fromContent <| Content.S s) l
 
 
 length : Colleer -> Int
@@ -89,12 +135,14 @@ add i b c =
             | head = b
             , beads = c.head :: c.beads
             , matrice = c.matrice + 1
+            , oneSound = Nothing
         }
 
     else
         { c
             | beads = List.concat [ List.take (i - 1) c.beads, [ b ], List.drop (i - 1) c.beads ]
             , matrice = c.matrice + 1
+            , oneSound = Nothing
         }
 
 
@@ -110,6 +158,7 @@ rm i c =
                     | head = head
                     , beads = beads
                     , matrice = c.matrice - 1
+                    , oneSound = Nothing
                 }
 
             ( j, beads ) ->
@@ -121,6 +170,7 @@ rm i c =
 
                         else
                             c.matrice
+                    , oneSound = Nothing
                 }
 
 

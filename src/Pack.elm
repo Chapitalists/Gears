@@ -174,7 +174,7 @@ view pack events wrap interactable surfaceInter wrapInteract =
             ([ Border.color <| rgb 0 0 0
              , Border.width 4
              , Bg.color <| rgb 1 1 1
-             , alignBottom
+             , alignTop
              , alignRight
              ]
                 ++ (List.map Element.htmlAttribute <|
