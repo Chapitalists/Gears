@@ -98,6 +98,9 @@ let scheduler = {
     model.updateVolume()
     
     if (model.soundName) {
+      // WARNING in model, startPercent is of whole sound, here it’s of content
+      model.startPercent = (model.startPercent - model.loopPercents[0]) / (model.loopPercents[1] - model.loopPercents[0])
+
       model.players = []
       model.freePlayer = function(startTime) {
         setTimeout(
@@ -119,6 +122,7 @@ let scheduler = {
     if (model.collar) {
       // WARNING collarOffset : ignore collar startPercent because it’s broken now (see todolist)
       model.startPercent = 0
+
       model.nextBead = 0
       model.duration = model.collar.duration
       model.beadsDurs = model.collar.beads.map(v => v.length)
@@ -132,6 +136,9 @@ let scheduler = {
     }
     
     if (model.mobile) {
+      // WARNING mobileOffset : ignore mobile startPercent because it’s broken now (see todolist)
+      model.startPercent = 0
+
       model.duration = model.mobile.duration
       model.rate = parentRate * model.duration / model.length
       model.subWheels = model.mobile.gears.map(v => this.prepare(t, v, model.gainNode, model.rate))
