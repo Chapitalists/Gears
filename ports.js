@@ -98,6 +98,7 @@ function cutSample(infos) {
     if (!buffers[infos.fromFileName]) {console.error(infos.fromFileName + " ain’t loaded, cannot cut");return;}
 
     let buf = buffers[infos.fromFileName]
+      // TODO maybe round ?
       , start = infos.percents[0] * buf.length - 1
       , end = infos.percents[1] * buf.length + 1
       , newBuf = new AudioBuffer(

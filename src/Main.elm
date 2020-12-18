@@ -325,6 +325,10 @@ update msg model =
                                                             Just str ->
                                                                 case searchReplacement str soundLib of
                                                                     Nothing ->
+                                                                        let
+                                                                            _ =
+                                                                                Debug.log "Cannot find replacement for a sound" str
+                                                                        in
                                                                         Nothing
 
                                                                     Just p ->

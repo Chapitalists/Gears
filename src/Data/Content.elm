@@ -100,8 +100,8 @@ beadDecoder wheelDecoder =
 
 
 type alias Collar item =
-    { matrice : Int
-    , loop : Float
+    { matrice : Int -- nth bead to include in collar size (start to nth’s end)
+    , loop : Float -- start point of loop in percent of full collar (then loops to end)
     , head : Bead item
     , beads : List (Bead item)
 

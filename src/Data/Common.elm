@@ -174,7 +174,7 @@ updateWheel ( id, list ) msg m =
                         _ ->
                             let
                                 _ =
-                                    Debug.log "Wrong identifier to delete bead" ( ( id, l ), msg, m )
+                                    Debug.log "Wrong identifier to update bead" ( ( id, l ), msg, m )
                             in
                             w
     in

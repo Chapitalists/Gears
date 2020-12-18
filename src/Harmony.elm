@@ -12,6 +12,8 @@ import Round
 
 -- TODO Keep Ref internal
 -- TODO Debug.log reveals impossible cases, maybe make fns with ’em intern and expose a safe version, higher level
+-- TODO Why Other can’t point to Other ? every fn could be recursive this way and no fallback cases
+--      But there could be circular references instead…
 
 
 type alias Harmony =
