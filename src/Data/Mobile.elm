@@ -8,7 +8,8 @@ import Data.Wheel as Wheel exposing (Conteet, Wheel)
 import Harmony as Harmo exposing (Harmony)
 import Json.Decode as D
 import Json.Encode as E
-import Math.Vector2 exposing (Vec2)
+import Link exposing (DrawLink, Link)
+import Math.Vector2 as Vec exposing (Vec2)
 import Motor
 
 
@@ -59,6 +60,39 @@ newSizedGear p l w =
     { pos = p, harmony = Harmo.newSelf l, motor = [], wheel = w }
 
 
+copy : Vec2 -> Id Geer -> Coll Geer -> Coll Geer
+copy move id coll =
+    let
+        g =
+            Coll.get id coll
+
+        newG =
+            { g
+                | pos = Vec.add g.pos move
+                , motor = []
+            }
+
+        ( newId, newColl ) =
+            Coll.insertTellId newG coll
+    in
+    Harmo.makeCopy id newId newColl
+
+
+toDrawLink : Coll Geer -> Link Geer -> DrawLink
+toDrawLink coll l =
+    let
+        get id =
+            Coll.get id coll
+
+        toCircle g =
+            { c = g.pos, d = getLength g coll }
+
+        f =
+            get >> toCircle
+    in
+    Tuple.mapBoth f f l
+
+
 
 -- TODO remove and use Common.getName instead
 
@@ -76,13 +110,23 @@ gearName id coll =
         name
 
 
+getLengthId : Id Geer -> Coll Geer -> Float
+getLengthId =
+    Harmo.getLengthId getWheeledContentLength
+
+
+getLength : Geer -> Coll Geer -> Float
+getLength =
+    Harmo.getLength getWheeledContentLength
+
+
 gearPosSize : Id Geer -> Coll Geer -> ( Vec2, Float )
 gearPosSize id coll =
     let
         g =
             Coll.get id coll
     in
-    ( g.pos, Harmo.getLength g.harmony coll )
+    ( g.pos, getLength g coll )
 
 
 rm : Id Geer -> Mobeel -> Mobeel

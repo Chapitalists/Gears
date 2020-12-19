@@ -1,12 +1,11 @@
 module Data.Gear exposing (..)
 
-import Coll exposing (Coll, Id)
+import Coll exposing (Id)
 import Fraction as Fract exposing (Fraction)
 import Harmony as Harmo exposing (Harmony)
 import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Encode as E
-import Link exposing (DrawLink, Link)
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Motor exposing (Motor)
 
@@ -28,46 +27,6 @@ default w =
 toUID : Id (Gear w) -> String
 toUID id =
     typeString ++ "-" ++ Coll.idToString id
-
-
-copy : Id (Gear w) -> Coll (Gear w) -> Coll (Gear w)
-copy id coll =
-    let
-        g =
-            Coll.get id coll
-
-        base =
-            Coll.idMap <| Maybe.withDefault id <| Harmo.getBaseId g.harmony
-
-        newG =
-            { g
-                | pos = Vec.add g.pos (vec2 (Harmo.getLength g.harmony coll * 1.1) 0)
-                , harmony = { fract = g.harmony.fract, ref = Harmo.Other <| Coll.idMap base } -- TODO abuses harmo internals
-                , motor = []
-            }
-
-        ( newId, newColl ) =
-            Coll.insertTellId newG coll
-
-        newLink =
-            Link.map ( id, newId )
-    in
-    Coll.update base (Harmo.insert newId >> Harmo.addLink newLink) newColl
-
-
-toDrawLink : Coll (Gear w) -> Link (Gear w) -> DrawLink
-toDrawLink coll l =
-    let
-        get id =
-            Coll.get id coll
-
-        toCircle g =
-            { c = g.pos, d = Harmo.getLength g.harmony coll }
-
-        f =
-            get >> toCircle
-    in
-    Tuple.mapBoth f f l
 
 
 encoder : (w -> List ( String, E.Value )) -> Gear w -> E.Value
