@@ -764,7 +764,7 @@ update msg ( model, mobile ) =
                     Coll.get id mobile.gears
 
                 newMotor =
-                    { m | motor = Motor.default, harmony = Harmo.newSelf <| Mobile.getLength m mobile.gears }
+                    { m | motor = Motor.default, harmony = Harmo.newDuration <| Mobile.getLength m mobile.gears }
 
                 subMobile =
                     List.foldl
@@ -776,7 +776,7 @@ update msg ( model, mobile ) =
                                 newG =
                                     { g
                                         | motor = Motor.default
-                                        , harmony = Harmo.newSelf <| Mobile.getLength g mobile.gears
+                                        , harmony = Harmo.newDuration <| Mobile.getLength g mobile.gears
                                     }
                             in
                             { acc | gears = Coll.insert newG acc.gears }

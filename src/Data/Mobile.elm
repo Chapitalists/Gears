@@ -49,7 +49,7 @@ defaultGear =
 gearFromContent : Conteet -> Vec2 -> Geer
 gearFromContent c pos =
     { pos = pos
-    , harmony = Harmo.newSelf <| getContentLength c
+    , harmony = Harmo.newDuration <| getContentLength c
     , motor = []
     , wheel = Wheel.fromContent c
     }
@@ -57,7 +57,7 @@ gearFromContent c pos =
 
 newSizedGear : Vec2 -> Float -> Wheel -> Geer
 newSizedGear p l w =
-    { pos = p, harmony = Harmo.newSelf l, motor = [], wheel = w }
+    { pos = p, harmony = Harmo.newDuration l, motor = [], wheel = w }
 
 
 copy : Vec2 -> Id Geer -> Coll Geer -> Coll Geer

@@ -44,8 +44,8 @@ setFract fract g =
 
 
 type SelfUnit
-    = ContentLength
-    | Unit Float
+    = Rate Float -- Duration / Content length
+    | Duration Float
 
 
 type Ref
@@ -69,11 +69,11 @@ view id coll getName =
         ++ (case harmo.ref of
                 Self { unit } ->
                     case unit of
-                        Unit float ->
-                            " de " ++ Round.round 2 float
+                        Duration d ->
+                            " de " ++ Round.round 2 d
 
-                        ContentLength ->
-                            " du contenu"
+                        Rate r ->
+                            " du contenu x" ++ Round.round 2 (1 / r)
 
                 Other rId ->
                     let
@@ -83,11 +83,11 @@ view id coll getName =
                     case (Coll.get (Coll.idMap rId) coll).harmony.ref of
                         Self { unit } ->
                             case unit of
-                                Unit float ->
-                                    " de " ++ Round.round 2 float ++ " ( " ++ name ++ " )"
+                                Duration d ->
+                                    " de " ++ Round.round 2 d ++ " ( " ++ name ++ " )"
 
-                                ContentLength ->
-                                    " du contenu de " ++ name
+                                Rate r ->
+                                    " du contenu de " ++ name ++ " x" ++ Round.round 2 (1 / r)
 
                         Other _ ->
                             Debug.log "IMPOSSIBLE Other refer to another Other" "BUG Harmo.view"
@@ -96,7 +96,7 @@ view id coll getName =
 
 defaultRef : Ref
 defaultRef =
-    Self { unit = ContentLength, group = [], links = [] }
+    Self { unit = Rate 1, group = [], links = [] }
 
 
 clean : Id (Harmonized g) -> Coll (Harmonized g) -> Coll (Harmonized g)
@@ -110,7 +110,7 @@ clean id coll =
 
 
 changeSelf : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
-changeSelf id length coll =
+changeSelf id dur coll =
     let
         g =
             Coll.get id coll
@@ -120,11 +120,11 @@ changeSelf id length coll =
     in
     case harmo.ref of
         Self r ->
-            Coll.update id (always { g | harmony = { harmo | ref = Self { r | unit = Unit length } } }) coll
+            Coll.update id (always { g | harmony = { harmo | ref = Self { r | unit = Duration dur } } }) coll
 
         Other rId ->
             coll
-                |> Coll.update id (always { g | harmony = newSelf length })
+                |> Coll.update id (always { g | harmony = newDuration dur })
                 |> Coll.update (Coll.idMap rId) (remove id)
 
 
@@ -137,11 +137,11 @@ toContentLength : Id (Harmonized g) -> Coll (Harmonized g) -> Coll (Harmonized g
 toContentLength id coll =
     case (getHarmo id coll).ref of
         Self _ ->
-            Coll.update id (\g -> { g | harmony = newContentLength }) coll
+            Coll.update id (\g -> { g | harmony = newRate 1 }) coll
 
         Other rId ->
             coll
-                |> Coll.update id (\g -> { g | harmony = newContentLength })
+                |> Coll.update id (\g -> { g | harmony = newRate 1 })
                 |> Coll.update (Coll.idMap rId) (remove id)
 
 
@@ -180,11 +180,11 @@ getLength getContentLength el coll =
             case harmo.ref of
                 Self { unit } ->
                     case unit of
-                        Unit float ->
-                            float
+                        Duration d ->
+                            d
 
-                        ContentLength ->
-                            getContentLength el
+                        Rate r ->
+                            r * getContentLength el
 
                 Other idd ->
                     let
@@ -197,11 +197,11 @@ getLength getContentLength el coll =
                     case ref of
                         Self { unit } ->
                             case unit of
-                                Unit float ->
-                                    float
+                                Duration d ->
+                                    d
 
-                                ContentLength ->
-                                    getContentLength ell
+                                Rate r ->
+                                    r * getContentLength ell
 
                         Other _ ->
                             let
@@ -213,14 +213,14 @@ getLength getContentLength el coll =
     Fract.toFloat harmo.fract * refUnit
 
 
-newSelf : Float -> Harmony
-newSelf length =
-    { fract = Fract.integer 1, ref = Self { unit = Unit length, group = [], links = [] } }
+newDuration : Float -> Harmony
+newDuration d =
+    { fract = Fract.integer 1, ref = Self { unit = Duration d, group = [], links = [] } }
 
 
-newContentLength : Harmony
-newContentLength =
-    { fract = Fract.integer 1, ref = Self { unit = ContentLength, group = [], links = [] } }
+newRate : Float -> Harmony
+newRate r =
+    { fract = Fract.integer 1, ref = Self { unit = Rate r, group = [], links = [] } }
 
 
 hasHarmonics : Harmony -> Bool
@@ -364,20 +364,20 @@ decoder =
 selfUnitEncoder : SelfUnit -> List ( String, E.Value )
 selfUnitEncoder su =
     case su of
-        ContentLength ->
-            []
+        Rate r ->
+            [ ( "rate", E.float r ) ]
 
-        Unit f ->
-            [ ( "unit", E.float f ) ]
+        Duration d ->
+            [ ( "duration", E.float d ) ]
 
 
 selfUnitDecoder : D.Decoder SelfUnit
 selfUnitDecoder =
-    Field.attempt "unit" D.float <|
-        \mayUnit ->
-            D.succeed <|
-                Maybe.withDefault ContentLength <|
-                    Maybe.map Unit mayUnit
+    D.oneOf
+        [ Field.require "unit" D.float <| \d -> D.succeed <| Duration d
+        , Field.require "duration" D.float <| \d -> D.succeed <| Duration d
+        , Field.require "rate" D.float <| \r -> D.succeed <| Rate r
+        ]
 
 
 refEncoder : Ref -> E.Value
