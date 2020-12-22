@@ -44,12 +44,12 @@ encoder wEncoder g =
             ++ wEncoder g.wheel
 
 
-decoder : D.Decoder w -> D.Decoder (Gear w)
-decoder wDecoder =
+decoder : D.Decoder w -> (w -> Float) -> D.Decoder (Gear w)
+decoder wDecoder wheelToContentLength =
     wDecoder
         |> D.andThen
             (\w ->
-                Harmo.decoder
+                Harmo.decoder (wheelToContentLength w)
                     |> D.andThen
                         (\harmo ->
                             Field.require "motors" Motor.decoder <|

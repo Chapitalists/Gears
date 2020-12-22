@@ -349,9 +349,9 @@ encoder h =
     ]
 
 
-decoder : D.Decoder Harmony
-decoder =
-    Field.require "ref" refDecoder <|
+decoder : Float -> D.Decoder Harmony
+decoder contentLength =
+    Field.require "ref" (refDecoder contentLength) <|
         \ref ->
             Field.require "fract" Fract.decoder <|
                 \fract ->
@@ -371,10 +371,10 @@ selfUnitEncoder su =
             [ ( "duration", E.float d ) ]
 
 
-selfUnitDecoder : D.Decoder SelfUnit
-selfUnitDecoder =
+selfUnitDecoder : Float -> D.Decoder SelfUnit
+selfUnitDecoder contentLength =
     D.oneOf
-        [ Field.require "unit" D.float <| \d -> D.succeed <| Duration d
+        [ Field.require "unit" D.float <| \d -> D.succeed <| Rate (d / contentLength)
         , Field.require "duration" D.float <| \d -> D.succeed <| Duration d
         , Field.require "rate" D.float <| \r -> D.succeed <| Rate r
         ]
@@ -394,8 +394,8 @@ refEncoder ref =
                     ++ selfUnitEncoder r.unit
 
 
-refDecoder : D.Decoder Ref
-refDecoder =
+refDecoder : Float -> D.Decoder Ref
+refDecoder contentLength =
     Field.attempt "other" Coll.idDecoder <|
         \mayId ->
             case mayId of
@@ -403,7 +403,7 @@ refDecoder =
                     D.succeed <| Other id
 
                 Nothing ->
-                    selfUnitDecoder
+                    selfUnitDecoder contentLength
                         |> (D.andThen <|
                                 \unit ->
                                     Field.require "group" (D.list Coll.idDecoder) <|

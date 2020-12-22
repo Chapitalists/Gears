@@ -500,9 +500,9 @@ encoder w =
     ]
 
 
-decoder : D.Decoder Wheel
-decoder =
-    Content.decoder (D.lazy (\_ -> decoder)) default
+decoder : (Conteet -> Float) -> D.Decoder Wheel
+decoder getContentLength =
+    Content.decoder (D.lazy (\_ -> decoder getContentLength)) (getContentLength << getWheelContent) default
         |> D.andThen
             (\content ->
                 Field.attempt "viewContent" D.bool <|

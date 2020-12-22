@@ -28,11 +28,11 @@ encoder wheelEncoder content =
             ( "collar", collarEncoder wheelEncoder c )
 
 
-decoder : D.Decoder item -> item -> D.Decoder (Content item)
-decoder wheelDecoder defaultWheel =
+decoder : D.Decoder item -> (item -> Float) -> item -> D.Decoder (Content item)
+decoder wheelDecoder wheelToCententLength defaultWheel =
     D.oneOf
         [ Field.require "sound" Sound.decoder <| \sound -> D.succeed <| S sound
-        , Field.require "mobile" (mobileDecoder wheelDecoder defaultWheel) <| \mobile -> D.succeed <| M mobile
+        , Field.require "mobile" (mobileDecoder wheelDecoder wheelToCententLength defaultWheel) <| \mobile -> D.succeed <| M mobile
         , Field.require "collar" (collarDecoder wheelDecoder) <| \collar -> D.succeed <| C collar
         ]
 
@@ -61,13 +61,13 @@ mobileEncoder wheelEncoder m =
         ]
 
 
-mobileDecoder : D.Decoder item -> item -> D.Decoder (Mobile item)
-mobileDecoder wheelDecoder defaultWheel =
+mobileDecoder : D.Decoder item -> (item -> Float) -> item -> D.Decoder (Mobile item)
+mobileDecoder wheelDecoder wheelToContentLength defaultWheel =
     D.succeed Mobile
         |> required "motor" Coll.idDecoder
         |> required "gears"
             (Coll.decoder
-                (Gear.decoder wheelDecoder)
+                (Gear.decoder wheelDecoder wheelToContentLength)
                 Gear.typeString
              <|
                 Gear.default defaultWheel

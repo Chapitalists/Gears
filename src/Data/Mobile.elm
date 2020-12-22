@@ -177,4 +177,4 @@ encoder =
 
 decoder : D.Decoder Mobeel
 decoder =
-    Content.mobileDecoder Wheel.decoder Wheel.default
+    Content.mobileDecoder (Wheel.decoder getContentLength) (getContentLength << Wheel.getWheelContent) Wheel.default

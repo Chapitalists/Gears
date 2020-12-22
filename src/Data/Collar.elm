@@ -186,4 +186,4 @@ encoder =
 
 decoder : D.Decoder Colleer
 decoder =
-    Content.collarDecoder Wheel.decoder
+    Content.collarDecoder (Wheel.decoder getContentLength)
