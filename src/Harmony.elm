@@ -109,8 +109,8 @@ clean id coll =
             Debug.todo "Clean Base"
 
 
-changeSelf : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
-changeSelf id dur coll =
+changeSelfUnit : Id (Harmonized g) -> SelfUnit -> Coll (Harmonized g) -> Coll (Harmonized g)
+changeSelfUnit id su coll =
     let
         g =
             Coll.get id coll
@@ -120,17 +120,27 @@ changeSelf id dur coll =
     in
     case harmo.ref of
         Self r ->
-            Coll.update id (always { g | harmony = { harmo | ref = Self { r | unit = Duration dur } } }) coll
+            Coll.update id (always { g | harmony = { harmo | ref = Self { r | unit = su } } }) coll
 
         Other rId ->
             coll
-                |> Coll.update id (always { g | harmony = newDuration dur })
+                |> Coll.update id (always { g | harmony = newHarmoWithSelfUnit su })
                 |> Coll.update (Coll.idMap rId) (remove id)
 
 
-resizeFree : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
-resizeFree id length coll =
-    changeSelf id (length / Fract.toFloat (getHarmo id coll).fract) coll
+changeRate : Id (Harmonized g) -> Float -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
+changeRate id newDur contentLength =
+    changeSelfUnit id <| Rate (newDur / contentLength)
+
+
+changeDuration : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
+changeDuration id newDur =
+    changeSelfUnit id <| Duration newDur
+
+
+resizeFree : Id (Harmonized g) -> Float -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
+resizeFree id length contentLength coll =
+    changeRate id (length / Fract.toFloat (getHarmo id coll).fract) contentLength coll
 
 
 toContentLength : Id (Harmonized g) -> Coll (Harmonized g) -> Coll (Harmonized g)
@@ -213,14 +223,19 @@ getLength getContentLength el coll =
     Fract.toFloat harmo.fract * refUnit
 
 
+newHarmoWithSelfUnit : SelfUnit -> Harmony
+newHarmoWithSelfUnit su =
+    { fract = Fract.integer 1, ref = Self { unit = su, group = [], links = [] } }
+
+
 newDuration : Float -> Harmony
 newDuration d =
-    { fract = Fract.integer 1, ref = Self { unit = Duration d, group = [], links = [] } }
+    newHarmoWithSelfUnit <| Duration d
 
 
 newRate : Float -> Harmony
 newRate r =
-    { fract = Fract.integer 1, ref = Self { unit = Rate r, group = [], links = [] } }
+    newHarmoWithSelfUnit <| Rate r
 
 
 hasHarmonics : Harmony -> Bool

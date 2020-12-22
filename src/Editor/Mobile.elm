@@ -472,52 +472,6 @@ update msg ( model, mobile ) =
             }
 
         DeleteWheel ( id, l ) ->
-            let
-                newMob =
-                    CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
-
-                finalMob =
-                    case l of
-                        [ i ] ->
-                            let
-                                colId =
-                                    ( id, [] )
-
-                                mayOldCol =
-                                    case Wheel.getWheelContent <| CommonData.getWheel colId mobile of
-                                        Content.C col ->
-                                            Just col
-
-                                        _ ->
-                                            Nothing
-
-                                mayNewCol =
-                                    case Wheel.getWheelContent <| CommonData.getWheel colId newMob of
-                                        Content.C col ->
-                                            Just col
-
-                                        _ ->
-                                            Nothing
-
-                                mayOldContentLength =
-                                    Maybe.map Collar.getTotalLength mayOldCol
-
-                                mayNewContentLength =
-                                    Maybe.map Collar.getTotalLength mayNewCol
-
-                                oldLength =
-                                    Mobile.getLengthId id mobile.gears
-                            in
-                            case Maybe.map2 Tuple.pair mayOldContentLength mayNewContentLength of
-                                Just ( oldCL, newCL ) ->
-                                    { newMob | gears = Harmo.changeSelf id (newCL * oldLength / oldCL) newMob.gears }
-
-                                Nothing ->
-                                    newMob
-
-                        _ ->
-                            newMob
-            in
             { return
                 | model =
                     { model
@@ -551,7 +505,7 @@ update msg ( model, mobile ) =
                     }
                 , toUndo = Do
                 , toEngine = [ Engine.stop ]
-                , mobile = finalMob
+                , mobile = CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
             }
 
         EnteredFract isNumerator str ->
@@ -738,9 +692,7 @@ update msg ( model, mobile ) =
                 | mobile =
                     { mobile
                         | gears =
-                            Harmo.changeSelf id
-                                (CommonData.getWheeledContentLength <| Coll.get id mobile.gears)
-                                mobile.gears
+                            Harmo.toContentLength id mobile.gears
                     }
                 , toUndo = Do
             }
@@ -764,7 +716,11 @@ update msg ( model, mobile ) =
                     Coll.get id mobile.gears
 
                 newMotor =
-                    { m | motor = Motor.default, harmony = Harmo.newDuration <| Mobile.getLength m mobile.gears }
+                    { m
+                        | motor = Motor.default
+                        , harmony =
+                            Harmo.newRate (Mobile.getLength m mobile.gears / CommonData.getWheeledContentLength m)
+                    }
 
                 subMobile =
                     List.foldl
@@ -776,7 +732,9 @@ update msg ( model, mobile ) =
                                 newG =
                                     { g
                                         | motor = Motor.default
-                                        , harmony = Harmo.newDuration <| Mobile.getLength g mobile.gears
+                                        , harmony =
+                                            Harmo.newRate
+                                                (Mobile.getLength g mobile.gears / CommonData.getWheeledContentLength g)
                                     }
                             in
                             { acc | gears = Coll.insert newG acc.gears }
@@ -803,13 +761,16 @@ update msg ( model, mobile ) =
                 l =
                     Mobile.getLength g mobile.gears
 
+                contentLength =
+                    CommonData.getWheeledContentLength g
+
                 collar =
                     case collaring of
                         Simple ->
                             Collar.fromWheel g.wheel l
 
                         Mult i ->
-                            Collar.fromWheelMult g.wheel i l
+                            Collar.fromWheelMult g.wheel i contentLength
 
                         Div s i ->
                             Collar.fromSoundDiv s i l
@@ -819,8 +780,8 @@ update msg ( model, mobile ) =
 
                 res =
                     case collaring of
-                        Mult i ->
-                            Harmo.changeSelf id (toFloat i * l) tmp
+                        Mult _ ->
+                            Harmo.changeRate id l contentLength tmp
 
                         _ ->
                             tmp
@@ -2018,11 +1979,12 @@ doResize id d add mobile =
         newSize =
             abs <| dd * 2 + length
     in
-    { mobile | gears = Harmo.resizeFree id newSize gears }
+    { mobile | gears = Harmo.resizeFree id newSize (CommonData.getWheeledContentLength <| Coll.get id gears) gears }
 
 
 doChangeContent : Id Geer -> Conteet -> Maybe Float -> Model -> Mobeel -> Return
 doChangeContent id c mayColor model mobile =
+    -- TODO probably needs to keep duration instead of rate when changing content
     let
         return =
             { model = model
@@ -2085,19 +2047,10 @@ addBead model mobile bead =
                             CommonData.updateWheel ( id, [] )
                                 (Wheel.ChangeContent <| Content.C newCol)
                                 mobile
-
-                        oldLength =
-                            Mobile.getLengthId id mobile.gears
-
-                        oldContentLength =
-                            Collar.getTotalLength col
-
-                        newContentLength =
-                            Collar.getTotalLength newCol
                     in
                     Just
                         ( { model | beadCursor = model.beadCursor + 1 }
-                        , { newMob | gears = Harmo.changeSelf id (newContentLength * oldLength / oldContentLength) newMob.gears }
+                        , newMob
                         , id
                         )
 
@@ -2388,27 +2341,7 @@ manageInteractEvent event model mobile =
                                                     in
                                                     case interactWave g event model mobile of
                                                         Just subMsg ->
-                                                            let
-                                                                ret =
-                                                                    update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
-
-                                                                newMob =
-                                                                    ret.mobile
-
-                                                                oldPercents =
-                                                                    Wheel.getLoopPercents (Coll.get id mobile.gears)
-
-                                                                newPercents =
-                                                                    Wheel.getLoopPercents (Coll.get id newMob.gears)
-
-                                                                ratio =
-                                                                    (Tuple.second newPercents - Tuple.first newPercents)
-                                                                        / (Tuple.second oldPercents - Tuple.first oldPercents)
-
-                                                                oldLength =
-                                                                    Mobile.getLengthId id mobile.gears
-                                                            in
-                                                            { ret | mobile = { newMob | gears = Harmo.changeSelf id (ratio * oldLength) newMob.gears } }
+                                                            update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
 
                                                         Nothing ->
                                                             return
