@@ -47,7 +47,7 @@ port openMic : () -> Cmd msg
 port micOpened : (() -> msg) -> Sub msg
 
 
-port inputRec : String -> Cmd msg
+port inputRec : ( String, Int ) -> Cmd msg
 
 
 port gotNewSample : (D.Value -> msg) -> Sub msg
@@ -80,7 +80,7 @@ main =
 type alias Model =
     { connected : Bool
     , currentUrl : Url.Url
-    , micState : Maybe ( Bool, String )
+    , micState : Maybe ( Bool, ( String, Int ) ) -- Recording, FileName, Latency in ms
     , soundList : Dict String SoundListType
     , loadedSoundList : List Sound
     , showDirLoad : Bool
@@ -155,8 +155,9 @@ type Msg
     | RequestOpenMic
     | MicOpened
     | StartMicRec
-    | EndMicRec String
+    | EndMicRec String Int
     | EnteredNewRecName String
+    | EnteredMicLatency String
     | ClickedUploadSound
     | UploadSounds File (List File)
     | GotNewSample (Result D.Error File)
@@ -510,20 +511,35 @@ update msg model =
             ( model, openMic () )
 
         MicOpened ->
-            ( { model | micState = Just ( False, "" ) }, Cmd.none )
+            ( { model | micState = Just ( False, ( "", 0 ) ) }, Cmd.none )
 
         StartMicRec ->
             ( { model | micState = Maybe.map (Tuple.mapFirst <| always True) model.micState }
-            , inputRec ""
+            , inputRec ( "", 0 )
             )
 
-        EndMicRec fileName ->
+        EndMicRec fileName latency ->
             ( { model | micState = Maybe.map (Tuple.mapFirst <| always False) model.micState }
-            , inputRec fileName
+            , inputRec ( fileName, latency )
             )
 
         EnteredNewRecName fileName ->
-            ( { model | micState = Maybe.map (Tuple.mapSecond <| always fileName) model.micState }
+            ( { model | micState = Maybe.map (Tuple.mapSecond <| Tuple.mapFirst <| always fileName) model.micState }
+            , Cmd.none
+            )
+
+        EnteredMicLatency lat ->
+            ( { model
+                | micState =
+                    Maybe.map
+                        (Tuple.mapSecond <|
+                            Tuple.mapSecond <|
+                                always <|
+                                    Maybe.withDefault 0 <|
+                                        String.toInt lat
+                        )
+                        model.micState
+              }
             , Cmd.none
             )
 
@@ -886,16 +902,24 @@ viewSounds model =
                 viewOpenRefreshButtons ClickedUploadSound RequestSoundList model.connected
             , column [ width fill, spacing 20 ] <|
                 case model.micState of
-                    Just ( False, name ) ->
-                        [ Input.button []
-                            { onPress =
-                                if String.isEmpty name then
-                                    Nothing
+                    Just ( False, ( name, latency ) ) ->
+                        [ row []
+                            [ Input.button []
+                                { onPress =
+                                    if String.isEmpty name then
+                                        Nothing
 
-                                else
-                                    Just StartMicRec
-                            , label = text "Rec Mic"
-                            }
+                                    else
+                                        Just StartMicRec
+                                , label = text "Rec Mic"
+                                }
+                            , Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
+                                { text = String.fromInt latency
+                                , placeholder = Nothing
+                                , label = Input.labelHidden "Mic latency in ms"
+                                , onChange = EnteredMicLatency
+                                }
+                            ]
                         , Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
                             { text = name
                             , placeholder = Just <| Input.placeholder [] <| text "Nom du fichier"
@@ -904,8 +928,8 @@ viewSounds model =
                             }
                         ]
 
-                    Just ( True, name ) ->
-                        [ Input.button [] { onPress = Just <| EndMicRec name, label = text "Stop Mic" }
+                    Just ( True, ( name, latency ) ) ->
+                        [ Input.button [] { onPress = Just <| EndMicRec name latency, label = text "Stop Mic" }
                         , text name
                         ]
 
