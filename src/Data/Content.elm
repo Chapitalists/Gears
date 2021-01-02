@@ -342,7 +342,25 @@ getBead i c =
 
 
 updateBead : Int -> (Bead item -> Bead item) -> Collar item -> Collar item
-updateBead i f c =
+updateBead =
+    updateBeadHelper False
+
+
+updateBeadKeepOneSound : Int -> (Bead item -> Bead item) -> Collar item -> Collar item
+updateBeadKeepOneSound =
+    updateBeadHelper True
+
+
+updateBeadHelper : Bool -> Int -> (Bead item -> Bead item) -> Collar item -> Collar item
+updateBeadHelper keepOneSound i f collar =
+    let
+        c =
+            if keepOneSound then
+                collar
+
+            else
+                { collar | oneSound = Nothing }
+    in
     if i <= 0 then
         { c | head = f c.head }
 

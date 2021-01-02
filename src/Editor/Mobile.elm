@@ -2556,8 +2556,17 @@ interactSelectEdit event mobile model =
                         in
                         Just ( { model | edit = [ id ], wave = wave }, Cmd.map WaveMsg cmd )
 
-                    Content.C _ ->
-                        Just ( { model | edit = [ id ], beadCursor = 0 }, Cmd.none )
+                    Content.C c ->
+                        case c.oneSound of
+                            Just one ->
+                                let
+                                    ( wave, cmd ) =
+                                        Waveform.update (Waveform.ChgSound one.soundName) model.wave
+                                in
+                                Just ( { model | edit = [ id ], beadCursor = 0, wave = wave }, Cmd.map WaveMsg cmd )
+
+                            Nothing ->
+                                Just ( { model | edit = [ id ], beadCursor = 0 }, Cmd.none )
 
                     _ ->
                         Just ( { model | edit = [ id ] }, Cmd.none )
