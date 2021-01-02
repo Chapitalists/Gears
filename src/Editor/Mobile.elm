@@ -2769,7 +2769,22 @@ interactWave g event model mobile =
                     Just <| Wheel.ChangeStart <| move absD <| g.wheel.startPercent
 
                 Divide i ->
-                    Nothing
+                    let
+                        mayCollar =
+                            case Wheel.getContent g of
+                                Content.C collar ->
+                                    Just collar
+
+                                _ ->
+                                    Nothing
+
+                        mayDivs =
+                            Maybe.map .divs <| Maybe.andThen .oneSound mayCollar
+
+                        mayPercent =
+                            Maybe.andThen (List.head << List.drop i) mayDivs
+                    in
+                    mayPercent |> Maybe.andThen (\percent -> Just <| Wheel.ChangeDiv i <| move absD percent)
 
         ( IWaveSel, Interact.Dragged { absD } _ _ ) ->
             let

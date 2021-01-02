@@ -110,6 +110,214 @@ type alias Collar item =
     }
 
 
+
+-- TODO doesn’t updates collar.loop…
+
+
+setCollarLoop :
+    (( Maybe Float, Maybe Float ) -> Bead item -> Bead item)
+    -> ( Maybe Float, Maybe Float )
+    -> Collar item
+    -> Collar item
+setCollarLoop chgBeadLoop mayPoints c =
+    case c.oneSound of
+        Nothing ->
+            c
+
+        Just one ->
+            case mayPoints of
+                ( Nothing, Just end ) ->
+                    let
+                        safeEnd =
+                            clamp one.start 1 end
+
+                        newDivs =
+                            List.filter (\x -> x < safeEnd) one.divs
+                    in
+                    if List.isEmpty newDivs then
+                        { c | oneSound = Nothing, matrice = 1, beads = [], head = chgBeadLoop mayPoints c.head }
+
+                    else
+                        let
+                            nBeads =
+                                List.length newDivs
+
+                            tmpBeads =
+                                List.take nBeads c.beads
+
+                            newBeads =
+                                List.indexedMap
+                                    (\i ->
+                                        if i == nBeads - 1 then
+                                            chgBeadLoop mayPoints
+
+                                        else
+                                            identity
+                                    )
+                                    tmpBeads
+                        in
+                        { c
+                            | matrice = nBeads + 1
+                            , beads = newBeads
+                            , oneSound = Just { one | end = safeEnd, divs = newDivs }
+                        }
+
+                ( Just start, Nothing ) ->
+                    let
+                        safeStart =
+                            clamp 0 one.end start
+
+                        newDivs =
+                            List.filter (\x -> x > safeStart) one.divs
+                    in
+                    if List.isEmpty newDivs then
+                        { c
+                            | oneSound = Nothing
+                            , matrice = 1
+                            , beads = []
+                            , head = chgBeadLoop mayPoints <| getBead (List.length c.beads) c
+                        }
+
+                    else
+                        let
+                            nBeads =
+                                List.length newDivs + 1
+
+                            allBeads =
+                                getBeads c
+
+                            tmpBeads =
+                                List.drop (List.length allBeads - nBeads) allBeads
+                        in
+                        case tmpBeads of
+                            head :: newBeads ->
+                                { c
+                                    | matrice = nBeads
+                                    , beads = newBeads
+                                    , head = chgBeadLoop mayPoints head
+                                    , oneSound = Just { one | start = safeStart, divs = newDivs }
+                                }
+
+                            [] ->
+                                let
+                                    _ =
+                                        Debug.log "Incoherency between oneSound and beads" ( c.oneSound, c.beads )
+                                in
+                                c
+
+                ( Just start, Just end ) ->
+                    let
+                        safeStart =
+                            clamp 0 1 start
+
+                        safeEnd =
+                            clamp safeStart 1 end
+
+                        newDivs =
+                            List.map
+                                (\d ->
+                                    safeStart
+                                        + (d - one.start)
+                                        * (safeEnd - safeStart)
+                                        / (one.end - one.start)
+                                )
+                                one.divs
+                    in
+                    { c
+                        | oneSound = Just { one | start = safeStart, end = safeEnd, divs = newDivs }
+                        , head = chgBeadLoop ( Just safeStart, List.head newDivs ) c.head
+                        , beads = List.map3 (\b s e -> chgBeadLoop ( Just s, Just e ) b) c.beads newDivs <| List.drop 1 newDivs ++ [ safeEnd ]
+                    }
+
+                _ ->
+                    c
+
+
+setCollarDiv :
+    (( Maybe Float, Maybe Float ) -> Bead item -> Bead item)
+    -> Int
+    -> Float
+    -> Collar item
+    -> Collar item
+setCollarDiv chgBeadLoop i percent c =
+    case c.oneSound of
+        Nothing ->
+            c
+
+        Just one ->
+            case List.head <| List.drop i one.divs of
+                Nothing ->
+                    c
+
+                Just oldDiv ->
+                    if percent <= one.start then
+                        setCollarLoop chgBeadLoop ( Just percent, Nothing ) c
+
+                    else if percent >= one.end then
+                        setCollarLoop chgBeadLoop ( Nothing, Just percent ) c
+
+                    else
+                        let
+                            tmpDivs =
+                                List.filter (\x -> (x < percent && x < oldDiv) || (x > percent && x > oldDiv)) one.divs
+
+                            ( preDiv, postDiv ) =
+                                List.partition (\x -> x < percent) tmpDivs
+
+                            newDivs =
+                                preDiv ++ percent :: postDiv
+
+                            oldBeads =
+                                getBeads c
+
+                            preBead =
+                                List.take (List.length preDiv) oldBeads
+
+                            mayLeftBead =
+                                List.head <| List.drop (List.length preDiv) oldBeads
+
+                            nToPost =
+                                List.length oldBeads - List.length postDiv
+
+                            mayRightBead =
+                                List.head <| List.drop (nToPost - 1) oldBeads
+
+                            postBead =
+                                List.drop nToPost oldBeads
+                        in
+                        case ( mayLeftBead, mayRightBead ) of
+                            ( Just leftBead, Just rightBead ) ->
+                                let
+                                    tmpBeads =
+                                        preBead
+                                            ++ [ chgBeadLoop ( Nothing, Just percent ) leftBead ]
+                                            ++ [ chgBeadLoop ( Just percent, Nothing ) rightBead ]
+                                            ++ postBead
+                                in
+                                case tmpBeads of
+                                    newHead :: newBeads ->
+                                        { c
+                                            | matrice = List.length tmpBeads
+                                            , head = newHead
+                                            , beads = newBeads
+                                            , oneSound = Just { one | divs = newDivs }
+                                        }
+
+                                    [] ->
+                                        let
+                                            _ =
+                                                Debug.log "Incoherency1 between oneSound and beads" ( c.oneSound, c.beads )
+                                        in
+                                        c
+
+                            _ ->
+                                let
+                                    _ =
+                                        Debug.log "Incoherency2 between oneSound and beads" ( c.oneSound, c.beads )
+                                in
+                                c
+
+
 getBeads : Collar item -> List (Bead item)
 getBeads c =
     c.head :: c.beads

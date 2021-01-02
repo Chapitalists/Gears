@@ -1,7 +1,7 @@
 module Data.Wheel exposing (..)
 
 import Color exposing (Color)
-import Data.Content as Content exposing (Content, Mobile)
+import Data.Content as Content exposing (Bead, Content, Mobile)
 import Html.Attributes
 import Interact
 import Json.Decode as D
@@ -57,6 +57,14 @@ getLoopPercents { wheel } =
     case wheel.content of
         C (Content.S s) ->
             Sound.getLoopPercents s
+
+        C (Content.C c) ->
+            case c.oneSound of
+                Just one ->
+                    ( one.start, one.end )
+
+                _ ->
+                    ( 0, 1 )
 
         _ ->
             ( 0, 1 )
@@ -121,6 +129,7 @@ type Msg
     | Mute Bool
     | ChangeStart Float
     | ChangeLoop ( Maybe Float, Maybe Float )
+    | ChangeDiv Int Float
     | Named String
     | ChangeColor Float
     | ToggleContentView
@@ -131,6 +140,32 @@ update msg g =
     let
         wheel =
             g.wheel
+
+        --TODO Very specific to beads, but content or collar doesn’t know wheels, so where is it to put ?
+        chgLoopWithSoundLength : ( Maybe Float, Maybe Float ) -> Bead Wheel -> Bead Wheel
+        chgLoopWithSoundLength p b =
+            let
+                w =
+                    b.wheel
+
+                newSound =
+                    case getWheelContent w of
+                        Content.S s ->
+                            Sound.setLoop p s
+
+                        _ ->
+                            Sound.noSound
+
+                newWheel =
+                    { w
+                        | startPercent = Tuple.first <| Sound.getLoopPercents newSound
+                        , content = C <| Content.S newSound
+                    }
+
+                length =
+                    Sound.length newSound
+            in
+            { wheel = newWheel, length = length }
     in
     case msg of
         ChangeContent c ->
@@ -172,6 +207,35 @@ update msg g =
                             { wheel
                                 | content = C <| Content.S newSound
                                 , startPercent = clamp min max wheel.startPercent
+                            }
+                    }
+
+                C (Content.C c) ->
+                    { g
+                        | wheel =
+                            { wheel
+                                | content =
+                                    C <|
+                                        Content.C <|
+                                            Content.setCollarLoop chgLoopWithSoundLength mayPoints c
+                            }
+                    }
+
+                _ ->
+                    g
+
+        ChangeDiv i percent ->
+            case wheel.content of
+                C (Content.C c) ->
+                    { g
+                        | wheel =
+                            { wheel
+                                | content =
+                                    C <|
+                                        Content.C <|
+                                            Debug.log "new" <|
+                                                Content.setCollarDiv chgLoopWithSoundLength i percent <|
+                                                    Debug.log "old" c
                             }
                     }
 
