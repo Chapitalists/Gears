@@ -681,16 +681,22 @@ update msg model =
 
         DocMsg subMsg ->
             let
-                ( doc, cmd ) =
+                ( newModel, cmd ) =
+                    case ( model.micState, subMsg, model.doc.editor.tool ) of
+                        -- FIXME Absurd... Should be a commonMsg and common ChangedMode
+                        ( _, Doc.MobileMsg (Editor.ChangedMode (Editor.ChangeSound _)), _ ) ->
+                            ( { model | fileExplorerTab = LoadedSounds }, Cmd.none )
+
+                        ( Just ( True, ( name, latency ) ), Doc.MobileMsg Editor.ToggleEngine, Editor.Play True _ ) ->
+                            update (EndMicRec name latency) model
+
+                        _ ->
+                            ( model, Cmd.none )
+
+                ( doc, subCmd ) =
                     Doc.update subMsg model.doc
             in
-            case subMsg of
-                -- FIXME Absurd... Should be a commonMsg and common ChangedMode
-                Doc.MobileMsg (Editor.ChangedMode (Editor.ChangeSound _)) ->
-                    ( { model | doc = doc, fileExplorerTab = LoadedSounds }, Cmd.map DocMsg cmd )
-
-                _ ->
-                    ( { model | doc = doc }, Cmd.map DocMsg cmd )
+            ( { newModel | doc = doc }, Cmd.batch <| cmd :: [ Cmd.map DocMsg subCmd ] )
 
         -- TODO Should dispatch KeysMsg, not specific messages to each part, too big of a dependency
         KeysMsg subMsg ->
