@@ -189,6 +189,7 @@ view wave mayCursors interState wrapInter =
                                 CollarDiv c ->
                                     [ selection ( toPx 0, toPx c.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
                                     , selection ( toPx c.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                    , selection ( toPx c.start, toPx c.end ) (Just IWaveSel) <| rgba 0 0 0 0
                                     , cursor (toPx c.start) LoopStart wave.height
                                     , cursor (toPx c.end) LoopEnd wave.height
                                     ]
@@ -245,7 +246,7 @@ cursor pos cur h =
                             , handle [ centerY, moveUp <| toFloat h / 4 ]
                             ]
 
-                        Divide int ->
+                        Divide _ ->
                             [ handle [ alignTop, moveUp <| toFloat border ]
                             , handle [ alignBottom, moveDown <| toFloat border ]
                             ]

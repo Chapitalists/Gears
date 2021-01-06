@@ -43,10 +43,15 @@ setFract fract g =
     { g | harmony = { harmo | fract = fract } }
 
 
+type SelfUnit
+    = Rate Float -- Duration / Content length
+    | Duration Float
+
+
 type Ref
     = Other (Id Harmony)
     | Self
-        { unit : Float
+        { unit : SelfUnit
 
         -- TODO better be a Set than a List, either deOpacify Id or add Set in Coll lib
         , group : List (Id Harmony)
@@ -61,15 +66,28 @@ view id coll getName =
             getHarmo id coll
     in
     Fract.toString harmo.fract
-        ++ " de "
         ++ (case harmo.ref of
-                Self r ->
-                    Round.round 2 r.unit
+                Self { unit } ->
+                    case unit of
+                        Duration d ->
+                            " de " ++ Round.round 2 d
+
+                        Rate r ->
+                            " du contenu x" ++ Round.round 2 (1 / r)
 
                 Other rId ->
+                    let
+                        name =
+                            getName <| Coll.idMap rId
+                    in
                     case (Coll.get (Coll.idMap rId) coll).harmony.ref of
-                        Self r ->
-                            Round.round 2 r.unit ++ " ( " ++ (getName <| Coll.idMap rId) ++ " )"
+                        Self { unit } ->
+                            case unit of
+                                Duration d ->
+                                    " de " ++ Round.round 2 d ++ " ( " ++ name ++ " )"
+
+                                Rate r ->
+                                    " du contenu de " ++ name ++ " x" ++ Round.round 2 (1 / r)
 
                         Other _ ->
                             Debug.log "IMPOSSIBLE Other refer to another Other" "BUG Harmo.view"
@@ -78,7 +96,7 @@ view id coll getName =
 
 defaultRef : Ref
 defaultRef =
-    Self { unit = 0, group = [], links = [] }
+    Self { unit = Rate 1, group = [], links = [] }
 
 
 clean : Id (Harmonized g) -> Coll (Harmonized g) -> Coll (Harmonized g)
@@ -91,8 +109,8 @@ clean id coll =
             Debug.todo "Clean Base"
 
 
-changeSelf : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
-changeSelf id length coll =
+changeSelfUnit : Id (Harmonized g) -> SelfUnit -> Coll (Harmonized g) -> Coll (Harmonized g)
+changeSelfUnit id su coll =
     let
         g =
             Coll.get id coll
@@ -102,50 +120,122 @@ changeSelf id length coll =
     in
     case harmo.ref of
         Self r ->
-            Coll.update id (always { g | harmony = { harmo | ref = Self { r | unit = length } } }) coll
+            Coll.update id (always { g | harmony = { harmo | ref = Self { r | unit = su } } }) coll
 
         Other rId ->
             coll
-                |> Coll.update id (always { g | harmony = newSelf length })
+                |> Coll.update id (always { g | harmony = newHarmoWithSelfUnit su })
                 |> Coll.update (Coll.idMap rId) (remove id)
 
 
-resizeFree : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
-resizeFree id length coll =
-    changeSelf id (length / Fract.toFloat (getHarmo id coll).fract) coll
+changeRate : Id (Harmonized g) -> Float -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
+changeRate id newDur contentLength =
+    changeSelfUnit id <| Rate (newDur / contentLength)
 
 
-getLengthId : Id (Harmonized g) -> Coll (Harmonized g) -> Float
-getLengthId id coll =
-    getLength (getHarmo id coll) coll
+changeDuration : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
+changeDuration id newDur =
+    changeSelfUnit id <| Duration newDur
 
 
-getLength : Harmony -> Coll (Harmonized g) -> Float
-getLength harmo coll =
-    case harmo.ref of
-        Self { unit } ->
-            unit * Fract.toFloat harmo.fract
+resizeFree : Id (Harmonized g) -> Float -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
+resizeFree id length contentLength coll =
+    changeRate id (length / Fract.toFloat (getHarmo id coll).fract) contentLength coll
 
-        Other id ->
-            let
-                { ref } =
-                    (Coll.get (Coll.idMap id) coll).harmony
-            in
-            case ref of
+
+toContentLength : Id (Harmonized g) -> Coll (Harmonized g) -> Coll (Harmonized g)
+toContentLength id coll =
+    case (getHarmo id coll).ref of
+        Self _ ->
+            Coll.update id (\g -> { g | harmony = newRate 1 }) coll
+
+        Other rId ->
+            coll
+                |> Coll.update id (\g -> { g | harmony = newRate 1 })
+                |> Coll.update (Coll.idMap rId) (remove id)
+
+
+makeCopy : Id (Harmonized g) -> Id (Harmonized g) -> Coll (Harmonized g) -> Coll (Harmonized g)
+makeCopy id newId coll =
+    let
+        harmo =
+            getHarmo id coll
+
+        baseId =
+            Maybe.withDefault id <| getBaseId harmo
+
+        newHarmo =
+            { fract = harmo.fract, ref = Other <| Coll.idMap baseId }
+
+        link =
+            ( id, newId )
+    in
+    coll
+        |> Coll.update newId (\g -> { g | harmony = newHarmo })
+        |> Coll.update id (insert newId >> addLink link)
+
+
+getLengthId : (Harmonized g -> Float) -> Id (Harmonized g) -> Coll (Harmonized g) -> Float
+getLengthId f id coll =
+    getLength f (Coll.get id coll) coll
+
+
+getLength : (Harmonized g -> Float) -> Harmonized g -> Coll (Harmonized g) -> Float
+getLength getContentLength el coll =
+    let
+        harmo =
+            el.harmony
+
+        refUnit =
+            case harmo.ref of
                 Self { unit } ->
-                    unit * Fract.toFloat harmo.fract
+                    case unit of
+                        Duration d ->
+                            d
 
-                Other _ ->
+                        Rate r ->
+                            r * getContentLength el
+
+                Other idd ->
                     let
-                        _ =
-                            Debug.log "IMPOSSIBLE Ref isn’t a base" ( harmo, coll )
+                        ell =
+                            Coll.get (Coll.idMap idd) coll
+
+                        { ref } =
+                            ell.harmony
                     in
-                    0
+                    case ref of
+                        Self { unit } ->
+                            case unit of
+                                Duration d ->
+                                    d
+
+                                Rate r ->
+                                    r * getContentLength ell
+
+                        Other _ ->
+                            let
+                                _ =
+                                    Debug.log "IMPOSSIBLE Ref isn’t a base" ( harmo, coll )
+                            in
+                            getContentLength el
+    in
+    Fract.toFloat harmo.fract * refUnit
 
 
-newSelf : Float -> Harmony
-newSelf length =
-    { fract = Fract.integer 1, ref = Self { unit = length, group = [], links = [] } }
+newHarmoWithSelfUnit : SelfUnit -> Harmony
+newHarmoWithSelfUnit su =
+    { fract = Fract.integer 1, ref = Self { unit = su, group = [], links = [] } }
+
+
+newDuration : Float -> Harmony
+newDuration d =
+    newHarmoWithSelfUnit <| Duration d
+
+
+newRate : Float -> Harmony
+newRate r =
+    newHarmoWithSelfUnit <| Rate r
 
 
 hasHarmonics : Harmony -> Bool
@@ -274,9 +364,9 @@ encoder h =
     ]
 
 
-decoder : D.Decoder Harmony
-decoder =
-    Field.require "ref" refDecoder <|
+decoder : Float -> D.Decoder Harmony
+decoder contentLength =
+    Field.require "ref" (refDecoder contentLength) <|
         \ref ->
             Field.require "fract" Fract.decoder <|
                 \fract ->
@@ -284,6 +374,25 @@ decoder =
                         { ref = ref
                         , fract = fract
                         }
+
+
+selfUnitEncoder : SelfUnit -> List ( String, E.Value )
+selfUnitEncoder su =
+    case su of
+        Rate r ->
+            [ ( "rate", E.float r ) ]
+
+        Duration d ->
+            [ ( "duration", E.float d ) ]
+
+
+selfUnitDecoder : Float -> D.Decoder SelfUnit
+selfUnitDecoder contentLength =
+    D.oneOf
+        [ Field.require "unit" D.float <| \d -> D.succeed <| Rate (d / contentLength)
+        , Field.require "duration" D.float <| \d -> D.succeed <| Duration d
+        , Field.require "rate" D.float <| \r -> D.succeed <| Rate r
+        ]
 
 
 refEncoder : Ref -> E.Value
@@ -294,14 +403,14 @@ refEncoder ref =
 
         Self r ->
             E.object <|
-                [ ( "unit", E.float r.unit )
-                , ( "group", E.list Coll.idEncoder r.group )
+                [ ( "group", E.list Coll.idEncoder r.group )
                 , ( "links", E.list Link.encoder r.links )
                 ]
+                    ++ selfUnitEncoder r.unit
 
 
-refDecoder : D.Decoder Ref
-refDecoder =
+refDecoder : Float -> D.Decoder Ref
+refDecoder contentLength =
     Field.attempt "other" Coll.idDecoder <|
         \mayId ->
             case mayId of
@@ -309,15 +418,17 @@ refDecoder =
                     D.succeed <| Other id
 
                 Nothing ->
-                    Field.require "unit" D.float <|
-                        \unit ->
-                            Field.require "group" (D.list Coll.idDecoder) <|
-                                \group ->
-                                    Field.require "links" (D.list Link.decoder) <|
-                                        \links ->
-                                            D.succeed <|
-                                                Self
-                                                    { unit = unit
-                                                    , group = group
-                                                    , links = links
-                                                    }
+                    selfUnitDecoder contentLength
+                        |> (D.andThen <|
+                                \unit ->
+                                    Field.require "group" (D.list Coll.idDecoder) <|
+                                        \group ->
+                                            Field.require "links" (D.list Link.decoder) <|
+                                                \links ->
+                                                    D.succeed <|
+                                                        Self
+                                                            { unit = unit
+                                                            , group = group
+                                                            , links = links
+                                                            }
+                           )

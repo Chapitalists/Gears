@@ -442,7 +442,11 @@ update msg ( model, mobile ) =
                return
         -}
         CopyGear id ->
-            { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
+            let
+                d =
+                    vec2 (Mobile.getLengthId id mobile.gears * 1.1) 0
+            in
+            { return | mobile = { mobile | gears = Mobile.copy d id mobile.gears }, toUndo = Do }
 
         CopyContent w ->
             case model.edit of
@@ -468,52 +472,6 @@ update msg ( model, mobile ) =
             }
 
         DeleteWheel ( id, l ) ->
-            let
-                newMob =
-                    CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
-
-                finalMob =
-                    case l of
-                        [ i ] ->
-                            let
-                                colId =
-                                    ( id, [] )
-
-                                mayOldCol =
-                                    case Wheel.getWheelContent <| CommonData.getWheel colId mobile of
-                                        Content.C col ->
-                                            Just col
-
-                                        _ ->
-                                            Nothing
-
-                                mayNewCol =
-                                    case Wheel.getWheelContent <| CommonData.getWheel colId newMob of
-                                        Content.C col ->
-                                            Just col
-
-                                        _ ->
-                                            Nothing
-
-                                mayOldContentLength =
-                                    Maybe.map Collar.getTotalLength mayOldCol
-
-                                mayNewContentLength =
-                                    Maybe.map Collar.getTotalLength mayNewCol
-
-                                oldLength =
-                                    Harmo.getLengthId id mobile.gears
-                            in
-                            case Maybe.map2 Tuple.pair mayOldContentLength mayNewContentLength of
-                                Just ( oldCL, newCL ) ->
-                                    { newMob | gears = Harmo.changeSelf id (newCL * oldLength / oldCL) newMob.gears }
-
-                                Nothing ->
-                                    newMob
-
-                        _ ->
-                            newMob
-            in
             { return
                 | model =
                     { model
@@ -547,7 +505,7 @@ update msg ( model, mobile ) =
                     }
                 , toUndo = Do
                 , toEngine = [ Engine.stop ]
-                , mobile = finalMob
+                , mobile = CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
             }
 
         EnteredFract isNumerator str ->
@@ -734,9 +692,7 @@ update msg ( model, mobile ) =
                 | mobile =
                     { mobile
                         | gears =
-                            Harmo.changeSelf id
-                                (CommonData.getContentLength <| Wheel.getContent <| Coll.get id mobile.gears)
-                                mobile.gears
+                            Harmo.toContentLength id mobile.gears
                     }
                 , toUndo = Do
             }
@@ -760,7 +716,11 @@ update msg ( model, mobile ) =
                     Coll.get id mobile.gears
 
                 newMotor =
-                    { m | motor = Motor.default, harmony = Harmo.newSelf <| Harmo.getLength m.harmony mobile.gears }
+                    { m
+                        | motor = Motor.default
+                        , harmony =
+                            Harmo.newRate (Mobile.getLength m mobile.gears / CommonData.getWheeledContentLength m)
+                    }
 
                 subMobile =
                     List.foldl
@@ -772,7 +732,9 @@ update msg ( model, mobile ) =
                                 newG =
                                     { g
                                         | motor = Motor.default
-                                        , harmony = Harmo.newSelf <| Harmo.getLength g.harmony mobile.gears
+                                        , harmony =
+                                            Harmo.newRate
+                                                (Mobile.getLength g mobile.gears / CommonData.getWheeledContentLength g)
                                     }
                             in
                             { acc | gears = Coll.insert newG acc.gears }
@@ -797,7 +759,10 @@ update msg ( model, mobile ) =
                     Coll.get id mobile.gears
 
                 l =
-                    Harmo.getLength g.harmony mobile.gears
+                    Mobile.getLength g mobile.gears
+
+                contentLength =
+                    CommonData.getWheeledContentLength g
 
                 collar =
                     case collaring of
@@ -805,7 +770,7 @@ update msg ( model, mobile ) =
                             Collar.fromWheel g.wheel l
 
                         Mult i ->
-                            Collar.fromWheelMult g.wheel i l
+                            Collar.fromWheelMult g.wheel i contentLength
 
                         Div s i ->
                             Collar.fromSoundDiv s i l
@@ -815,8 +780,8 @@ update msg ( model, mobile ) =
 
                 res =
                     case collaring of
-                        Mult i ->
-                            Harmo.changeSelf id (toFloat i * l) tmp
+                        Mult _ ->
+                            Harmo.changeRate id l contentLength tmp
 
                         _ ->
                             tmp
@@ -1298,7 +1263,7 @@ viewContent ( model, mobile ) =
                             in
                             Wheel.view w
                                 g.pos
-                                (Harmo.getLength g.harmony mobile.gears)
+                                (Mobile.getLength g mobile.gears)
                                 { mod = getMod id
                                 , motor = id == mobile.motor
                                 , dashed = Harmo.hasHarmonics g.harmony
@@ -1330,14 +1295,14 @@ viewContent ( model, mobile ) =
                                         Play _ _ ->
                                             let
                                                 length =
-                                                    Harmo.getLength g.harmony mobile.gears
+                                                    Mobile.getLength g mobile.gears
                                             in
                                             [ Link.drawMotorLink ( ( g.pos, length ), ( pos, length ) ) ]
 
                                         Harmonize ->
                                             [ Link.drawRawLink
                                                 ( g.pos, pos )
-                                                (Harmo.getLength g.harmony mobile.gears)
+                                                (Mobile.getLength g mobile.gears)
                                                 Link.baseColor
                                             ]
                                                 ++ [ S.g [ SA.opacity <| Opacity 0 ] <|
@@ -1345,7 +1310,7 @@ viewContent ( model, mobile ) =
                                                             (\( idd, gg ) ->
                                                                 Wheel.view gg.wheel
                                                                     gg.pos
-                                                                    (Harmo.getLength gg.harmony mobile.gears)
+                                                                    (Mobile.getLength gg mobile.gears)
                                                                     Wheel.defaultStyle
                                                                     (Just ( IWheel << Tuple.pair idd, [] ))
                                                                     Nothing
@@ -1361,10 +1326,10 @@ viewContent ( model, mobile ) =
                                 CompleteLink l ->
                                     case model.tool of
                                         Play _ _ ->
-                                            Link.viewMotorLink False <| Gear.toDrawLink mobile.gears l
+                                            Link.viewMotorLink False <| Mobile.toDrawLink mobile.gears l
 
                                         Harmonize ->
-                                            Link.viewFractLink (Gear.toDrawLink mobile.gears l) <| ILink l
+                                            Link.viewFractLink (Mobile.toDrawLink mobile.gears l) <| ILink l
 
                                         _ ->
                                             []
@@ -1409,7 +1374,7 @@ viewContent ( model, mobile ) =
                                     List.concatMap
                                         (\l ->
                                             Link.viewMotorLink (List.any (Link.equal l) cuts) <|
-                                                Gear.toDrawLink mobile.gears l
+                                                Mobile.toDrawLink mobile.gears l
                                         )
                                     <|
                                         Motor.getAllLinks mobile.gears
@@ -1417,7 +1382,7 @@ viewContent ( model, mobile ) =
                                 Harmonize ->
                                     (case Interact.getInteract model.interact of
                                         Just ( ILink l, _ ) ->
-                                            Link.viewFractOnLink (Gear.toDrawLink mobile.gears l) <|
+                                            Link.viewFractOnLink (Mobile.toDrawLink mobile.gears l) <|
                                                 Fract.simplify <|
                                                     Fract.division
                                                         (Coll.get (Tuple.second l) mobile.gears).harmony.fract
@@ -1426,13 +1391,13 @@ viewContent ( model, mobile ) =
                                         _ ->
                                             []
                                     )
-                                        ++ (List.concatMap (\l -> Link.viewFractLink (Gear.toDrawLink mobile.gears l) (ILink l)) <|
+                                        ++ (List.concatMap (\l -> Link.viewFractLink (Mobile.toDrawLink mobile.gears l) (ILink l)) <|
                                                 List.concatMap (.harmony >> Harmo.getLinks) <|
                                                     Coll.values mobile.gears
                                            )
                                         ++ (case model.link of
                                                 Just { link, fractInput } ->
-                                                    Link.viewSelectedLink (Gear.toDrawLink mobile.gears link) <|
+                                                    Link.viewSelectedLink (Mobile.toDrawLink mobile.gears link) <|
                                                         case fractInput of
                                                             FractionInput _ _ _ ->
                                                                 Just <|
@@ -1456,7 +1421,7 @@ viewContent ( model, mobile ) =
                                                     Coll.get id mobile.gears
 
                                                 length =
-                                                    Harmo.getLength g.harmony mobile.gears
+                                                    Mobile.getLength g mobile.gears
 
                                                 pos =
                                                     g.pos
@@ -1803,10 +1768,10 @@ viewEditDetails model mobile =
                             (\rId ->
                                 getNameWithDefault rId mobile
                             )
-                , text <| "( " ++ (Round.round 2 <| Harmo.getLengthId id mobile.gears) ++ " )"
+                , text <| "( " ++ (Round.round 2 <| Mobile.getLengthId id mobile.gears) ++ " )"
                 , text <|
                     "Contenu : "
-                        ++ (Round.round 2 <| CommonData.getContentLength <| Wheel.getContent g)
+                        ++ (Round.round 2 <| CommonData.getWheeledContentLength g)
                 ]
                     ++ (case Wheel.getContent g of
                             Content.S s ->
@@ -1923,8 +1888,8 @@ viewHarmonizeDetails model mobile =
                                                     Round.round
                                                         5
                                                     <|
-                                                        Harmo.getLengthId (Tuple.second link) mobile.gears
-                                                            / Harmo.getLengthId (Tuple.first link) mobile.gears
+                                                        Mobile.getLengthId (Tuple.second link) mobile.gears
+                                                            / Mobile.getLengthId (Tuple.first link) mobile.gears
                                     , text = str
                                     , label = Input.labelHidden "Fraction"
                                     , onChange = EnteredTextFract
@@ -2002,7 +1967,7 @@ doResize id d add mobile =
             mobile.gears
 
         length =
-            Harmo.getLengthId id gears
+            Mobile.getLengthId id gears
 
         dd =
             if add then
@@ -2014,11 +1979,12 @@ doResize id d add mobile =
         newSize =
             abs <| dd * 2 + length
     in
-    { mobile | gears = Harmo.resizeFree id newSize gears }
+    { mobile | gears = Harmo.resizeFree id newSize (CommonData.getWheeledContentLength <| Coll.get id gears) gears }
 
 
 doChangeContent : Id Geer -> Conteet -> Maybe Float -> Model -> Mobeel -> Return
 doChangeContent id c mayColor model mobile =
+    -- TODO probably needs to keep duration instead of rate when changing content
     let
         return =
             { model = model
@@ -2081,19 +2047,10 @@ addBead model mobile bead =
                             CommonData.updateWheel ( id, [] )
                                 (Wheel.ChangeContent <| Content.C newCol)
                                 mobile
-
-                        oldLength =
-                            Harmo.getLengthId id mobile.gears
-
-                        oldContentLength =
-                            Collar.getTotalLength col
-
-                        newContentLength =
-                            Collar.getTotalLength newCol
                     in
                     Just
                         ( { model | beadCursor = model.beadCursor + 1 }
-                        , { newMob | gears = Harmo.changeSelf id (newContentLength * oldLength / oldContentLength) newMob.gears }
+                        , newMob
                         , id
                         )
 
@@ -2107,7 +2064,7 @@ addBead model mobile bead =
 computeCuts : ( Vec2, Vec2 ) -> Coll Geer -> List (Link Geer)
 computeCuts cut gears =
     Motor.getAllLinks gears
-        |> List.filter (Link.cuts cut << Link.toSegment << Gear.toDrawLink gears)
+        |> List.filter (Link.cuts cut << Link.toSegment << Mobile.toDrawLink gears)
 
 
 
@@ -2384,27 +2341,7 @@ manageInteractEvent event model mobile =
                                                     in
                                                     case interactWave g event model mobile of
                                                         Just subMsg ->
-                                                            let
-                                                                ret =
-                                                                    update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
-
-                                                                newMob =
-                                                                    ret.mobile
-
-                                                                oldPercents =
-                                                                    Wheel.getLoopPercents (Coll.get id mobile.gears)
-
-                                                                newPercents =
-                                                                    Wheel.getLoopPercents (Coll.get id newMob.gears)
-
-                                                                ratio =
-                                                                    (Tuple.second newPercents - Tuple.first newPercents)
-                                                                        / (Tuple.second oldPercents - Tuple.first oldPercents)
-
-                                                                oldLength =
-                                                                    Harmo.getLengthId id mobile.gears
-                                                            in
-                                                            { ret | mobile = { newMob | gears = Harmo.changeSelf id (ratio * oldLength) newMob.gears } }
+                                                            update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
 
                                                         Nothing ->
                                                             return
@@ -2539,7 +2476,7 @@ interactHarmonize event model mobile =
     case ( event.item, event.action, model.dragging ) of
         -- COPY
         ( IWheel ( id, [] ), Interact.Clicked _, _ ) ->
-            { return | mobile = { mobile | gears = Gear.copy id mobile.gears }, toUndo = Do }
+            update (CopyGear id) ( model, mobile )
 
         -- RESIZE
         ( IResizeHandle id add, Interact.Dragged { startD } _ _, NoDrag ) ->
@@ -2619,8 +2556,17 @@ interactSelectEdit event mobile model =
                         in
                         Just ( { model | edit = [ id ], wave = wave }, Cmd.map WaveMsg cmd )
 
-                    Content.C _ ->
-                        Just ( { model | edit = [ id ], beadCursor = 0 }, Cmd.none )
+                    Content.C c ->
+                        case c.oneSound of
+                            Just one ->
+                                let
+                                    ( wave, cmd ) =
+                                        Waveform.update (Waveform.ChgSound one.soundName) model.wave
+                                in
+                                Just ( { model | edit = [ id ], beadCursor = 0, wave = wave }, Cmd.map WaveMsg cmd )
+
+                            Nothing ->
+                                Just ( { model | edit = [ id ], beadCursor = 0 }, Cmd.none )
 
                     _ ->
                         Just ( { model | edit = [ id ] }, Cmd.none )
@@ -2699,7 +2645,7 @@ interactMove event model mobile =
                                     (Pack.DragTo <|
                                         Just
                                             { pos = newPos
-                                            , length = Harmo.getLengthId id mobile.gears
+                                            , length = Mobile.getLengthId id mobile.gears
                                             , wheel = (Coll.get id mobile.gears).wheel
                                             }
                                     )
@@ -2736,7 +2682,7 @@ interactMove event model mobile =
                             Wheel.getLoopPercents waveG
 
                         selPercentLength =
-                            Harmo.getLengthId id mobile.gears * (end - start) / Harmo.getLength waveG.harmony mobile.gears
+                            Mobile.getLengthId id mobile.gears * (end - start) / Mobile.getLength waveG mobile.gears
 
                         ( wave, cmd ) =
                             Waveform.update (Waveform.Select ( Vec.getX oldPos, selPercentLength )) model.wave
@@ -2832,7 +2778,22 @@ interactWave g event model mobile =
                     Just <| Wheel.ChangeStart <| move absD <| g.wheel.startPercent
 
                 Divide i ->
-                    Nothing
+                    let
+                        mayCollar =
+                            case Wheel.getContent g of
+                                Content.C collar ->
+                                    Just collar
+
+                                _ ->
+                                    Nothing
+
+                        mayDivs =
+                            Maybe.map .divs <| Maybe.andThen .oneSound mayCollar
+
+                        mayPercent =
+                            Maybe.andThen (List.head << List.drop i) mayDivs
+                    in
+                    mayPercent |> Maybe.andThen (\percent -> Just <| Wheel.ChangeDiv i <| move absD percent)
 
         ( IWaveSel, Interact.Dragged { absD } _ _ ) ->
             let

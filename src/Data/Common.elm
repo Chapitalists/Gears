@@ -181,6 +181,11 @@ updateWheel ( id, list ) msg m =
     Content.updateGear id (\gear -> { gear | wheel = rec list gear.wheel }) m
 
 
+getWheeledContentLength : Wheeled g -> Float
+getWheeledContentLength =
+    getContentLength << Wheel.getContent
+
+
 getContentLength : Conteet -> Float
 getContentLength c =
     case c of
@@ -188,7 +193,7 @@ getContentLength c =
             Sound.length s
 
         Content.M m ->
-            Harmo.getLengthId m.motor m.gears
+            Harmo.getLengthId getWheeledContentLength m.motor m.gears
 
         Content.C col ->
             Content.getMatriceLength col

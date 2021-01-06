@@ -370,7 +370,7 @@ update msg model =
                                                     Just ( collar, sl, cc ) ->
                                                         case checkLoad (Wheel.getContent b) sl cc of
                                                             Just ( newContent, newSL, newCmds ) ->
-                                                                Just ( Collar.updateBead i (Wheel.setContent newContent) collar, newSL, newCmds )
+                                                                Just ( Content.updateBeadKeepOneSound i (Wheel.setContent newContent) collar, newSL, newCmds )
 
                                                             _ ->
                                                                 Nothing
