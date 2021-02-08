@@ -1121,7 +1121,7 @@ viewContent ( model, mobile ) =
                     in
                     case ( g.wheel.viewContent, Wheel.getContent g ) of
                         ( True, Content.S s ) ->
-                            if model.wave.drawn == (Waveform.SoundDrawn <| Sound.toString s) then
+                            if Waveform.isDrawn model.wave <| Sound.toString s then
                                 Just <| Waveform.Sound { offset = g.wheel.startPercent, start = start, end = end }
 
                             else
@@ -1130,7 +1130,7 @@ viewContent ( model, mobile ) =
                         ( True, Content.C c ) ->
                             case c.oneSound of
                                 Just oneSound ->
-                                    if model.wave.drawn == Waveform.SoundDrawn oneSound.soundName then
+                                    if Waveform.isDrawn model.wave oneSound.soundName then
                                         Just <|
                                             Waveform.CollarDiv
                                                 { start = oneSound.start

@@ -14,10 +14,18 @@ import Json.Decode as D
 -- TODO Maybe better to compute min max rms in js but draw in elm with adequate lib
 
 
-port requestSoundDraw : String -> Cmd msg
+port requestSoundDraw : SoundView -> Cmd msg
 
 
 port soundDrawn : (D.Value -> msg) -> Sub msg
+
+
+soundViewDecoder : D.Decoder SoundView
+soundViewDecoder =
+    D.map3 SoundView
+        (D.field "soundName" D.string)
+        (D.field "zoomFactor" D.float)
+        (D.field "centerPercent" D.float)
 
 
 canvasId : String
@@ -38,10 +46,17 @@ type alias Waveform =
     }
 
 
+type alias SoundView =
+    { soundName : String
+    , zoomFactor : Float
+    , centerPercent : Float
+    }
+
+
 type Drawing
     = None
-    | SoundDrawn String
-    | Pending String
+    | SoundDrawn SoundView
+    | Pending SoundView
 
 
 init : Waveform
@@ -62,10 +77,21 @@ getSelPercents { sel, size } =
     Maybe.map (Tuple.mapBoth toPercent toPercent) sel
 
 
+isDrawn : Waveform -> String -> Bool
+isDrawn { drawn } name =
+    case drawn of
+        SoundDrawn { soundName } ->
+            name == soundName
+
+        _ ->
+            False
+
+
 type Msg
     = GotSize Int
     | ChgSound String
-    | GotDrawn (Result D.Error String)
+    | ChgView Float Float -- Zoom, Center percent
+    | GotDrawn (Result D.Error SoundView)
     | Select ( Float, Float )
     | MoveSel Float
     | CancelSel
@@ -77,30 +103,76 @@ update msg wave =
         GotSize size ->
             ( { wave | size = size - 2 * border }
             , case wave.drawn of
-                SoundDrawn s ->
-                    requestSoundDraw s
+                SoundDrawn sv ->
+                    requestSoundDraw sv
 
                 _ ->
                     Cmd.none
             )
 
-        ChgSound s ->
-            if wave.drawn == SoundDrawn s then
-                ( wave, Cmd.none )
+        ChgSound name ->
+            let
+                newSV =
+                    SoundView name 1 0.5
 
-            else
-                ( { wave | drawn = Pending s }, requestSoundDraw s )
+                chgRes =
+                    ( { wave | drawn = Pending newSV }, requestSoundDraw newSV )
+            in
+            case wave.drawn of
+                SoundDrawn { soundName } ->
+                    if name == soundName then
+                        ( wave, Cmd.none )
+
+                    else
+                        chgRes
+
+                _ ->
+                    chgRes
+
+        ChgView factor center ->
+            let
+                f =
+                    if factor < 1 then
+                        1
+
+                    else
+                        factor
+
+                c =
+                    clamp (1 / f / 2) (1 - 1 / f / 2) center
+            in
+            case wave.drawn of
+                SoundDrawn sv ->
+                    if f /= sv.zoomFactor || c /= sv.centerPercent then
+                        let
+                            newSV =
+                                { sv | zoomFactor = f, centerPercent = c }
+                        in
+                        ( { wave | drawn = Pending newSV }, requestSoundDraw newSV )
+
+                    else
+                        ( wave, Cmd.none )
+
+                Pending { soundName } ->
+                    let
+                        newSV =
+                            SoundView soundName f c
+                    in
+                    ( { wave | drawn = Pending newSV }, requestSoundDraw newSV )
+
+                None ->
+                    ( wave, Cmd.none )
 
         GotDrawn res ->
             case res of
-                Ok str ->
+                Ok soundView ->
                     case wave.drawn of
-                        Pending s ->
-                            if s == str then
-                                ( { wave | drawn = SoundDrawn s }, Cmd.none )
+                        Pending sv ->
+                            if sv == soundView then
+                                ( { wave | drawn = SoundDrawn sv }, Cmd.none )
 
                             else
-                                ( wave, requestSoundDraw s )
+                                ( wave, requestSoundDraw sv )
 
                         _ ->
                             ( wave, Cmd.none )
@@ -140,7 +212,7 @@ update msg wave =
 
 sub : Sub Msg
 sub =
-    soundDrawn (GotDrawn << D.decodeValue D.string)
+    soundDrawn (GotDrawn << D.decodeValue soundViewDecoder)
 
 
 type Cursors

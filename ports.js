@@ -19,10 +19,13 @@ function sendSize(entries) {
     app.ports.newSVGSize.send(entries[0].contentRect)
 }
 
-function drawSound(soundName) {
-  if (buffers[soundName]) {
-    drawSamples(Array.from(buffers[soundName].getChannelData(0))) // TODO mix channels ?
-    app.ports.soundDrawn.send(soundName)
+function drawSound(sv) {
+  if (buffers[sv.soundName]) {
+    let buf = buffers[sv.soundName]
+      , half = Math.round(buf.length / sv.zoomFactor / 2)
+      , mid = Math.round(buf.length * sv.centerPercent)
+    drawSamples(Array.from(buffers[sv.soundName].getChannelData(0).slice(mid - half, mid + half))) // TODO mix channels ?
+    app.ports.soundDrawn.send(sv)
   } else console.log(soundName + ' isn’t loaded, cannot draw')
 }
 
