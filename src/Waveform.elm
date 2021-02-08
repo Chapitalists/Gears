@@ -6,6 +6,7 @@ import Element.Background as Bg
 import Element.Border as Border
 import Html exposing (canvas)
 import Html.Attributes as Attr
+import Html.Events.Extra.Wheel as Wheel
 import Interact
 import Json.Decode as D
 
@@ -91,6 +92,7 @@ type Msg
     = GotSize Int
     | ChgSound String
     | ChgView Float Float -- Zoom, Center percent
+    | ZoomPoint Float ( Float, Float )
     | GotDrawn (Result D.Error SoundView)
     | Select ( Float, Float )
     | MoveSel Float
@@ -163,6 +165,27 @@ update msg wave =
                 None ->
                     ( wave, Cmd.none )
 
+        ZoomPoint delta ( x, y ) ->
+            case wave.drawn of
+                SoundDrawn sv ->
+                    let
+                        factor =
+                            clamp 0.01 2 <| 1 + delta / 100
+
+                        d =
+                            x / toFloat wave.size - 0.5
+
+                        f =
+                            sv.zoomFactor * factor
+
+                        c =
+                            sv.centerPercent + d * (factor - 1) / f
+                    in
+                    update (ChgView f c) wave
+
+                _ ->
+                    ( wave, Cmd.none )
+
         GotDrawn res ->
             case res of
                 Ok soundView ->
@@ -225,51 +248,54 @@ view :
     -> Maybe Cursors
     -> Interact.State Interactable Zone
     -> (Interact.Msg Interactable Zone -> msg)
+    -> (Msg -> msg)
     -> Element msg
-view wave mayCursors interState wrapInter =
+view wave mayCursors interState wrapInter wrapMsg =
     let
         toPx =
             round << ((*) <| toFloat wave.size)
     in
     el
-        (case mayCursors of
-            Just cursors ->
-                (List.map (htmlAttribute << Attr.map wrapInter) <| Interact.dragSpaceEvents interState ZWave)
-                    ++ [ Border.color <| rgb 0 0 0
-                       , Border.width border
-                       , Bg.color <| rgb 1 1 1
-                       , alignBottom
-                       ]
-                    ++ (List.map (mapAttribute wrapInter) <|
-                            case cursors of
-                                Sound c ->
-                                    [ selection ( toPx 0, toPx c.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                                    , selection ( toPx c.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                                    , selection ( toPx c.start, toPx c.end ) (Just IWaveSel) <| rgba 0 0 0 0
-                                    , cursor (toPx c.start) LoopStart wave.height
-                                    , cursor (toPx c.end) LoopEnd wave.height
-                                    , cursor (toPx c.offset) StartOffset wave.height
-                                    ]
-                                        ++ (case wave.sel of
-                                                Just points ->
-                                                    [ selection points Nothing <| rgba 0.3 0.3 0.3 0.3 ]
+        ((htmlAttribute <| Attr.map wrapMsg <| Wheel.onWheel (\e -> ZoomPoint -e.deltaY e.mouseEvent.offsetPos))
+            :: (case mayCursors of
+                    Just cursors ->
+                        (List.map (htmlAttribute << Attr.map wrapInter) <| Interact.dragSpaceEvents interState ZWave)
+                            ++ [ Border.color <| rgb 0 0 0
+                               , Border.width border
+                               , Bg.color <| rgb 1 1 1
+                               , alignBottom
+                               ]
+                            ++ (List.map (mapAttribute wrapInter) <|
+                                    case cursors of
+                                        Sound c ->
+                                            [ selection ( toPx 0, toPx c.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                            , selection ( toPx c.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                            , selection ( toPx c.start, toPx c.end ) (Just IWaveSel) <| rgba 0 0 0 0
+                                            , cursor (toPx c.start) LoopStart wave.height
+                                            , cursor (toPx c.end) LoopEnd wave.height
+                                            , cursor (toPx c.offset) StartOffset wave.height
+                                            ]
+                                                ++ (case wave.sel of
+                                                        Just points ->
+                                                            [ selection points Nothing <| rgba 0.3 0.3 0.3 0.3 ]
 
-                                                Nothing ->
-                                                    []
-                                           )
+                                                        Nothing ->
+                                                            []
+                                                   )
 
-                                CollarDiv c ->
-                                    [ selection ( toPx 0, toPx c.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                                    , selection ( toPx c.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                                    , selection ( toPx c.start, toPx c.end ) (Just IWaveSel) <| rgba 0 0 0 0
-                                    , cursor (toPx c.start) LoopStart wave.height
-                                    , cursor (toPx c.end) LoopEnd wave.height
-                                    ]
-                                        ++ List.indexedMap (\i div -> cursor (toPx div) (Divide i) wave.height) c.divs
-                       )
+                                        CollarDiv c ->
+                                            [ selection ( toPx 0, toPx c.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                            , selection ( toPx c.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                            , selection ( toPx c.start, toPx c.end ) (Just IWaveSel) <| rgba 0 0 0 0
+                                            , cursor (toPx c.start) LoopStart wave.height
+                                            , cursor (toPx c.end) LoopEnd wave.height
+                                            ]
+                                                ++ List.indexedMap (\i div -> cursor (toPx div) (Divide i) wave.height) c.divs
+                               )
 
-            Nothing ->
-                []
+                    Nothing ->
+                        []
+               )
         )
     <|
         html <|

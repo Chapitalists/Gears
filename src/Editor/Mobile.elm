@@ -1221,6 +1221,7 @@ viewContent ( model, mobile ) =
                 mayWavePoints
                 model.interact
                 InteractMsg
+                WaveMsg
         ]
     <|
         Element.html <|
