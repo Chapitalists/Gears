@@ -138,6 +138,21 @@ changeDuration id newDur =
     changeSelfUnit id <| Duration newDur
 
 
+changeContentKeepLength : Id (Harmonized g) -> Float -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
+changeContentKeepLength id newContentLength oldContentLength coll =
+    case (getHarmo id coll).ref of
+        Self { unit } ->
+            case unit of
+                Rate r ->
+                    changeSelfUnit id (Rate <| r * oldContentLength / newContentLength) coll
+
+                _ ->
+                    coll
+
+        _ ->
+            coll
+
+
 resizeFree : Id (Harmonized g) -> Float -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
 resizeFree id length contentLength coll =
     changeRate id (length / Fract.toFloat (getHarmo id coll).fract) contentLength coll

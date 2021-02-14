@@ -1976,7 +1976,6 @@ doResize id d add mobile =
 
 doChangeContent : Id Geer -> Conteet -> Maybe Float -> Model -> Mobeel -> Return
 doChangeContent id c mayColor model mobile =
-    -- TODO probably needs to keep duration instead of rate when changing content
     let
         return =
             { model = model
@@ -1993,8 +1992,14 @@ doChangeContent id c mayColor model mobile =
         chSound =
             Wheel.update <| Wheel.ChangeContent c
 
+        tmpGears =
+            Harmo.changeContentKeepLength id
+                (CommonData.getContentLength c)
+                (CommonData.getWheeledContentLength <| Coll.get id mobile.gears)
+                mobile.gears
+
         gears =
-            List.foldl (\el -> Coll.update el chSound) mobile.gears group
+            List.foldl (\el -> Coll.update el chSound) tmpGears group
 
         newModel =
             -- TODO Why !!??
