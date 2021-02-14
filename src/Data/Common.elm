@@ -106,18 +106,6 @@ deleteWheel ( id, l ) mobile gRm bRm =
         [] ->
             gRm id mobile
 
-        [ i ] ->
-            case Wheel.getContent <| Coll.get id mobile.gears of
-                Content.C col ->
-                    Content.updateGear id (Wheel.setContent <| Content.C <| bRm i col) mobile
-
-                _ ->
-                    let
-                        _ =
-                            Debug.log "Wrong identifier to delete bead" ( id, l, mobile )
-                    in
-                    mobile
-
         i :: rest ->
             case Wheel.getContent <| Coll.get id mobile.gears of
                 Content.C col ->
