@@ -472,6 +472,19 @@ update msg ( model, mobile ) =
             }
 
         DeleteWheel ( id, l ) ->
+            let
+                tmp =
+                    CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
+
+                newMob =
+                    case l of
+                        [] ->
+                            tmp
+
+                        _ ->
+                            Maybe.withDefault tmp <|
+                                uncollar ( id, List.take (List.length l - 1) l ) tmp
+            in
             { return
                 | model =
                     { model
@@ -505,7 +518,7 @@ update msg ( model, mobile ) =
                     }
                 , toUndo = Do
                 , toEngine = [ Engine.stop ]
-                , mobile = CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
+                , mobile = newMob
             }
 
         EnteredFract isNumerator str ->
@@ -785,18 +798,11 @@ update msg ( model, mobile ) =
 
         UnCollar id ->
             let
-                g =
-                    Coll.get id mobile.gears
+                mayRes =
+                    uncollar ( id, [] ) mobile
             in
-            case Wheel.getContent g of
-                Content.C col ->
-                    { return
-                        | mobile = Mobile.updateGear id (Wheel.setContent <| Wheel.getContent col.head) mobile
-                        , toUndo = Do
-                    }
-
-                _ ->
-                    return
+            Maybe.withDefault return <|
+                Maybe.map (\m -> { return | mobile = m, toUndo = Do }) mayRes
 
         EnteredCollarMult str ->
             case toIntOrEmpty str of
@@ -2053,6 +2059,41 @@ addBead model mobile bead =
 
                 _ ->
                     Nothing
+
+        _ ->
+            Nothing
+
+
+uncollar : Identifier -> Mobeel -> Maybe Mobeel
+uncollar id m =
+    let
+        w =
+            CommonData.getWheel id m
+    in
+    case Wheel.getWheelContent w of
+        Content.C col ->
+            if Collar.length col == 1 then
+                let
+                    newMob =
+                        CommonData.updateWheel id (Wheel.ChangeContent <| Wheel.getContent col.head) m
+
+                    gId =
+                        Tuple.first id
+
+                    getContentLength =
+                        CommonData.getWheeledContentLength << Coll.get gId << .gears
+                in
+                Just <|
+                    { newMob
+                        | gears =
+                            Harmo.changeContentKeepLength gId
+                                (getContentLength newMob)
+                                (getContentLength m)
+                                newMob.gears
+                    }
+
+            else
+                Nothing
 
         _ ->
             Nothing
