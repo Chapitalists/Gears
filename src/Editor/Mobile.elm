@@ -777,17 +777,9 @@ update msg ( model, mobile ) =
 
                 tmp =
                     Coll.update id (Wheel.setContent <| Content.C collar) mobile.gears
-
-                res =
-                    case collaring of
-                        Mult _ ->
-                            Harmo.changeRate id l contentLength tmp
-
-                        _ ->
-                            tmp
             in
             { return
-                | mobile = { mobile | gears = res }
+                | mobile = { mobile | gears = Harmo.changeRate id l contentLength tmp }
                 , toUndo = Do
             }
 
