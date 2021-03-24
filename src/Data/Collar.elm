@@ -42,7 +42,7 @@ beadName i collar =
 fromWheel : Wheel -> Float -> Colleer
 fromWheel w l =
     { matrice = 1
-    , loop = l
+    , loop = 0
     , head = { length = l, wheel = w }
     , beads = []
     , oneSound = Nothing
@@ -52,7 +52,7 @@ fromWheel w l =
 fromWheelMult : Wheel -> Int -> Float -> Colleer
 fromWheelMult w m l =
     { matrice = m
-    , loop = l * toFloat m
+    , loop = 0
     , head = { length = l, wheel = w }
     , beads = List.repeat (m - 1) { length = l, wheel = w }
     , oneSound = Nothing
@@ -77,7 +77,7 @@ fromSoundDiv s d l =
     case beads of
         head :: rest ->
             { matrice = d
-            , loop = l
+            , loop = 0
             , head = head
             , beads = rest
             , oneSound =
