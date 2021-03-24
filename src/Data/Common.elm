@@ -122,19 +122,19 @@ deleteWheel ( id, l ) mobile gRm bRm =
 updateWheel : Identifier -> Wheel.Msg -> Mobile Wheel -> Mobile Wheel
 updateWheel ( id, list ) msg m =
     let
-        modify =
+        ( modify, upBead ) =
             case msg of
                 Wheel.ChangeContent _ ->
-                    True
+                    ( True, Content.updateBead )
 
                 Wheel.ChangeStart _ ->
-                    True
+                    ( True, Content.updateBead )
 
                 Wheel.ChangeLoop _ ->
-                    True
+                    ( True, Content.updateBead )
 
                 _ ->
-                    False
+                    ( False, Content.updateBeadKeepOneSound )
 
         rec : List Int -> Wheel -> Wheel
         rec l w =
@@ -148,7 +148,7 @@ updateWheel ( id, list ) msg m =
                         Content.C col ->
                             let
                                 upCol =
-                                    Content.updateBead i (\bead -> { bead | wheel = rec ll bead.wheel }) col
+                                    upBead i (\bead -> { bead | wheel = rec ll bead.wheel }) col
 
                                 newCol =
                                     if modify then
