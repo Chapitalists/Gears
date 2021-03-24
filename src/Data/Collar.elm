@@ -72,7 +72,7 @@ fromSoundDiv s d l =
             List.map Content.S sounds
 
         beads =
-            List.map beadFromContent contents
+            List.map (\c -> { length = l / toFloat d, wheel = Wheel.fromContent c }) contents
     in
     case beads of
         head :: rest ->

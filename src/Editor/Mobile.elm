@@ -774,16 +774,13 @@ update msg ( model, mobile ) =
                 l =
                     Mobile.getLength g mobile.gears
 
-                contentLength =
-                    CommonData.getWheeledContentLength g
-
                 collar =
                     case collaring of
                         Simple ->
                             Collar.fromWheel g.wheel l
 
                         Mult i ->
-                            Collar.fromWheelMult g.wheel i contentLength
+                            Collar.fromWheelMult g.wheel i l
 
                         Div s i ->
                             Collar.fromSoundDiv s i l
@@ -792,7 +789,7 @@ update msg ( model, mobile ) =
                     Coll.update id (Wheel.setContent <| Content.C collar) mobile.gears
             in
             { return
-                | mobile = { mobile | gears = Harmo.changeRate id l contentLength tmp }
+                | mobile = { mobile | gears = Harmo.toContentLength id tmp }
                 , toUndo = Do
             }
 
