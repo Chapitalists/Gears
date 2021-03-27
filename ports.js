@@ -22,10 +22,10 @@ function sendSize(entries) {
 function drawSound(sv) {
   if (buffers[sv.soundName]) {
     let buf = buffers[sv.soundName]
-      , half = Math.round(buf.length / sv.zoomFactor / 2)
-      , mid = Math.round(buf.length * sv.centerPercent)
-    drawSamples(Array.from(buffers[sv.soundName].getChannelData(0).slice(mid - half, mid + half))) // TODO mix channels ?
-    app.ports.soundDrawn.send(sv)
+      , size = Math.round(buf.length / sv.zoomFactor)
+      , start = Math.round(buf.length * sv.startPercent)
+    drawSamples(Array.from(buffers[sv.soundName].getChannelData(0).slice(start, start + size))) // TODO mix channels ?
+    app.ports.soundDrawn.send(sv.soundName)
   } else console.log(soundName + ' isn’t loaded, cannot draw')
 }
 

@@ -21,14 +21,6 @@ port requestSoundDraw : SoundView -> Cmd msg
 port soundDrawn : (D.Value -> msg) -> Sub msg
 
 
-soundViewDecoder : D.Decoder SoundView
-soundViewDecoder =
-    D.map3 SoundView
-        (D.field "soundName" D.string)
-        (D.field "zoomFactor" D.float)
-        (D.field "centerPercent" D.float)
-
-
 canvasId : String
 canvasId =
     "waveform"
@@ -44,20 +36,22 @@ type alias Waveform =
     , height : Int
     , drawn : Drawing
     , sel : Maybe ( Int, Int )
+    , zoomFactor : Float
+    , startPercent : Float
     }
 
 
 type alias SoundView =
     { soundName : String
     , zoomFactor : Float
-    , centerPercent : Float
+    , startPercent : Float
     }
 
 
 type Drawing
     = None
-    | SoundDrawn SoundView
-    | Pending SoundView
+    | SoundDrawn String
+    | Pending String
 
 
 init : Waveform
@@ -66,6 +60,8 @@ init =
     , height = 150
     , drawn = None
     , sel = Nothing
+    , zoomFactor = 1
+    , startPercent = 0
     }
 
 
@@ -81,7 +77,7 @@ getSelPercents { sel, size } =
 isDrawn : Waveform -> String -> Bool
 isDrawn { drawn } name =
     case drawn of
-        SoundDrawn { soundName } ->
+        SoundDrawn soundName ->
             name == soundName
 
         _ ->
@@ -93,7 +89,7 @@ type Msg
     | ChgSound String
     | ChgView Float Float -- Zoom, Center percent
     | ZoomPoint Float ( Float, Float )
-    | GotDrawn (Result D.Error SoundView)
+    | GotDrawn (Result D.Error String)
     | Select ( Float, Float )
     | MoveSel Float
     | CancelSel
@@ -105,8 +101,8 @@ update msg wave =
         GotSize size ->
             ( { wave | size = size - 2 * border }
             , case wave.drawn of
-                SoundDrawn sv ->
-                    requestSoundDraw sv
+                SoundDrawn name ->
+                    requestSoundDraw <| SoundView name wave.zoomFactor wave.startPercent
 
                 _ ->
                     Cmd.none
@@ -114,14 +110,19 @@ update msg wave =
 
         ChgSound name ->
             let
-                newSV =
-                    SoundView name 1 0.5
+                f =
+                    init.zoomFactor
+
+                a =
+                    init.startPercent
 
                 chgRes =
-                    ( { wave | drawn = Pending newSV }, requestSoundDraw newSV )
+                    ( { wave | drawn = Pending name, zoomFactor = f, startPercent = a }
+                    , requestSoundDraw <| SoundView name f a
+                    )
             in
             case wave.drawn of
-                SoundDrawn { soundName } ->
+                SoundDrawn soundName ->
                     if name == soundName then
                         ( wave, Cmd.none )
 
@@ -131,71 +132,56 @@ update msg wave =
                 _ ->
                     chgRes
 
-        ChgView factor center ->
+        ChgView factor start ->
             let
                 f =
-                    if factor < 1 then
-                        1
+                    clamp 1 (1 / 0) factor
 
-                    else
-                        factor
+                a =
+                    clamp 0 (1 - 1 / f) start
 
-                c =
-                    clamp (1 / f / 2) (1 - 1 / f / 2) center
+                newWave =
+                    { wave | zoomFactor = f, startPercent = a }
+
+                cmd soundName =
+                    requestSoundDraw <| SoundView soundName f a
             in
             case wave.drawn of
-                SoundDrawn sv ->
-                    if f /= sv.zoomFactor || c /= sv.centerPercent then
-                        let
-                            newSV =
-                                { sv | zoomFactor = f, centerPercent = c }
-                        in
-                        ( { wave | drawn = Pending newSV }, requestSoundDraw newSV )
+                SoundDrawn name ->
+                    ( newWave, cmd name )
 
-                    else
-                        ( wave, Cmd.none )
-
-                Pending { soundName } ->
-                    let
-                        newSV =
-                            SoundView soundName f c
-                    in
-                    ( { wave | drawn = Pending newSV }, requestSoundDraw newSV )
+                Pending name ->
+                    ( newWave, cmd name )
 
                 None ->
-                    ( wave, Cmd.none )
+                    ( newWave, Cmd.none )
 
         ZoomPoint delta ( x, y ) ->
-            case wave.drawn of
-                SoundDrawn sv ->
-                    let
-                        factor =
-                            clamp 0.01 2 <| 1 + delta / 100
+            let
+                factor =
+                    clamp 0.01 2 <| 1 + delta / 100
 
-                        d =
-                            x / toFloat wave.size - 0.5
+                f =
+                    wave.zoomFactor * factor
 
-                        f =
-                            sv.zoomFactor * factor
+                d =
+                    x / toFloat wave.size
 
-                        c =
-                            sv.centerPercent + d * (factor - 1) / f
-                    in
-                    update (ChgView f c) wave
-
-                _ ->
-                    ( wave, Cmd.none )
+                a =
+                    wave.startPercent + d * (factor - 1) / f
+            in
+            update (ChgView f a) wave
 
         GotDrawn res ->
             case res of
-                Ok soundView ->
+                Ok soundName ->
                     case wave.drawn of
-                        Pending sv ->
-                            if sv == soundView then
-                                ( { wave | drawn = SoundDrawn sv }, Cmd.none )
+                        Pending name ->
+                            if name == soundName then
+                                ( { wave | drawn = SoundDrawn name }, Cmd.none )
 
                             else
-                                ( wave, requestSoundDraw sv )
+                                ( wave, requestSoundDraw <| SoundView name wave.zoomFactor wave.startPercent )
 
                         _ ->
                             ( wave, Cmd.none )
@@ -235,7 +221,7 @@ update msg wave =
 
 sub : Sub Msg
 sub =
-    soundDrawn (GotDrawn << D.decodeValue soundViewDecoder)
+    soundDrawn (GotDrawn << D.decodeValue D.string)
 
 
 type Cursors
