@@ -1,12 +1,13 @@
 port module Waveform exposing (..)
 
+import DOM
 import Editor.Interacting exposing (..)
 import Element exposing (..)
 import Element.Background as Bg
 import Element.Border as Border
 import Html exposing (canvas)
 import Html.Attributes as Attr
-import Html.Events.Extra.Wheel as Wheel
+import Html.Events as Events
 import Interact
 import Json.Decode as D
 
@@ -88,7 +89,7 @@ type Msg
     = GotSize Int
     | ChgSound String
     | ChgView Float Float -- Zoom, Center percent
-    | ZoomPoint Float ( Float, Float )
+    | ZoomPoint Float Float -- wheelDelta, xOffset
     | GotDrawn (Result D.Error String)
     | Select ( Float, Float )
     | MoveSel Float
@@ -156,19 +157,19 @@ update msg wave =
                 None ->
                     ( newWave, Cmd.none )
 
-        ZoomPoint delta ( x, y ) ->
+        ZoomPoint delta x ->
             let
                 factor =
-                    clamp 0.01 2 <| 1 + delta / 100
+                    clamp 0.01 2 <| 1 + delta / 1000
 
                 f =
-                    wave.zoomFactor * factor
+                    wave.zoomFactor / factor
 
                 d =
                     x / toFloat wave.size
 
                 a =
-                    wave.startPercent + d * (factor - 1) / f
+                    wave.startPercent + d * (1 / factor - 1) / f
             in
             update (ChgView f a) wave
 
@@ -242,7 +243,14 @@ view wave mayCursors interState wrapInter wrapMsg =
             round << ((*) <| toFloat wave.size)
     in
     el
-        ((htmlAttribute <| Attr.map wrapMsg <| Wheel.onWheel (\e -> ZoomPoint -e.deltaY e.mouseEvent.offsetPos))
+        ((htmlAttribute <|
+            Attr.map wrapMsg <|
+                Events.on "wheel" <|
+                    D.map3 (\deltaY clientX rect -> ZoomPoint deltaY <| clientX - rect.left - toFloat border)
+                        (D.field "deltaY" D.float)
+                        (D.field "clientX" D.float)
+                        (DOM.currentTarget DOM.boundingClientRect)
+         )
             :: (case mayCursors of
                     Just cursors ->
                         (List.map (htmlAttribute << Attr.map wrapInter) <| Interact.dragSpaceEvents interState ZWave)
