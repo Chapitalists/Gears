@@ -36,7 +36,7 @@ type alias Waveform =
     { size : Int
     , height : Int
     , drawn : Drawing
-    , sel : Maybe ( Int, Int )
+    , sel : Maybe ( Float, Float )
     , zoomFactor : Float
     , startPercent : Float
     }
@@ -67,12 +67,8 @@ init =
 
 
 getSelPercents : Waveform -> Maybe ( Float, Float )
-getSelPercents { sel, size } =
-    let
-        toPercent px =
-            toFloat px / toFloat size
-    in
-    Maybe.map (Tuple.mapBoth toPercent toPercent) sel
+getSelPercents { sel } =
+    sel
 
 
 isDrawn : Waveform -> String -> Bool
@@ -143,19 +139,8 @@ update msg wave =
 
                 newWave =
                     { wave | zoomFactor = f, startPercent = a }
-
-                cmd soundName =
-                    requestSoundDraw <| SoundView soundName f a
             in
-            case wave.drawn of
-                SoundDrawn name ->
-                    ( newWave, cmd name )
-
-                Pending name ->
-                    ( newWave, cmd name )
-
-                None ->
-                    ( newWave, Cmd.none )
+            ( newWave, requestRedraw newWave )
 
         ZoomPoint delta x ->
             let
@@ -196,22 +181,59 @@ update msg wave =
 
         Select ( centerPx, percentLength ) ->
             let
-                halfSel =
-                    round (percentLength * toFloat wave.size / 2)
+                tmpPV =
+                    pxToSoundDist wave wave.size
+
+                ( newWave, percentView ) =
+                    if percentLength > tmpPV then
+                        ( { wave
+                            | zoomFactor = 1 / percentLength
+                            , startPercent = clamp 0 (1 - percentLength) <| wave.startPercent - (percentLength - tmpPV) / 2
+                          }
+                        , percentLength
+                        )
+
+                    else
+                        ( wave, tmpPV )
+
+                half =
+                    percentLength / 2
+
+                ( vp1, vp2 ) =
+                    ( newWave.startPercent, newWave.startPercent + percentView )
 
                 safeCenter =
-                    clamp halfSel (wave.size - halfSel) <| round centerPx
+                    clamp (vp1 + half) (vp2 - half) <| pxToSoundPercent newWave <| round centerPx
             in
-            ( { wave | sel = Just ( safeCenter - halfSel, safeCenter + halfSel ) }, Cmd.none )
+            ( { newWave | sel = Just ( safeCenter - half, safeCenter + half ) }, requestRedraw newWave )
 
-        MoveSel d ->
+        MoveSel pxD ->
             case wave.sel of
-                Just ( px1, px2 ) ->
+                Just ( p1, p2 ) ->
                     let
+                        ( vp1, vp2 ) =
+                            ( wave.startPercent, wave.startPercent + pxToSoundDist wave wave.size )
+
                         move =
-                            (+) <| clamp -px1 (wave.size - px2) <| round d
+                            (+) <| clamp -p1 (1 - p2) <| pxToSoundDist wave <| round pxD
+
+                        ( newP1, newP2 ) =
+                            ( move p1, move p2 )
+
+                        newStartPercent =
+                            if p1 < vp1 then
+                                p1
+
+                            else if p2 > vp2 then
+                                vp1 + p2 - vp2
+
+                            else
+                                vp1
+
+                        newWave =
+                            { wave | sel = Just ( newP1, newP2 ), startPercent = newStartPercent }
                     in
-                    ( { wave | sel = Just ( move px1, move px2 ) }, Cmd.none )
+                    ( newWave, requestRedraw newWave )
 
                 Nothing ->
                     ( wave, Cmd.none )
@@ -239,8 +261,30 @@ view :
     -> Element msg
 view wave mayCursors interState wrapInter wrapMsg =
     let
-        toPx =
-            round << ((*) <| toFloat wave.size)
+        curs pos =
+            let
+                p =
+                    soundPercentToViewPercent wave pos
+            in
+            if p >= 0 && p <= 1 then
+                List.singleton << (cursor wave.height <| viewPercentToPx wave p)
+
+            else
+                always []
+
+        sel tup foo bar =
+            let
+                clmapx =
+                    viewPercentToPx wave << clamp 0 1 << soundPercentToViewPercent wave
+
+                ( a, b ) =
+                    Tuple.mapBoth clmapx clmapx tup
+            in
+            if a >= b then
+                []
+
+            else
+                [ selection ( a, b ) foo bar ]
     in
     el
         ((htmlAttribute <|
@@ -262,29 +306,30 @@ view wave mayCursors interState wrapInter wrapMsg =
                             ++ (List.map (mapAttribute wrapInter) <|
                                     case cursors of
                                         Sound c ->
-                                            [ selection ( toPx 0, toPx c.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                                            , selection ( toPx c.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                                            , selection ( toPx c.start, toPx c.end ) (Just IWaveSel) <| rgba 0 0 0 0
-                                            , cursor (toPx c.start) LoopStart wave.height
-                                            , cursor (toPx c.end) LoopEnd wave.height
-                                            , cursor (toPx c.offset) StartOffset wave.height
-                                            ]
-                                                ++ (case wave.sel of
-                                                        Just points ->
-                                                            [ selection points Nothing <| rgba 0.3 0.3 0.3 0.3 ]
+                                            List.concat
+                                                [ sel ( 0, c.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                                , sel ( c.end, 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                                , sel ( c.start, c.end ) (Just IWaveSel) <| rgba 0 0 0 0
+                                                , curs c.start LoopStart
+                                                , curs c.end LoopEnd
+                                                , curs c.offset StartOffset
+                                                , case wave.sel of
+                                                    Just points ->
+                                                        sel points Nothing <| rgba 0.3 0.3 0.3 0.3
 
-                                                        Nothing ->
-                                                            []
-                                                   )
+                                                    Nothing ->
+                                                        []
+                                                ]
 
                                         CollarDiv c ->
-                                            [ selection ( toPx 0, toPx c.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                                            , selection ( toPx c.end, toPx 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
-                                            , selection ( toPx c.start, toPx c.end ) (Just IWaveSel) <| rgba 0 0 0 0
-                                            , cursor (toPx c.start) LoopStart wave.height
-                                            , cursor (toPx c.end) LoopEnd wave.height
-                                            ]
-                                                ++ List.indexedMap (\i div -> cursor (toPx div) (Divide i) wave.height) c.divs
+                                            List.concat <|
+                                                [ sel ( 0, c.start ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                                , sel ( c.end, 1 ) Nothing <| rgba 0.5 0.5 0.5 0.5
+                                                , sel ( c.start, c.end ) (Just IWaveSel) <| rgba 0 0 0 0
+                                                , curs c.start LoopStart
+                                                , curs c.end LoopEnd
+                                                ]
+                                                    ++ List.indexedMap (\i div -> curs div (Divide i)) c.divs
                                )
 
                     Nothing ->
@@ -302,18 +347,38 @@ view wave mayCursors interState wrapInter wrapMsg =
                 []
 
 
-cursor : Int -> Cursor -> Int -> Attribute (Interact.Msg Interactable zone)
-cursor pos cur h =
+requestRedraw : Waveform -> Cmd msg
+requestRedraw wave =
     let
+        cmd soundName =
+            requestSoundDraw <| SoundView soundName wave.zoomFactor wave.startPercent
+    in
+    case wave.drawn of
+        SoundDrawn name ->
+            cmd name
+
+        Pending name ->
+            cmd name
+
+        None ->
+            Cmd.none
+
+
+cursor : Int -> Int -> Cursor -> Attribute (Interact.Msg Interactable zone)
+cursor h pos cur =
+    let
+        size =
+            8
+
         handle attrs =
             inFront <|
                 el
                     ([ htmlAttribute <| Attr.style "cursor" "grab"
-                     , height <| px <| border * 8
-                     , width <| px <| border * 8
-                     , Border.rounded <| border * 4
+                     , height <| px <| border * size
+                     , width <| px <| border * size
+                     , Border.rounded <| border * size // 2
                      , Bg.color <| rgb 0 0 0
-                     , moveLeft <| toFloat <| border * 4
+                     , moveLeft <| toFloat <| border * size // 2
                      ]
                         ++ attrs
                     )
@@ -367,3 +432,53 @@ selection ( a, b ) mayInter color =
                    )
             )
             none
+
+
+soundPercentToViewPercent : Waveform -> Float -> Float
+soundPercentToViewPercent wave p =
+    (p - wave.startPercent) * wave.zoomFactor
+
+
+soundDistToViewDist : Waveform -> Float -> Float
+soundDistToViewDist wave d =
+    d * wave.zoomFactor
+
+
+viewPercentToSoundPercent : Waveform -> Float -> Float
+viewPercentToSoundPercent wave p =
+    p / wave.zoomFactor + wave.startPercent
+
+
+viewDistToSoundDist : Waveform -> Float -> Float
+viewDistToSoundDist wave d =
+    d / wave.zoomFactor
+
+
+viewPercentToPx : Waveform -> Float -> Int
+viewPercentToPx wave p =
+    round <| p * toFloat wave.size
+
+
+pxToViewPercent : Waveform -> Int -> Float
+pxToViewPercent wave p =
+    toFloat p / toFloat wave.size
+
+
+soundPercentToPx : Waveform -> Float -> Int
+soundPercentToPx w =
+    soundPercentToViewPercent w >> viewPercentToPx w
+
+
+pxToSoundPercent : Waveform -> Int -> Float
+pxToSoundPercent w =
+    pxToViewPercent w >> viewPercentToSoundPercent w
+
+
+soundDistToPx : Waveform -> Float -> Int
+soundDistToPx w =
+    soundDistToViewDist w >> viewPercentToPx w
+
+
+pxToSoundDist : Waveform -> Int -> Float
+pxToSoundDist w =
+    pxToViewPercent w >> viewDistToSoundDist w

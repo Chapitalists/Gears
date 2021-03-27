@@ -2756,7 +2756,7 @@ interactWave : Geer -> Interact.Event Interactable Zone -> Model -> Mobeel -> Ma
 interactWave g event model mobile =
     let
         move d val =
-            val + (Vec.getX d / toFloat model.wave.size)
+            val + (Waveform.pxToSoundDist model.wave <| round <| Vec.getX d)
     in
     case ( event.item, event.action ) of
         ( IWaveCursor cur, Interact.Dragged { absD } _ _ ) ->
