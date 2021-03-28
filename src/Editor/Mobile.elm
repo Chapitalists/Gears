@@ -989,7 +989,16 @@ update msg ( model, mobile ) =
                                                 startZone =
                                                     Tuple.second info.start
                                             in
-                                            if startZone == ZWave || dragZone == ZWave then
+                                            if
+                                                startZone
+                                                    == ZWave
+                                                    || dragZone
+                                                    == ZWave
+                                                    || startZone
+                                                    == ZWaveMap
+                                                    || dragZone
+                                                    == ZWaveMap
+                                            then
                                                 e
 
                                             else
@@ -2341,8 +2350,11 @@ manageInteractEvent event model mobile =
                                                             Coll.get id mobile.gears
                                                     in
                                                     case interactWave g event model mobile of
-                                                        Just subMsg ->
+                                                        Just (ReturnWheel subMsg) ->
                                                             update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
+
+                                                        Just (ReturnWave subMsg) ->
+                                                            update (WaveMsg subMsg) ( model, mobile )
 
                                                         Nothing ->
                                                             return
@@ -2752,33 +2764,51 @@ interactMove event model mobile =
             Nothing
 
 
-interactWave : Geer -> Interact.Event Interactable Zone -> Model -> Mobeel -> Maybe Wheel.Msg
+type InteractWaveReturn
+    = ReturnWheel Wheel.Msg
+    | ReturnWave Waveform.Msg
+
+
+interactWave : Geer -> Interact.Event Interactable Zone -> Model -> Mobeel -> Maybe InteractWaveReturn
 interactWave g event model mobile =
     let
-        move d val =
+        move part =
+            case part of
+                Main ->
+                    mainMove
+
+                Mini ->
+                    miniMove
+
+        mainMove d val =
             val + (Waveform.pxToSoundDist model.wave <| round <| Vec.getX d)
+
+        miniMove d val =
+            val + (Waveform.mapPxToSoundPercent model.wave <| round <| Vec.getX d)
     in
     case ( event.item, event.action ) of
         ( IWaveCursor cur, Interact.Dragged { absD } _ _ ) ->
             case cur of
-                LoopEnd ->
+                LoopEnd part ->
                     Just <|
-                        Wheel.ChangeLoop
-                            ( Nothing
-                            , Just <| move absD <| Tuple.second <| Wheel.getLoopPercents g
-                            )
+                        ReturnWheel <|
+                            Wheel.ChangeLoop
+                                ( Nothing
+                                , Just <| move part absD <| Tuple.second <| Wheel.getLoopPercents g
+                                )
 
-                LoopStart ->
+                LoopStart part ->
                     Just <|
-                        Wheel.ChangeLoop
-                            ( Just <| move absD <| Tuple.first <| Wheel.getLoopPercents g
-                            , Nothing
-                            )
+                        ReturnWheel <|
+                            Wheel.ChangeLoop
+                                ( Just <| move part absD <| Tuple.first <| Wheel.getLoopPercents g
+                                , Nothing
+                                )
 
-                StartOffset ->
-                    Just <| Wheel.ChangeStart <| move absD <| g.wheel.startPercent
+                StartOffset part ->
+                    Just <| ReturnWheel <| Wheel.ChangeStart <| move part absD <| g.wheel.startPercent
 
-                Divide i ->
+                Divide i part ->
                     let
                         mayCollar =
                             case Wheel.getContent g of
@@ -2794,14 +2824,29 @@ interactWave g event model mobile =
                         mayPercent =
                             Maybe.andThen (List.head << List.drop i) mayDivs
                     in
-                    mayPercent |> Maybe.andThen (\percent -> Just <| Wheel.ChangeDiv i <| move absD percent)
+                    mayPercent
+                        |> Maybe.map
+                            (\percent ->
+                                ReturnWheel <|
+                                    Wheel.ChangeDiv i <|
+                                        move part absD percent
+                            )
+
+                ViewStart ->
+                    Just <| ReturnWave <| Waveform.MoveStartPercent <| round <| Vec.getX absD
+
+                ViewEnd ->
+                    Just <| ReturnWave <| Waveform.MoveEndPercent <| round <| Vec.getX absD
 
         ( IWaveSel, Interact.Dragged { absD } _ _ ) ->
             let
                 mv =
-                    Just << move absD
+                    Just << mainMove absD
             in
-            Just <| Wheel.ChangeLoop <| Tuple.mapBoth mv mv <| Wheel.getLoopPercents g
+            Just <| ReturnWheel <| Wheel.ChangeLoop <| Tuple.mapBoth mv mv <| Wheel.getLoopPercents g
+
+        ( IWaveMapSel, Interact.Dragged { absD } _ _ ) ->
+            Just <| ReturnWave <| Waveform.MoveView <| round <| Vec.getX absD
 
         _ ->
             Nothing

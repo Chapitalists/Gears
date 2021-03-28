@@ -20,13 +20,18 @@ function sendSize(entries) {
 }
 
 function drawSound(sv) {
-  if (buffers[sv.soundName]) {
-    let buf = buffers[sv.soundName]
-      , size = Math.round(buf.length / sv.zoomFactor)
+  let buf = buffers[sv.soundName]
+  if (buf) {
+    let size = Math.round(buf.length / sv.zoomFactor)
       , start = Math.round(buf.length * sv.startPercent)
-    drawSamples(Array.from(buffers[sv.soundName].getChannelData(0).slice(start, start + size))) // TODO mix channels ?
+      , drawFunc = () => { // TODO mix channels ?
+          drawSamples('waveform', Array.from(buf.getChannelData(0).slice(start, start + size)))
+          if (sv.waveformMap) drawSamples('waveformMap', Array.from(buf.getChannelData(0)))
+        }
+    if (sv.wait) setTimeout(drawFunc, 10)
+    else drawFunc()
     app.ports.soundDrawn.send(sv.soundName)
-  } else console.log(soundName + ' isn’t loaded, cannot draw')
+  } else console.log(sv.soundName + ' isn’t loaded, cannot draw')
 }
 
 function loadSound(soundName) {
@@ -175,53 +180,51 @@ function engine(o) {
     }
 }
 
-function drawSamples(samples) {
-  setTimeout(() => {
-      let canvas = document.getElementById('waveform')
-        , ctx = canvas.getContext('2d')
-        , {width, height} = canvas
-        , pxPerSample = width / samples.length
+function drawSamples(id, samples) {
+  let canvas = document.getElementById(id)
+    , ctx = canvas.getContext('2d')
+    , {width, height} = canvas
+    , pxPerSample = width / samples.length
 
-      ctx.clearRect(0, 0, width, height)
+  ctx.clearRect(0, 0, width, height)
 
+  ctx.strokeStyle = 'black'
+  ctx.beginPath()
+  ctx.moveTo(0, height / 2)
+  ctx.lineTo(width, height / 2)
+  ctx.stroke()
+
+  ctx.strokeRect(0, 0, width, height)
+
+  if (pxPerSample < 0.5) {
+    for (let x = 0 ; x < width ; x++) {
+      let px = samples.slice(Math.floor(x / pxPerSample), Math.floor((x + 1) / pxPerSample))
+        , minPoint = (Math.min.apply(null, px) + 1) * height / 2
+        , maxPoint = (Math.max.apply(null, px) + 1) * height / 2
       ctx.strokeStyle = 'black'
       ctx.beginPath()
-      ctx.moveTo(0, height / 2)
-      ctx.lineTo(width, height / 2)
+      ctx.moveTo(x, minPoint)
+      ctx.lineTo(x, maxPoint)
       ctx.stroke()
 
-      ctx.strokeRect(0, 0, width, height)
-
-      if (pxPerSample < 0.5) {
-        for (let x = 0 ; x < width ; x++) {
-          let px = samples.slice(Math.floor(x / pxPerSample), Math.floor((x + 1) / pxPerSample))
-            , minPoint = (Math.min.apply(null, px) + 1) * height / 2
-            , maxPoint = (Math.max.apply(null, px) + 1) * height / 2
-          ctx.strokeStyle = 'black'
+      let rms = Math.sqrt(px.reduce((acc,v,i,a) => acc + Math.pow(v, 2)) / px.length)
+        , minRmsPoint = (1 - rms) * height / 2
+        , maxRmsPoint = (1 + rms) * height / 2
+      if (minRmsPoint > minPoint && maxRmsPoint < maxPoint) {
+          ctx.strokeStyle = 'gray'
           ctx.beginPath()
-          ctx.moveTo(x, minPoint)
-          ctx.lineTo(x, maxPoint)
+          ctx.moveTo(x, minRmsPoint)
+          ctx.lineTo(x, maxRmsPoint)
           ctx.stroke()
-
-          let rms = Math.sqrt(px.reduce((acc,v,i,a) => acc + Math.pow(v, 2)) / px.length)
-            , minRmsPoint = (1 - rms) * height / 2
-            , maxRmsPoint = (1 + rms) * height / 2
-          if (minRmsPoint > minPoint && maxRmsPoint < maxPoint) {
-              ctx.strokeStyle = 'gray'
-              ctx.beginPath()
-              ctx.moveTo(x, minRmsPoint)
-              ctx.lineTo(x, maxRmsPoint)
-              ctx.stroke()
-          }
-        }
-      } else {
-        ctx.strokeStyle = 'black'
-        ctx.beginPath()
-        ctx.moveTo(0, (samples[0] + 1) * height / 2)
-        for (let i = 1 ; i < samples.length ; i++) {
-          ctx.lineTo(i * pxPerSample, (samples[i] + 1) * height / 2)
-        }
-        ctx.stroke()
       }
-  }, 10)
+    }
+  } else {
+    ctx.strokeStyle = 'black'
+    ctx.beginPath()
+    ctx.moveTo(0, (samples[0] + 1) * height / 2)
+    for (let i = 1 ; i < samples.length ; i++) {
+      ctx.lineTo(i * pxPerSample, (samples[i] + 1) * height / 2)
+    }
+    ctx.stroke()
+  }
 }
