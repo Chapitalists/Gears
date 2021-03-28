@@ -77,7 +77,6 @@ let mic
   , micToRecord
   , micRecorder
   , recording
-//const micLatency = 0.180 // calc with https://superpowered.com/webbrowserlatency
 function openMic() {
   navigator.mediaDevices.getUserMedia({audio : true}).then(stream => {
     mic = stream
@@ -89,34 +88,16 @@ function openMic() {
 
 function inputRec(args) {
   let name = args[0]
-    , micLatency = args[1]
+    , start = args[1]
   if (name) {
     micRecorder.stop()
-    console.log(micLatency/1000)
-//    micRecorder.exportWAV(bl => app.ports.gotNewSample.send(new File([bl], name + ".wav", {type: "audio/wav"})))
-    micRecorder.getBuffer(bs => {
-      let start = Math.round(ctx.sampleRate * micLatency / 1000)
-        , length = bs[0].length - start
-        , newBuf = new AudioBuffer(
-          { length : length
-          , numberOfChannels : bs.length
-          , sampleRate : ctx.sampleRate
-          }
-        )
-      
-      for (let i = 0 ; i < bs.length ; i++) {
-        let chan = bs[i].slice(start)
-        newBuf.copyToChannel(chan, i)
-      }
-      
-      app.ports.gotNewSample.send(new File([audioBufferToWav(newBuf)], name + ".wav", {type: "audio/wav"}))
-    })
+    micRecorder.exportWAV(bl => app.ports.gotNewSample.send(new File([bl], name + ".wav", {type: "audio/wav"})))
     micRecorder.clear()
     recording = false
     if (!scheduler.running) ctx.suspend()
   } else {
     if (mic) {
-//      ctx.resume()
+      if (start) ctx.resume()
       micRecorder.record()
       recording = true
     } else console.error("won’t record mic if it ain’t opened !")

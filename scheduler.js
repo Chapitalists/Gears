@@ -63,7 +63,7 @@ let scheduler = {
       model.view.moveTo(0)
     }
     
-    if (!recording) ctx.suspend()
+    ctx.suspend()
 
     this.intervalId = -1
     this.nextRequestId = -1
