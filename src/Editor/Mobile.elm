@@ -8,7 +8,7 @@ import Data.Content as Content exposing (Content)
 import Data.Gear as Gear
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
 import Data.Wheel as Wheel exposing (Conteet, Wheel)
-import Dict
+import Dict exposing (Dict)
 import Editor.Interacting exposing (..)
 import Element exposing (..)
 import Element.Background as Bg
@@ -128,6 +128,11 @@ keyCodeToMode =
     , ( "KeyQ", Alternate )
     , ( "KeyS", Solo )
     ]
+
+
+keyCodeToShortcut : Model -> Mobeel -> Dict String Msg
+keyCodeToShortcut mod mob =
+    Dict.map (always WaveMsg) <| Waveform.keyCodeToShortcut <| getWavePoints mod mob
 
 
 type alias LinkInfo =
@@ -1111,6 +1116,49 @@ viewExtraTools model =
         )
 
 
+getWavePoints : Model -> Mobeel -> Maybe Waveform.Cursors
+getWavePoints model mobile =
+    case ( model.tool, model.edit ) of
+        ( Edit _, [ id ] ) ->
+            let
+                g =
+                    Coll.get id mobile.gears
+
+                ( start, end ) =
+                    Wheel.getLoopPercents g
+            in
+            case ( g.wheel.viewContent, Wheel.getContent g ) of
+                ( True, Content.S s ) ->
+                    if Waveform.isDrawn model.wave <| Sound.toString s then
+                        Just <| Waveform.Sound { offset = g.wheel.startPercent, start = start, end = end }
+
+                    else
+                        Nothing
+
+                ( True, Content.C c ) ->
+                    case c.oneSound of
+                        Just oneSound ->
+                            if Waveform.isDrawn model.wave oneSound.soundName then
+                                Just <|
+                                    Waveform.CollarDiv
+                                        { start = oneSound.start
+                                        , end = oneSound.end
+                                        , divs = oneSound.divs
+                                        }
+
+                            else
+                                Nothing
+
+                        _ ->
+                            Nothing
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
 
 -- TODO Split between mobile view, motor view, harmony view, and whatever else
 
@@ -1119,45 +1167,7 @@ viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
         mayWavePoints =
-            case ( model.tool, model.edit ) of
-                ( Edit _, [ id ] ) ->
-                    let
-                        g =
-                            Coll.get id mobile.gears
-
-                        ( start, end ) =
-                            Wheel.getLoopPercents g
-                    in
-                    case ( g.wheel.viewContent, Wheel.getContent g ) of
-                        ( True, Content.S s ) ->
-                            if Waveform.isDrawn model.wave <| Sound.toString s then
-                                Just <| Waveform.Sound { offset = g.wheel.startPercent, start = start, end = end }
-
-                            else
-                                Nothing
-
-                        ( True, Content.C c ) ->
-                            case c.oneSound of
-                                Just oneSound ->
-                                    if Waveform.isDrawn model.wave oneSound.soundName then
-                                        Just <|
-                                            Waveform.CollarDiv
-                                                { start = oneSound.start
-                                                , end = oneSound.end
-                                                , divs = oneSound.divs
-                                                }
-
-                                    else
-                                        Nothing
-
-                                _ ->
-                                    Nothing
-
-                        _ ->
-                            Nothing
-
-                _ ->
-                    Nothing
+            getWavePoints model mobile
 
         getMod : Id Geer -> Wheel.Mod
         getMod id =

@@ -716,7 +716,7 @@ update msg model =
                                     Tuple.mapSecond (\cm -> Cmd.batch [ cm, c ]) <| update (ChangedMode NoMode) m
 
                         Keys.Press code ->
-                            case Dict.get code keyCodeToShortcut of
+                            case Dict.get code <| keyCodeToShortcut model of
                                 Just press ->
                                     let
                                         ( doc, cmd ) =
@@ -778,19 +778,23 @@ keyCodeToMode =
             ++ List.map (Tuple.mapSecond EditorMode) Doc.keyCodeToMode
 
 
-keyCodeToShortcut : Dict String Doc.Shortcut
-keyCodeToShortcut =
-    Dict.fromList
-        [ ( "KeyZ", Doc.Tool 1 )
-        , ( "KeyX", Doc.Tool 2 )
-        , ( "KeyC", Doc.Tool 3 )
-        , ( "Space", Doc.Play )
-        , ( "ArrowLeft", Doc.Left )
-        , ( "ArrowRight", Doc.Right )
-        , ( "Backspace", Doc.Suppr )
-        , ( "Delete", Doc.Suppr )
-        , ( "KeyT", Doc.Pack )
-        ]
+keyCodeToShortcut : Model -> Dict String Doc.Shortcut
+keyCodeToShortcut model =
+    Dict.union
+        (Dict.fromList
+            [ ( "KeyZ", Doc.Tool 1 )
+            , ( "KeyX", Doc.Tool 2 )
+            , ( "KeyC", Doc.Tool 3 )
+            , ( "Space", Doc.Play )
+            , ( "ArrowLeft", Doc.Left )
+            , ( "ArrowRight", Doc.Right )
+            , ( "Backspace", Doc.Suppr )
+            , ( "Delete", Doc.Suppr )
+            , ( "KeyT", Doc.Pack )
+            ]
+        )
+    <|
+        Doc.keyCodeToShortcut model.doc
 
 
 keyCodeToDirection : Dict String PanSvg.Direction

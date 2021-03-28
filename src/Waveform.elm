@@ -1,6 +1,7 @@
 port module Waveform exposing (..)
 
 import DOM
+import Dict exposing (Dict)
 import Editor.Interacting exposing (..)
 import Element exposing (..)
 import Element.Background as Bg
@@ -96,6 +97,12 @@ isDrawn { drawn } name =
             False
 
 
+type Mark
+    = Cursor Cursor
+    | Start
+    | End
+
+
 type Msg
     = GotSize Int
     | ChgSound String
@@ -103,7 +110,9 @@ type Msg
     | MoveStartPercent Int
     | MoveEndPercent Int
     | MoveView Int
+    | CenterOn Mark (Maybe Cursors)
     | ZoomPoint Float Float -- wheelDelta, xOffset
+    | Zoom Bool
     | GotDrawn (Result D.Error String)
     | Select ( Float, Float )
     | MoveSel Float
@@ -181,6 +190,9 @@ update msg wave =
         MoveView d ->
             update (ChgView wave.zoomFactor (wave.startPercent + mapPxToSoundPercent wave d)) wave
 
+        CenterOn cur mayCursors ->
+            Debug.todo "center on cursors"
+
         ZoomPoint delta x ->
             let
                 factor =
@@ -196,6 +208,26 @@ update msg wave =
                     wave.startPercent + d * (1 / factor - 1) / f
             in
             update (ChgView f a) wave
+
+        Zoom b ->
+            let
+                factor =
+                    if b then
+                        0.9
+
+                    else
+                        1.1
+
+                f =
+                    clamp 1 (1 / 0) <| wave.zoomFactor / factor
+
+                a =
+                    clamp 0 (1 - 1 / f) <| wave.startPercent - (1 / f - 1 / wave.zoomFactor) / 2
+
+                newWave =
+                    { wave | zoomFactor = f, startPercent = a }
+            in
+            ( newWave, requestRedraw newWave )
 
         GotDrawn res ->
             case res of
@@ -284,6 +316,17 @@ update msg wave =
 sub : Sub Msg
 sub =
     soundDrawn (GotDrawn << D.decodeValue D.string)
+
+
+keyCodeToShortcut : Maybe Cursors -> Dict String Msg
+keyCodeToShortcut mayC =
+    Dict.fromList
+        [ ( "KeyG", Zoom False )
+        , ( "KeyH", Zoom True )
+        , ( "KeyB", MoveView -20 )
+        , ( "KeyN", MoveView 20 )
+        , ( "Key1", CenterOn Start mayC )
+        ]
 
 
 type Cursors
