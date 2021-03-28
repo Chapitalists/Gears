@@ -703,10 +703,18 @@ update msg model =
                             case Dict.get code <| keyCodeToShortcut model of
                                 Just press ->
                                     let
-                                        ( doc, cmd ) =
-                                            Doc.update (Doc.KeyPressed press) m.doc
+                                        ( newModel, cmd ) =
+                                            case ( model.micState, press, model.doc.editor.tool ) of
+                                                ( Just ( True, name ), Doc.Play, Editor.Play True _ ) ->
+                                                    update (EndMicRec name) model
+
+                                                _ ->
+                                                    ( m, Cmd.none )
+
+                                        ( doc, docCmd ) =
+                                            Doc.update (Doc.KeyPressed press) newModel.doc
                                     in
-                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
+                                    ( { newModel | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg docCmd, cmd ] )
 
                                 Nothing ->
                                     ( m, c )
