@@ -483,7 +483,8 @@ update msg ( model, mobile ) =
 
                         _ ->
                             Maybe.withDefault tmp <|
-                                uncollar ( id, List.take (List.length l - 1) l ) tmp
+                                Maybe.map Tuple.first <|
+                                    uncollar ( id, List.take (List.length l - 1) l ) tmp
             in
             { return
                 | model =
@@ -799,7 +800,15 @@ update msg ( model, mobile ) =
                     uncollar ( id, [] ) mobile
             in
             Maybe.withDefault return <|
-                Maybe.map (\m -> { return | mobile = m, toUndo = Do }) mayRes
+                Maybe.map
+                    (\( m, ( newSel, _ ) ) ->
+                        { return
+                            | mobile = m
+                            , toUndo = Do
+                            , model = { model | edit = [ newSel ] }
+                        }
+                    )
+                    mayRes
 
         EnteredCollarMult str ->
             case toIntOrEmpty str of
@@ -1670,18 +1679,6 @@ viewEditDetails model mobile =
                                 }
                       in
                       case Wheel.getContent g of
-                        Content.C col ->
-                            if List.length col.beads == 0 then
-                                Input.button []
-                                    { label = text "Décollier"
-                                    , onPress = Just <| UnCollar id
-                                    }
-
-                            else
-                                row [ spacing 16 ] <|
-                                    simpleBtn
-                                        :: multBtns
-
                         Content.S s ->
                             row [ spacing 16 ] <|
                                 simpleBtn
@@ -1692,6 +1689,10 @@ viewEditDetails model mobile =
                             row [ spacing 16 ] <|
                                 simpleBtn
                                     :: multBtns
+                    , Input.button []
+                        { label = text "Décollier"
+                        , onPress = Just <| UnCollar id
+                        }
                     , if id == mobile.motor then
                         Input.button []
                             { onPress = Just <| ChangedMode SelectMotor
@@ -2061,7 +2062,7 @@ addBead model mobile bead =
             Nothing
 
 
-uncollar : Identifier -> Mobeel -> Maybe Mobeel
+uncollar : Identifier -> Mobeel -> Maybe ( Mobeel, Identifier )
 uncollar id m =
     let
         w =
@@ -2069,28 +2070,83 @@ uncollar id m =
     in
     case Wheel.getWheelContent w of
         Content.C col ->
-            if Collar.length col == 1 then
-                let
-                    newMob =
-                        CommonData.updateWheel id (Wheel.ChangeContent <| Wheel.getContent col.head) m
+            let
+                beads =
+                    Collar.getBeads col
 
-                    gId =
-                        Tuple.first id
+                contentLength =
+                    Collar.getTotalLength col
 
-                    getContentLength =
-                        CommonData.getWheeledContentLength << Coll.get gId << .gears
-                in
-                Just <|
-                    { newMob
-                        | gears =
-                            Harmo.changeContentKeepLength gId
-                                (getContentLength newMob)
-                                (getContentLength m)
-                                newMob.gears
-                    }
+                ( gId, listPos ) =
+                    id
+            in
+            case List.reverse listPos of
+                [] ->
+                    let
+                        nextId =
+                            Tuple.first <| Coll.insertTellId (Gear.default Wheel.default) m.gears
 
-            else
-                Nothing
+                        newMotor =
+                            if m.motor == gId then
+                                nextId
+
+                            else
+                                m.motor
+
+                        newMob =
+                            CommonData.deleteWheel id { m | motor = newMotor } Mobile.rm Collar.rm
+
+                        ( gearPos, gearLength ) =
+                            Mobile.gearPosSize gId m.gears
+
+                        xMin =
+                            Vec.getX gearPos - gearLength / 2
+
+                        ratio =
+                            gearLength / contentLength
+
+                        newGears =
+                            Tuple.first <|
+                                List.foldl
+                                    (\{ length, wheel } ( gears, x ) ->
+                                        let
+                                            realLength =
+                                                length * ratio
+                                        in
+                                        ( gears
+                                            |> Coll.insert
+                                                { motor = Motor.default
+                                                , wheel = wheel
+                                                , harmony = Harmo.newRate <| realLength / CommonData.getWheeledContentLength { wheel = wheel }
+                                                , pos = Vec.setX (x + realLength / 2) gearPos
+                                                }
+                                        , x + realLength
+                                        )
+                                    )
+                                    ( newMob.gears, xMin )
+                                    beads
+                    in
+                    Just ( { newMob | gears = newGears }, ( nextId, [] ) )
+
+                lastIndex :: revRest ->
+                    let
+                        upColId =
+                            ( gId, List.reverse revRest )
+                    in
+                    case Wheel.getWheelContent <| CommonData.getWheel upColId m of
+                        Content.C upCol ->
+                            Just
+                                ( CommonData.updateWheel upColId
+                                    (Wheel.ChangeContent <|
+                                        Content.C <|
+                                            Collar.addBeads lastIndex beads upCol
+                                    )
+                                    m
+                                , id
+                                )
+
+                        _ ->
+                            Nothing
 
         _ ->
             Nothing

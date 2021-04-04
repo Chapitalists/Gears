@@ -128,22 +128,32 @@ get =
     Content.getBead
 
 
-add : Int -> Beed -> Colleer -> Colleer
-add i b c =
-    if i <= 0 then
-        { c
-            | head = b
-            , beads = c.head :: c.beads
-            , matrice = c.matrice + 1
-            , oneSound = Nothing
-        }
+addBeads : Int -> List Beed -> Colleer -> Colleer
+addBeads i bs c =
+    case bs of
+        [] ->
+            c
 
-    else
-        { c
-            | beads = List.concat [ List.take (i - 1) c.beads, [ b ], List.drop (i - 1) c.beads ]
-            , matrice = c.matrice + 1
-            , oneSound = Nothing
-        }
+        head :: tail ->
+            if i <= 0 then
+                { c
+                    | head = head
+                    , beads = List.concat [ tail, c.head :: c.beads ]
+                    , matrice = c.matrice + List.length bs
+                    , oneSound = Nothing
+                }
+
+            else
+                { c
+                    | beads = List.concat [ List.take (i - 1) c.beads, bs, List.drop (i - 1) c.beads ]
+                    , matrice = c.matrice + List.length bs
+                    , oneSound = Nothing
+                }
+
+
+add : Int -> Beed -> Colleer -> Colleer
+add i b =
+    addBeads i [ b ]
 
 
 rm : Int -> Colleer -> Colleer
