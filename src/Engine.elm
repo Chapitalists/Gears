@@ -109,7 +109,7 @@ encodeWheel w hasView parentUid =
     ]
         ++ (case Wheel.getWheelContent w of
                 Content.S s ->
-                    [ ( "soundName", E.string <| Sound.toString s )
+                    [ ( "soundPath", E.string <| Sound.getPath s )
                     , ( "loopPercents", E.list E.float <| Sound.getLoopPercentsList s )
                     ]
 

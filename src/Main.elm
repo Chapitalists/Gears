@@ -295,7 +295,7 @@ update msg model =
                                     else
                                         let
                                             path =
-                                                List.concatMap (String.split "\\") <| String.split "/" <| Sound.toString s
+                                                List.concatMap (String.split "\\") <| String.split "/" <| Sound.getPath s
                                         in
                                         case path of
                                             [] ->
@@ -966,7 +966,7 @@ viewSoundInLib model s id playing loading =
     row [ spacing 5 ]
         ([ Input.button
             [ Font.color <|
-                if List.any ((==) <| String.join "/" id) <| List.map Sound.toString model.loadedSoundList then
+                if List.any ((==) <| String.join "/" id) <| List.map Sound.getPath model.loadedSoundList then
                     rgb 0.2 0.8 0.2
 
                 else if loading then
@@ -1056,8 +1056,8 @@ viewLoaded model =
             }
          ]
             ++ (List.map (soundView model.showDirLoad) <|
-                    List.sortWith (\s t -> Natural.compare (Sound.toString s) (Sound.toString t)) <|
-                        filterFiles model.fileFilter Sound.toString model.loadedSoundList
+                    List.sortWith (\s t -> Natural.compare (Sound.getPath s) (Sound.getPath t)) <|
+                        filterFiles model.fileFilter Sound.getPath model.loadedSoundList
                )
         )
     ]
@@ -1067,7 +1067,7 @@ soundView : Bool -> Sound -> Element Msg
 soundView showDir s =
     let
         fullPath =
-            cutExtension <| Sound.toString s
+            cutExtension <| Sound.getPath s
 
         l =
             List.concatMap (String.split "/") <| String.split "\\" fullPath

@@ -97,23 +97,6 @@ toDrawLink coll l =
     Tuple.mapBoth f f l
 
 
-
--- TODO remove and use Common.getName instead
-
-
-gearName : Id Geer -> Coll Geer -> String
-gearName id coll =
-    let
-        name =
-            (Coll.get id coll).wheel.name
-    in
-    if String.isEmpty name then
-        Gear.toUID id
-
-    else
-        name
-
-
 getLengthId : Id Geer -> Coll Geer -> Float
 getLengthId =
     Harmo.getLengthId getWheeledContentLength

@@ -108,7 +108,7 @@ type alias Style =
     , motor : Bool
     , dashed : Bool
     , baseColor : Maybe Float
-    , named : Bool
+    , named : Maybe String
     }
 
 
@@ -118,7 +118,7 @@ defaultStyle =
     , motor = False
     , dashed = False
     , baseColor = Nothing
-    , named = True
+    , named = Nothing
     }
 
 
@@ -309,31 +309,21 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                     mayWheelInter
     in
     S.g [ SA.transform [ Translate (getX pos) (getY pos) ] ] <|
-        (if style.named then
-            [ S.text_
-                [ SA.x <| Num 0
-                , SA.y <| Num -(length * 3 / 4)
-                , SA.fontSize <| Num (length / 2)
-                , SA.textAnchor AnchorMiddle
-                , SA.stroke Color.white
-                , SA.strokeWidth <| Num (tickW / 4)
+        (case style.named of
+            Just name ->
+                [ S.text_
+                    [ SA.x <| Num 0
+                    , SA.y <| Num -(length * 3 / 4)
+                    , SA.fontSize <| Num (length / 2)
+                    , SA.textAnchor AnchorMiddle
+                    , SA.stroke Color.white
+                    , SA.strokeWidth <| Num (tickW / 4)
+                    ]
+                    [ text name ]
                 ]
-                [ text <|
-                    if String.isEmpty w.name then
-                        case getWheelContent w of
-                            Content.S s ->
-                                Sound.fileName s
 
-                            _ ->
-                                ""
-
-                    else
-                        w.name
-                ]
-            ]
-
-         else
-            [ S.text_ [] [] ]
+            Nothing ->
+                [ S.text_ [] [] ]
          -- Because rotating g cannot be Keyed in TypedSvg, trick to prevent recreation
         )
             ++ [ S.g hoverAttrs <|
@@ -536,7 +526,7 @@ insideCollarView collar mayWheelInter parentUid =
                 ( view b.wheel
                     (vec2 (p + b.length / 2) 0)
                     b.length
-                    { defaultStyle | named = False }
+                    { defaultStyle | named = Nothing }
                     (Maybe.map (\( inter, l ) -> ( inter, l ++ [ i ] )) mayWheelInter)
                     Nothing
                     (Content.beadUIDExtension parentUid i)

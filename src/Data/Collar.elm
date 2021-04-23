@@ -82,7 +82,7 @@ fromSoundDiv s d l =
             , beads = rest
             , oneSound =
                 Just
-                    { soundName = Sound.toString s
+                    { path = Sound.getPath s
                     , start = Tuple.first loopPercents
                     , end = Tuple.second loopPercents
                     , divs = divs

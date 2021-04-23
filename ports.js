@@ -19,41 +19,41 @@ function sendSize(entries) {
     app.ports.newSVGSize.send(entries[0].contentRect)
 }
 
-function drawSound(soundName) {
-  if (buffers[soundName]) {
-    drawSamples(Array.from(buffers[soundName].getChannelData(0))) // TODO mix channels ?
-    app.ports.soundDrawn.send(soundName)
-  } else console.log(soundName + ' isn’t loaded, cannot draw')
+function drawSound(soundPath) {
+  if (buffers[soundPath]) {
+    drawSamples(Array.from(buffers[soundPath].getChannelData(0))) // TODO mix channels ?
+    app.ports.soundDrawn.send(soundPath)
+  } else console.log(soundPath + ' isn’t loaded, cannot draw')
 }
 
-function loadSound(soundName) {
-  if (buffers[soundName]) {
-    app.ports.soundLoaded.send(soundName + ' already Loaded')
+function loadSound(soundPath) {
+  if (buffers[soundPath]) {
+    app.ports.soundLoaded.send(soundPath + ' already Loaded')
   } else {
-    createBuffer(soundName).then(b => {
-      buffers[soundName] = b
-      loadOk(soundName)
-    }).catch(err => loadErr(err, soundName))
+    createBuffer(soundPath).then(b => {
+      buffers[soundPath] = b
+      loadOk(soundPath)
+    }).catch(err => loadErr(err, soundPath))
   }
 }
 
-async function createBuffer(soundName) {
-  const response = await fetch('./sons/' + soundName)
+async function createBuffer(soundPath) {
+  const response = await fetch('./sons/' + soundPath)
       , arrayBuffer = await response.arrayBuffer()
       , audioBuffer = await ctx.decodeAudioData(arrayBuffer)
   return audioBuffer
 }
 
-function loadOk(soundName) {
+function loadOk(soundPath) {
   app.ports.soundLoaded.send(
-  { path : soundName
-  , length : buffers[soundName].duration
+  { path : soundPath
+  , length : buffers[soundPath].duration
   })
 }
 
-function loadErr(err, soundName) {
+function loadErr(err, soundPath) {
   console.error(err)
-  app.ports.soundLoaded.send(soundName + ' got ' + err)
+  app.ports.soundLoaded.send(soundPath + ' got ' + err)
 }
 
 function toggleRecord(bool) {
@@ -95,9 +95,9 @@ function inputRec(name) {
 }
 
 function cutSample(infos) {
-    if (!buffers[infos.fromFileName]) {console.error(infos.fromFileName + " ain’t loaded, cannot cut");return;}
+    if (!buffers[infos.fromSoundPath]) {console.error(infos.fromFileName + " ain’t loaded, cannot cut");return;}
 
-    let buf = buffers[infos.fromFileName]
+    let buf = buffers[infos.fromSoundPath]
       // TODO maybe round ?
       , start = infos.percents[0] * buf.length - 1
       , end = infos.percents[1] * buf.length + 1

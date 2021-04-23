@@ -31,20 +31,9 @@ length (S s) =
     s.duration * (s.endPercent - s.startPercent)
 
 
-toString : Sound -> String
-toString (S { path }) =
+getPath : Sound -> String
+getPath (S { path }) =
     path
-
-
-fileName : Sound -> String
-fileName (S { path }) =
-    Maybe.withDefault "" <|
-        List.head <|
-            String.split "." <|
-                Maybe.withDefault "" <|
-                    List.head <|
-                        List.reverse <|
-                            String.split "/" path
 
 
 getLoopPercentsList : Sound -> List Float

@@ -47,7 +47,7 @@ port toggleRecord : Bool -> Cmd msg
 port gotRecord : (D.Value -> msg) -> Sub msg
 
 
-port requestCutSample : { fromFileName : String, newFileName : String, percents : ( Float, Float ) } -> Cmd msg
+port requestCutSample : { fromSoundPath : String, newFileName : String, percents : ( Float, Float ) } -> Cmd msg
 
 
 
@@ -864,7 +864,7 @@ update msg ( model, mobile ) =
                     in
                     case Wheel.getContent g of
                         Content.S s ->
-                            { return | cmd = requestCutSample { fromFileName = Sound.toString s, newFileName = model.newSampleName, percents = Wheel.getLoopPercents g } }
+                            { return | cmd = requestCutSample { fromSoundPath = Sound.getPath s, newFileName = model.newSampleName, percents = Wheel.getLoopPercents g } }
 
                         _ ->
                             return
@@ -1127,7 +1127,7 @@ viewContent ( model, mobile ) =
                     in
                     case ( g.wheel.viewContent, Wheel.getContent g ) of
                         ( True, Content.S s ) ->
-                            if model.wave.drawn == (Waveform.SoundDrawn <| Sound.toString s) then
+                            if model.wave.drawn == (Waveform.SoundDrawn <| Sound.getPath s) then
                                 Just <| Waveform.Sound { offset = g.wheel.startPercent, start = start, end = end }
 
                             else
@@ -1136,7 +1136,7 @@ viewContent ( model, mobile ) =
                         ( True, Content.C c ) ->
                             case c.oneSound of
                                 Just oneSound ->
-                                    if model.wave.drawn == Waveform.SoundDrawn oneSound.soundName then
+                                    if model.wave.drawn == Waveform.SoundDrawn oneSound.path then
                                         Just <|
                                             Waveform.CollarDiv
                                                 { start = oneSound.start
@@ -1279,10 +1279,14 @@ viewContent ( model, mobile ) =
                                 , named =
                                     case Interact.getInteract model.interact of
                                         Just ( IWheel idd, _ ) ->
-                                            id == Tuple.first idd
+                                            if id == Tuple.first idd then
+                                                Just <| CommonData.getName ( id, [] ) mobile
+
+                                            else
+                                                Nothing
 
                                         _ ->
-                                            False
+                                            Nothing
                                 }
                                 (Just ( IWheel << Tuple.pair id, [] ))
                                 (Just <| IResizeHandle id)
@@ -1562,10 +1566,10 @@ viewEditDetails model mobile =
                             { label =
                                 text <|
                                     if g.wheel.viewContent then
-                                        "Ranger " ++ Sound.toString s
+                                        "Ranger " ++ Sound.getPath s
 
                                     else
-                                        "Voir " ++ Sound.toString s
+                                        "Voir " ++ Sound.getPath s
                             , onPress = Just <| WheelMsgs [ ( wId, Wheel.ToggleContentView ) ]
                             }
 
@@ -1776,7 +1780,7 @@ viewEditDetails model mobile =
                                 let
                                     ok =
                                         model.newSampleName
-                                            /= Sound.toString s
+                                            /= Sound.getPath s
                                             && (not <| String.isEmpty model.newSampleName)
                                 in
                                 [ Input.button
@@ -2654,7 +2658,7 @@ interactSelectEdit event mobile model =
                     Content.S s ->
                         let
                             ( wave, cmd ) =
-                                Waveform.update (Waveform.ChgSound <| Sound.toString s) model.wave
+                                Waveform.update (Waveform.ChgSound <| Sound.getPath s) model.wave
                         in
                         Just ( { model | edit = [ id ], wave = wave }, Cmd.map WaveMsg cmd )
 
@@ -2663,7 +2667,7 @@ interactSelectEdit event mobile model =
                             Just one ->
                                 let
                                     ( wave, cmd ) =
-                                        Waveform.update (Waveform.ChgSound one.soundName) model.wave
+                                        Waveform.update (Waveform.ChgSound one.path) model.wave
                                 in
                                 Just ( { model | edit = [ id ], beadCursor = 0, wave = wave }, Cmd.map WaveMsg cmd )
 

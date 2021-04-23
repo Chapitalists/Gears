@@ -106,7 +106,7 @@ type alias Collar item =
     , beads : List (Bead item)
 
     -- WARNING second source of truth, just a shortcut to sounds internals
-    , oneSound : Maybe { soundName : String, start : Float, end : Float, divs : List Float }
+    , oneSound : Maybe { path : String, start : Float, end : Float, divs : List Float }
     }
 
 
@@ -402,7 +402,7 @@ collarEncoder wheelEncoder c =
             ++ (Maybe.withDefault [] <|
                     Maybe.map
                         (\oneSound ->
-                            [ ( "oneSoundName", E.string oneSound.soundName )
+                            [ ( "oneSoundName", E.string oneSound.path )
                             , ( "divs", E.list E.float oneSound.divs )
                             , ( "start", E.float oneSound.start )
                             , ( "end", E.float oneSound.end )
@@ -442,7 +442,7 @@ collarDecoder wheelDecoder =
                                                                         , oneSound =
                                                                             Maybe.map4
                                                                                 (\str start end divs ->
-                                                                                    { soundName = str
+                                                                                    { path = str
                                                                                     , start = start
                                                                                     , end = end
                                                                                     , divs = divs

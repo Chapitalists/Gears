@@ -17,31 +17,35 @@ type alias Identifier =
 
 
 getName : Identifier -> Mobile Wheel -> String
-getName ( id, l ) mobile =
+getName id mobile =
     let
         w =
-            getWheel ( id, l ) mobile
+            getWheel id mobile
+
+        fileNameFromPath =
+            Maybe.withDefault ""
+                << List.head
+                << String.split "."
+                << Maybe.withDefault ""
+                << List.head
+                << List.reverse
+                << String.split "/"
     in
     if String.isEmpty w.name then
-        case l of
-            [] ->
-                case Wheel.getWheelContent w of
-                    Content.S s ->
-                        let
-                            fileName =
-                                Sound.fileName s
-                        in
-                        if String.isEmpty fileName then
-                            Gear.toUID id
+        case Wheel.getWheelContent w of
+            Content.S s ->
+                fileNameFromPath <| Sound.getPath s
 
-                        else
-                            fileName
+            Content.C c ->
+                case c.oneSound of
+                    Just { path } ->
+                        fileNameFromPath path
 
-                    _ ->
-                        Gear.toUID id
+                    Nothing ->
+                        toUid id
 
             _ ->
-                toUid ( id, l )
+                toUid id
 
     else
         w.name
