@@ -765,8 +765,6 @@ keyCodeToShortcut =
         , ( "Space", Doc.Play )
         , ( "ArrowLeft", Doc.Left )
         , ( "ArrowRight", Doc.Right )
-        , ( "Backspace", Doc.Suppr )
-        , ( "Delete", Doc.Suppr )
         , ( "KeyT", Doc.Pack )
         ]
 
