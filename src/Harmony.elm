@@ -168,15 +168,8 @@ resizeFree id length contentLength coll =
 
 
 toContentLength : Id (Harmonized g) -> Coll (Harmonized g) -> Coll (Harmonized g)
-toContentLength id coll =
-    case (getHarmo id coll).ref of
-        Self _ ->
-            Coll.update id (\g -> { g | harmony = newRate 1 }) coll
-
-        Other rId ->
-            coll
-                |> Coll.update id (\g -> { g | harmony = newRate 1 })
-                |> Coll.update (Coll.idMap rId) (remove id)
+toContentLength id =
+    changeSelfUnit id <| Rate 1
 
 
 makeCopy : Id (Harmonized g) -> Id (Harmonized g) -> Coll (Harmonized g) -> Coll (Harmonized g)
