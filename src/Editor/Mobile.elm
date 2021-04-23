@@ -8,7 +8,7 @@ import Data.Content as Content exposing (Content)
 import Data.Gear as Gear
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
 import Data.Wheel as Wheel exposing (Conteet, Wheel)
-import Dict
+import Dict exposing (Dict)
 import Editor.Interacting exposing (..)
 import Element exposing (..)
 import Element.Background as Bg
@@ -130,6 +130,11 @@ keyCodeToMode =
     , ( "KeyS", Solo )
     , ( "KeyA", Clone )
     ]
+
+
+keyCodeToShortcut : Model -> Mobeel -> Dict String Msg
+keyCodeToShortcut mod mob =
+    Dict.map (always WaveMsg) <| Waveform.keyCodeToShortcut <| getWavePoints mod mob
 
 
 type alias LinkInfo =
@@ -999,7 +1004,16 @@ update msg ( model, mobile ) =
                                                 startZone =
                                                     Tuple.second info.start
                                             in
-                                            if startZone == ZWave || dragZone == ZWave then
+                                            if
+                                                startZone
+                                                    == ZWave
+                                                    || dragZone
+                                                    == ZWave
+                                                    || startZone
+                                                    == ZWaveMap
+                                                    || dragZone
+                                                    == ZWaveMap
+                                            then
                                                 e
 
                                             else
@@ -1112,6 +1126,49 @@ viewExtraTools model =
         )
 
 
+getWavePoints : Model -> Mobeel -> Maybe Waveform.Cursors
+getWavePoints model mobile =
+    case ( model.tool, model.edit ) of
+        ( Edit _, [ id ] ) ->
+            let
+                g =
+                    Coll.get id mobile.gears
+
+                ( start, end ) =
+                    Wheel.getLoopPercents g
+            in
+            case ( g.wheel.viewContent, Wheel.getContent g ) of
+                ( True, Content.S s ) ->
+                    if Waveform.isDrawn model.wave <| Sound.getPath s then
+                        Just <| Waveform.Sound { offset = g.wheel.startPercent, start = start, end = end }
+
+                    else
+                        Nothing
+
+                ( True, Content.C c ) ->
+                    case c.oneSound of
+                        Just oneSound ->
+                            if Waveform.isDrawn model.wave oneSound.path then
+                                Just <|
+                                    Waveform.CollarDiv
+                                        { start = oneSound.start
+                                        , end = oneSound.end
+                                        , divs = oneSound.divs
+                                        }
+
+                            else
+                                Nothing
+
+                        _ ->
+                            Nothing
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
 
 -- TODO Split between mobile view, motor view, harmony view, and whatever else
 
@@ -1120,45 +1177,7 @@ viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
         mayWavePoints =
-            case ( model.tool, model.edit ) of
-                ( Edit _, [ id ] ) ->
-                    let
-                        g =
-                            Coll.get id mobile.gears
-
-                        ( start, end ) =
-                            Wheel.getLoopPercents g
-                    in
-                    case ( g.wheel.viewContent, Wheel.getContent g ) of
-                        ( True, Content.S s ) ->
-                            if model.wave.drawn == (Waveform.SoundDrawn <| Sound.getPath s) then
-                                Just <| Waveform.Sound { offset = g.wheel.startPercent, start = start, end = end }
-
-                            else
-                                Nothing
-
-                        ( True, Content.C c ) ->
-                            case c.oneSound of
-                                Just oneSound ->
-                                    if model.wave.drawn == Waveform.SoundDrawn oneSound.path then
-                                        Just <|
-                                            Waveform.CollarDiv
-                                                { start = oneSound.start
-                                                , end = oneSound.end
-                                                , divs = oneSound.divs
-                                                }
-
-                                    else
-                                        Nothing
-
-                                _ ->
-                                    Nothing
-
-                        _ ->
-                            Nothing
-
-                _ ->
-                    Nothing
+            getWavePoints model mobile
 
         getMod : Id Geer -> Wheel.Mod
         getMod id =
@@ -1239,6 +1258,7 @@ viewContent ( model, mobile ) =
                 mayWavePoints
                 model.interact
                 InteractMsg
+                WaveMsg
         ]
     <|
         Element.html <|
@@ -2475,8 +2495,11 @@ manageInteractEvent event model mobile =
                                                             Coll.get id mobile.gears
                                                     in
                                                     case interactWave g event model mobile of
-                                                        Just subMsg ->
+                                                        Just (ReturnWheel subMsg) ->
                                                             update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
+
+                                                        Just (ReturnWave subMsg) ->
+                                                            update (WaveMsg subMsg) ( model, mobile )
 
                                                         Nothing ->
                                                             return
@@ -2978,33 +3001,51 @@ interactMove event model mobile =
             Nothing
 
 
-interactWave : Geer -> Interact.Event Interactable Zone -> Model -> Mobeel -> Maybe Wheel.Msg
+type InteractWaveReturn
+    = ReturnWheel Wheel.Msg
+    | ReturnWave Waveform.Msg
+
+
+interactWave : Geer -> Interact.Event Interactable Zone -> Model -> Mobeel -> Maybe InteractWaveReturn
 interactWave g event model mobile =
     let
-        move d val =
-            val + (Vec.getX d / toFloat model.wave.size)
+        move part =
+            case part of
+                Main ->
+                    mainMove
+
+                Mini ->
+                    miniMove
+
+        mainMove d val =
+            val + (Waveform.pxToSoundDist model.wave <| round <| Vec.getX d)
+
+        miniMove d val =
+            val + (Waveform.mapPxToSoundPercent model.wave <| round <| Vec.getX d)
     in
     case ( event.item, event.action ) of
         ( IWaveCursor cur, Interact.Dragged { absD } _ _ ) ->
             case cur of
-                LoopEnd ->
+                LoopEnd part ->
                     Just <|
-                        Wheel.ChangeLoop
-                            ( Nothing
-                            , Just <| move absD <| Tuple.second <| Wheel.getLoopPercents g
-                            )
+                        ReturnWheel <|
+                            Wheel.ChangeLoop
+                                ( Nothing
+                                , Just <| move part absD <| Tuple.second <| Wheel.getLoopPercents g
+                                )
 
-                LoopStart ->
+                LoopStart part ->
                     Just <|
-                        Wheel.ChangeLoop
-                            ( Just <| move absD <| Tuple.first <| Wheel.getLoopPercents g
-                            , Nothing
-                            )
+                        ReturnWheel <|
+                            Wheel.ChangeLoop
+                                ( Just <| move part absD <| Tuple.first <| Wheel.getLoopPercents g
+                                , Nothing
+                                )
 
-                StartOffset ->
-                    Just <| Wheel.ChangeStart <| move absD <| g.wheel.startPercent
+                StartOffset part ->
+                    Just <| ReturnWheel <| Wheel.ChangeStart <| move part absD <| g.wheel.startPercent
 
-                Divide i ->
+                Divide i part ->
                     let
                         mayCollar =
                             case Wheel.getContent g of
@@ -3020,14 +3061,29 @@ interactWave g event model mobile =
                         mayPercent =
                             Maybe.andThen (List.head << List.drop i) mayDivs
                     in
-                    mayPercent |> Maybe.andThen (\percent -> Just <| Wheel.ChangeDiv i <| move absD percent)
+                    mayPercent
+                        |> Maybe.map
+                            (\percent ->
+                                ReturnWheel <|
+                                    Wheel.ChangeDiv i <|
+                                        move part absD percent
+                            )
+
+                ViewStart ->
+                    Just <| ReturnWave <| Waveform.MoveStartPercent <| round <| Vec.getX absD
+
+                ViewEnd ->
+                    Just <| ReturnWave <| Waveform.MoveEndPercent <| round <| Vec.getX absD
 
         ( IWaveSel, Interact.Dragged { absD } _ _ ) ->
             let
                 mv =
-                    Just << move absD
+                    Just << mainMove absD
             in
-            Just <| Wheel.ChangeLoop <| Tuple.mapBoth mv mv <| Wheel.getLoopPercents g
+            Just <| ReturnWheel <| Wheel.ChangeLoop <| Tuple.mapBoth mv mv <| Wheel.getLoopPercents g
+
+        ( IWaveMapSel, Interact.Dragged { absD } _ _ ) ->
+            Just <| ReturnWave <| Waveform.MoveView <| round <| Vec.getX absD
 
         _ ->
             Nothing

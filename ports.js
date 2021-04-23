@@ -19,11 +19,19 @@ function sendSize(entries) {
     app.ports.newSVGSize.send(entries[0].contentRect)
 }
 
-function drawSound(soundPath) {
-  if (buffers[soundPath]) {
-    drawSamples(Array.from(buffers[soundPath].getChannelData(0))) // TODO mix channels ?
-    app.ports.soundDrawn.send(soundPath)
-  } else console.log(soundPath + ' isn’t loaded, cannot draw')
+function drawSound(sv) {
+  let buf = buffers[sv.soundPath]
+  if (buf) {
+    let size = Math.round(buf.length / sv.zoomFactor)
+      , start = Math.round(buf.length * sv.startPercent)
+      , drawFunc = () => { // TODO mix channels ?
+          drawSamples('waveform', Array.from(buf.getChannelData(0).slice(start, start + size)))
+          if (sv.waveformMap) drawSamples('waveformMap', Array.from(buf.getChannelData(0)))
+        }
+    if (sv.wait) setTimeout(drawFunc, 10)
+    else drawFunc()
+    app.ports.soundDrawn.send(sv.soundPath)
+  } else console.log(sv.soundPath + ' isn’t loaded, cannot draw')
 }
 
 function loadSound(soundPath) {
@@ -78,7 +86,9 @@ function openMic() {
   }).catch(console.error)
 }
 
-function inputRec(name) {
+function inputRec(args) {
+  let name = args[0]
+    , start = args[1]
   if (name) {
     micRecorder.stop()
     micRecorder.exportWAV(bl => app.ports.gotNewSample.send(new File([bl], name + ".wav", {type: "audio/wav"})))
@@ -87,7 +97,7 @@ function inputRec(name) {
     if (!scheduler.running) ctx.suspend()
   } else {
     if (mic) {
-      ctx.resume()
+      if (start) ctx.resume()
       micRecorder.record()
       recording = true
     } else console.error("won’t record mic if it ain’t opened !")
@@ -151,53 +161,51 @@ function engine(o) {
     }
 }
 
-function drawSamples(samples) {
-  setTimeout(() => {
-      let canvas = document.getElementById('waveform')
-        , ctx = canvas.getContext('2d')
-        , {width, height} = canvas
-        , pxPerSample = width / samples.length
+function drawSamples(id, samples) {
+  let canvas = document.getElementById(id)
+    , ctx = canvas.getContext('2d')
+    , {width, height} = canvas
+    , pxPerSample = width / samples.length
 
-      ctx.clearRect(0, 0, width, height)
+  ctx.clearRect(0, 0, width, height)
 
+  ctx.strokeStyle = 'black'
+  ctx.beginPath()
+  ctx.moveTo(0, height / 2)
+  ctx.lineTo(width, height / 2)
+  ctx.stroke()
+
+  ctx.strokeRect(0, 0, width, height)
+
+  if (pxPerSample < 0.5) {
+    for (let x = 0 ; x < width ; x++) {
+      let px = samples.slice(Math.floor(x / pxPerSample), Math.floor((x + 1) / pxPerSample))
+        , minPoint = (Math.min.apply(null, px) + 1) * height / 2
+        , maxPoint = (Math.max.apply(null, px) + 1) * height / 2
       ctx.strokeStyle = 'black'
       ctx.beginPath()
-      ctx.moveTo(0, height / 2)
-      ctx.lineTo(width, height / 2)
+      ctx.moveTo(x, minPoint)
+      ctx.lineTo(x, maxPoint)
       ctx.stroke()
 
-      ctx.strokeRect(0, 0, width, height)
-
-      if (pxPerSample < 0.5) {
-        for (let x = 0 ; x < width ; x++) {
-          let px = samples.slice(Math.floor(x / pxPerSample), Math.floor((x + 1) / pxPerSample))
-            , minPoint = (Math.min.apply(null, px) + 1) * height / 2
-            , maxPoint = (Math.max.apply(null, px) + 1) * height / 2
-          ctx.strokeStyle = 'black'
+      let rms = Math.sqrt(px.reduce((acc,v,i,a) => acc + Math.pow(v, 2)) / px.length)
+        , minRmsPoint = (1 - rms) * height / 2
+        , maxRmsPoint = (1 + rms) * height / 2
+      if (minRmsPoint > minPoint && maxRmsPoint < maxPoint) {
+          ctx.strokeStyle = 'gray'
           ctx.beginPath()
-          ctx.moveTo(x, minPoint)
-          ctx.lineTo(x, maxPoint)
+          ctx.moveTo(x, minRmsPoint)
+          ctx.lineTo(x, maxRmsPoint)
           ctx.stroke()
-
-          let rms = Math.sqrt(px.reduce((acc,v,i,a) => acc + Math.pow(v, 2)) / px.length)
-            , minRmsPoint = (1 - rms) * height / 2
-            , maxRmsPoint = (1 + rms) * height / 2
-          if (minRmsPoint > minPoint && maxRmsPoint < maxPoint) {
-              ctx.strokeStyle = 'gray'
-              ctx.beginPath()
-              ctx.moveTo(x, minRmsPoint)
-              ctx.lineTo(x, maxRmsPoint)
-              ctx.stroke()
-          }
-        }
-      } else {
-        ctx.strokeStyle = 'black'
-        ctx.beginPath()
-        ctx.moveTo(0, (samples[0] + 1) * height / 2)
-        for (let i = 1 ; i < samples.length ; i++) {
-          ctx.lineTo(i * pxPerSample, (samples[i] + 1) * height / 2)
-        }
-        ctx.stroke()
       }
-  }, 10)
+    }
+  } else {
+    ctx.strokeStyle = 'black'
+    ctx.beginPath()
+    ctx.moveTo(0, (samples[0] + 1) * height / 2)
+    for (let i = 1 ; i < samples.length ; i++) {
+      ctx.lineTo(i * pxPerSample, (samples[i] + 1) * height / 2)
+    }
+    ctx.stroke()
+  }
 }

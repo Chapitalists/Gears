@@ -232,12 +232,7 @@ update msg g =
                     { g
                         | wheel =
                             { wheel
-                                | content =
-                                    C <|
-                                        Content.C <|
-                                            Debug.log "new" <|
-                                                Content.setCollarDiv chgLoopWithSoundLength i percent <|
-                                                    Debug.log "old" c
+                                | content = C <| Content.C <| Content.setCollarDiv chgLoopWithSoundLength i percent c
                             }
                     }
 

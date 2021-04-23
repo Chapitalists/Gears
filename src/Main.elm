@@ -47,7 +47,7 @@ port openMic : () -> Cmd msg
 port micOpened : (() -> msg) -> Sub msg
 
 
-port inputRec : String -> Cmd msg
+port inputRec : ( String, Bool ) -> Cmd msg
 
 
 port gotNewSample : (D.Value -> msg) -> Sub msg
@@ -80,7 +80,7 @@ main =
 type alias Model =
     { connected : Bool
     , currentUrl : Url.Url
-    , micState : Maybe ( Bool, String )
+    , micState : Maybe ( Bool, String ) -- Recording, FileName
     , soundList : Dict String SoundListType
     , loadedSoundList : List Sound
     , showDirLoad : Bool
@@ -514,12 +514,12 @@ update msg model =
 
         StartMicRec ->
             ( { model | micState = Maybe.map (Tuple.mapFirst <| always True) model.micState }
-            , inputRec ""
+            , inputRec ( "", Coll.isEmpty (Doc.getViewing model.doc).gears )
             )
 
         EndMicRec fileName ->
             ( { model | micState = Maybe.map (Tuple.mapFirst <| always False) model.micState }
-            , inputRec fileName
+            , inputRec ( fileName, True )
             )
 
         EnteredNewRecName fileName ->
@@ -665,16 +665,22 @@ update msg model =
 
         DocMsg subMsg ->
             let
-                ( doc, cmd ) =
+                ( newModel, cmd ) =
+                    case ( model.micState, subMsg, model.doc.editor.tool ) of
+                        -- FIXME Absurd... Should be a commonMsg and common ChangedMode
+                        ( _, Doc.MobileMsg (Editor.ChangedMode (Editor.ChangeSound _)), _ ) ->
+                            ( { model | fileExplorerTab = LoadedSounds }, Cmd.none )
+
+                        ( Just ( True, name ), Doc.MobileMsg Editor.ToggleEngine, Editor.Play True _ ) ->
+                            update (EndMicRec name) model
+
+                        _ ->
+                            ( model, Cmd.none )
+
+                ( doc, subCmd ) =
                     Doc.update subMsg model.doc
             in
-            case subMsg of
-                -- FIXME Absurd... Should be a commonMsg and common ChangedMode
-                Doc.MobileMsg (Editor.ChangedMode (Editor.ChangeSound _)) ->
-                    ( { model | doc = doc, fileExplorerTab = LoadedSounds }, Cmd.map DocMsg cmd )
-
-                _ ->
-                    ( { model | doc = doc }, Cmd.map DocMsg cmd )
+            ( { newModel | doc = doc }, Cmd.batch <| cmd :: [ Cmd.map DocMsg subCmd ] )
 
         -- TODO Should dispatch KeysMsg, not specific messages to each part, too big of a dependency
         KeysMsg subMsg ->
@@ -694,13 +700,21 @@ update msg model =
                                     Tuple.mapSecond (\cm -> Cmd.batch [ cm, c ]) <| update (ChangedMode NoMode) m
 
                         Keys.Press code ->
-                            case Dict.get code keyCodeToShortcut of
+                            case Dict.get code <| keyCodeToShortcut model of
                                 Just press ->
                                     let
-                                        ( doc, cmd ) =
-                                            Doc.update (Doc.KeyPressed press) m.doc
+                                        ( newModel, cmd ) =
+                                            case ( model.micState, press, model.doc.editor.tool ) of
+                                                ( Just ( True, name ), Doc.Play, Editor.Play True _ ) ->
+                                                    update (EndMicRec name) model
+
+                                                _ ->
+                                                    ( m, Cmd.none )
+
+                                        ( doc, docCmd ) =
+                                            Doc.update (Doc.KeyPressed press) newModel.doc
                                     in
-                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
+                                    ( { newModel | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg docCmd, cmd ] )
 
                                 Nothing ->
                                     ( m, c )
@@ -756,17 +770,23 @@ keyCodeToMode =
             ++ List.map (Tuple.mapSecond EditorMode) Doc.keyCodeToMode
 
 
-keyCodeToShortcut : Dict String Doc.Shortcut
-keyCodeToShortcut =
-    Dict.fromList
-        [ ( "KeyZ", Doc.Tool 1 )
-        , ( "KeyX", Doc.Tool 2 )
-        , ( "KeyC", Doc.Tool 3 )
-        , ( "Space", Doc.Play )
-        , ( "ArrowLeft", Doc.Left )
-        , ( "ArrowRight", Doc.Right )
-        , ( "KeyT", Doc.Pack )
-        ]
+keyCodeToShortcut : Model -> Dict String Doc.Shortcut
+keyCodeToShortcut model =
+    Dict.union
+        (Dict.fromList
+            [ ( "KeyZ", Doc.Tool 1 )
+            , ( "KeyX", Doc.Tool 2 )
+            , ( "KeyC", Doc.Tool 3 )
+            , ( "Space", Doc.Play )
+            , ( "ArrowLeft", Doc.Left )
+            , ( "ArrowRight", Doc.Right )
+            , ( "Backspace", Doc.Suppr )
+            , ( "Delete", Doc.Suppr )
+            , ( "KeyT", Doc.Pack )
+            ]
+        )
+    <|
+        Doc.keyCodeToShortcut model.doc
 
 
 keyCodeToDirection : Dict String PanSvg.Direction
@@ -885,15 +905,17 @@ viewSounds model =
             , column [ width fill, spacing 20 ] <|
                 case model.micState of
                     Just ( False, name ) ->
-                        [ Input.button []
-                            { onPress =
-                                if String.isEmpty name then
-                                    Nothing
+                        [ row []
+                            [ Input.button []
+                                { onPress =
+                                    if String.isEmpty name then
+                                        Nothing
 
-                                else
-                                    Just StartMicRec
-                            , label = text "Rec Mic"
-                            }
+                                    else
+                                        Just StartMicRec
+                                , label = text "Rec Mic"
+                                }
+                            ]
                         , Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
                             { text = name
                             , placeholder = Just <| Input.placeholder [] <| text "Nom du fichier"
