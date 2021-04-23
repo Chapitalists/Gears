@@ -109,6 +109,20 @@ clean id coll =
             Debug.todo "Clean Base"
 
 
+hardEmptySelf : Id (Harmonized g) -> Coll (Harmonized g) -> Coll (Harmonized g)
+hardEmptySelf id coll =
+    let
+        harmo =
+            getHarmo id coll
+    in
+    case harmo.ref of
+        Self { unit } ->
+            Coll.update id (\g -> { g | harmony = { harmo | ref = Self { unit = unit, group = [], links = [] } } }) coll
+
+        _ ->
+            coll
+
+
 changeSelfUnit : Id (Harmonized g) -> SelfUnit -> Coll (Harmonized g) -> Coll (Harmonized g)
 changeSelfUnit id su coll =
     let
@@ -189,7 +203,7 @@ makeCopy id newId coll =
     in
     coll
         |> Coll.update newId (\g -> { g | harmony = newHarmo })
-        |> Coll.update id (insert newId >> addLink link)
+        |> Coll.update baseId (insert newId >> addLink link)
 
 
 getLengthId : (Harmonized g -> Float) -> Id (Harmonized g) -> Coll (Harmonized g) -> Float

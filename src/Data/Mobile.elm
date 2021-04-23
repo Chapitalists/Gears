@@ -79,7 +79,7 @@ copy harmo move id coll =
         Harmo.makeCopy id newId newColl
 
     else
-        Harmo.toRate getWheeledContentLength newId newColl
+        Harmo.toRate getWheeledContentLength newId <| Harmo.hardEmptySelf newId newColl
 
 
 toDrawLink : Coll Geer -> Link Geer -> DrawLink
