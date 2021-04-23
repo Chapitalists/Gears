@@ -8,7 +8,7 @@ import Data.Wheel as Wheel exposing (Conteet, Wheel)
 import Harmony as Harmo exposing (Harmony)
 import Json.Decode as D
 import Json.Encode as E
-import Link exposing (DrawLink, Link)
+import Link exposing (Circle)
 import Math.Vector2 as Vec exposing (Vec2)
 import Motor
 
@@ -82,19 +82,13 @@ copy harmo move id coll =
         Harmo.toRate getWheeledContentLength newId <| Harmo.hardEmptySelf newId newColl
 
 
-toDrawLink : Coll Geer -> Link Geer -> DrawLink
-toDrawLink coll l =
+toCircle : Coll Geer -> Id Geer -> Circle
+toCircle coll id =
     let
-        get id =
+        g =
             Coll.get id coll
-
-        toCircle g =
-            { c = g.pos, d = getLength g coll }
-
-        f =
-            get >> toCircle
     in
-    Tuple.mapBoth f f l
+    { c = g.pos, d = getLength g coll }
 
 
 getLengthId : Id Geer -> Coll Geer -> Float

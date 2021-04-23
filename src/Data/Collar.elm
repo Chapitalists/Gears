@@ -49,6 +49,16 @@ fromWheel w l =
     }
 
 
+fromBeads : Beed -> List Beed -> Colleer
+fromBeads head rest =
+    { matrice = List.length rest + 1
+    , loop = 0
+    , head = head
+    , beads = rest
+    , oneSound = Nothing
+    }
+
+
 fromWheelMult : Wheel -> Int -> Float -> Colleer
 fromWheelMult w m l =
     { matrice = m

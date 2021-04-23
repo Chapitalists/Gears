@@ -25,7 +25,7 @@ import Html.Events
 import Interact exposing (Interact)
 import Json.Decode as D
 import Json.Encode as E
-import Link exposing (Link)
+import Link exposing (DrawLink, Link, Segment)
 import Math.Vector2 as Vec exposing (Vec2, getX, getY, vec2)
 import Motor
 import Pack exposing (Pack, Packed)
@@ -146,6 +146,7 @@ type Dragging
     | HalfLink ( Id Geer, Vec2 )
     | CompleteLink (Link Geer)
     | Cut ( Vec2, Vec2 ) (List (Link Geer))
+    | WeaveBeads Segment (List (Id Geer))
     | Alterning Identifier (Maybe Identifier) BlinkState
     | VolumeChange
     | SizeChange
@@ -291,6 +292,9 @@ update msg ( model, mobile ) =
                         , dragging =
                             case model.dragging of
                                 Cut _ _ ->
+                                    NoDrag
+
+                                WeaveBeads _ _ ->
                                     NoDrag
 
                                 _ ->
@@ -1190,6 +1194,14 @@ viewContent ( model, mobile ) =
                     _ ->
                         Wheel.None
 
+        isWeaving id =
+            case model.dragging of
+                WeaveBeads _ ids ->
+                    List.member id ids
+
+                _ ->
+                    False
+
         {--TODO bead mod inside collar (Wheel.view, viewContent)
         getMod : Int -> Wheel.Mod
         getMod i =
@@ -1273,6 +1285,7 @@ viewContent ( model, mobile ) =
                                 { mod = getMod id
                                 , motor = id == mobile.motor
                                 , dashed = Harmo.hasHarmonics g.harmony
+                                , weaving = isWeaving id
                                 , baseColor =
                                     Maybe.map (\bId -> (Coll.get bId mobile.gears).wheel.color) <|
                                         Harmo.getBaseId g.harmony
@@ -1297,19 +1310,19 @@ viewContent ( model, mobile ) =
                     )
                         ++ (case model.dragging of
                                 HalfLink ( id, pos ) ->
-                                    let
-                                        g =
-                                            Coll.get id mobile.gears
-                                    in
                                     case model.tool of
                                         Play _ _ ->
                                             let
-                                                length =
-                                                    Mobile.getLength g mobile.gears
+                                                circle =
+                                                    Mobile.toCircle mobile.gears id
                                             in
-                                            [ Link.drawMotorLink ( ( g.pos, length ), ( pos, length ) ) ]
+                                            [ Link.drawMotorLink ( circle, { circle | c = pos } ) ]
 
                                         Harmonize ->
+                                            let
+                                                g =
+                                                    Coll.get id mobile.gears
+                                            in
                                             [ Link.drawRawLink
                                                 ( g.pos, pos )
                                                 (Mobile.getLength g mobile.gears)
@@ -1336,15 +1349,18 @@ viewContent ( model, mobile ) =
                                 CompleteLink l ->
                                     case model.tool of
                                         Play _ _ ->
-                                            Link.viewMotorLink False <| Mobile.toDrawLink mobile.gears l
+                                            Link.viewMotorLink False <| toDrawLink mobile.gears l
 
                                         Harmonize ->
-                                            Link.viewFractLink (Mobile.toDrawLink mobile.gears l) <| ILink l
+                                            Link.viewFractLink (toDrawLink mobile.gears l) <| ILink l
 
                                         _ ->
                                             []
 
                                 Cut seg _ ->
+                                    [ Link.drawCut seg <| PanSvg.getScale model.svg ]
+
+                                WeaveBeads seg _ ->
                                     [ Link.drawCut seg <| PanSvg.getScale model.svg ]
 
                                 Content ( p, l ) ->
@@ -1384,7 +1400,7 @@ viewContent ( model, mobile ) =
                                     List.concatMap
                                         (\l ->
                                             Link.viewMotorLink (List.any (Link.equal l) cuts) <|
-                                                Mobile.toDrawLink mobile.gears l
+                                                toDrawLink mobile.gears l
                                         )
                                     <|
                                         Motor.getAllLinks mobile.gears
@@ -1392,7 +1408,7 @@ viewContent ( model, mobile ) =
                                 Harmonize ->
                                     (case Interact.getInteract model.interact of
                                         Just ( ILink l, _ ) ->
-                                            Link.viewFractOnLink (Mobile.toDrawLink mobile.gears l) <|
+                                            Link.viewFractOnLink (toDrawLink mobile.gears l) <|
                                                 Fract.simplify <|
                                                     Fract.division
                                                         (Coll.get (Tuple.second l) mobile.gears).harmony.fract
@@ -1401,13 +1417,13 @@ viewContent ( model, mobile ) =
                                         _ ->
                                             []
                                     )
-                                        ++ (List.concatMap (\l -> Link.viewFractLink (Mobile.toDrawLink mobile.gears l) (ILink l)) <|
+                                        ++ (List.concatMap (\l -> Link.viewFractLink (toDrawLink mobile.gears l) (ILink l)) <|
                                                 List.concatMap (.harmony >> Harmo.getLinks) <|
                                                     Coll.values mobile.gears
                                            )
                                         ++ (case model.link of
                                                 Just { link, fractInput } ->
-                                                    Link.viewSelectedLink (Mobile.toDrawLink mobile.gears link) <|
+                                                    Link.viewSelectedLink (toDrawLink mobile.gears link) <|
                                                         case fractInput of
                                                             FractionInput _ _ _ ->
                                                                 Just <|
@@ -2158,10 +2174,23 @@ uncollar id m =
             Nothing
 
 
-computeCuts : ( Vec2, Vec2 ) -> Coll Geer -> List (Link Geer)
+toDrawLink : Coll Geer -> Link Geer -> DrawLink
+toDrawLink gears =
+    let
+        toC =
+            Mobile.toCircle gears
+    in
+    Tuple.mapBoth toC toC
+
+
+computeCuts : Segment -> Coll Geer -> List (Link Geer) -> List (Link Geer)
 computeCuts cut gears =
-    Motor.getAllLinks gears
-        |> List.filter (Link.cuts cut << Link.toSegment << Mobile.toDrawLink gears)
+    List.filter <| Link.cuts cut << Link.toSegment << toDrawLink gears
+
+
+computeTouch : Segment -> Coll Geer -> List (Id Geer)
+computeTouch weave gears =
+    List.filter (Link.touchCircle weave << Mobile.toCircle gears) <| Coll.ids gears
 
 
 
@@ -2430,13 +2459,13 @@ manageInteractEvent event model mobile =
                                     ret
 
                                 Nothing ->
-                                    case interactSelectEdit event mobile model of
-                                        Just ( newModel, cmd ) ->
+                                    case interactEdit event model mobile of
+                                        Just { newModel, newMobile, toUndo, cmd } ->
                                             let
                                                 ret =
-                                                    update StopGear ( newModel, mobile )
+                                                    update StopGear ( newModel, newMobile )
                                             in
-                                            { ret | cmd = Cmd.batch [ cmd, ret.cmd ] }
+                                            { ret | toUndo = toUndo, cmd = Cmd.batch [ cmd, ret.cmd ] }
 
                                         Nothing ->
                                             case model.edit of
@@ -2483,10 +2512,26 @@ interactPlay on event model mobile =
 
         -- CUT
         ( ISurface, Interact.Dragged { oldPos, newPos } ZSurface _, NoDrag ) ->
-            { return | model = { model | dragging = Cut ( oldPos, newPos ) <| computeCuts ( oldPos, newPos ) mobile.gears } }
+            { return
+                | model =
+                    { model
+                        | dragging =
+                            Cut ( oldPos, newPos ) <|
+                                computeCuts ( oldPos, newPos ) mobile.gears <|
+                                    Motor.getAllLinks mobile.gears
+                    }
+            }
 
         ( ISurface, Interact.Dragged { newPos } ZSurface _, Cut ( p1, _ ) _ ) ->
-            { return | model = { model | dragging = Cut ( p1, newPos ) <| computeCuts ( p1, newPos ) mobile.gears } }
+            { return
+                | model =
+                    { model
+                        | dragging =
+                            Cut ( p1, newPos ) <|
+                                computeCuts ( p1, newPos ) mobile.gears <|
+                                    Motor.getAllLinks mobile.gears
+                    }
+            }
 
         ( ISurface, Interact.DragEnded True, Cut _ cuts ) ->
             let
@@ -2646,12 +2691,25 @@ interactHarmonize event model mobile =
             return
 
 
-interactSelectEdit : Interact.Event Interactable Zone -> Mobeel -> Model -> Maybe ( Model, Cmd Msg )
-interactSelectEdit event mobile model =
-    case ( event.item, event.action ) of
-        ( IWheel ( id, _ ), Interact.Clicked ( _, False, False ) ) ->
+interactEdit :
+    Interact.Event Interactable Zone
+    -> Model
+    -> Mobeel
+    -> Maybe { newModel : Model, newMobile : Mobeel, toUndo : ToUndo, cmd : Cmd Msg }
+interactEdit event model mobile =
+    let
+        return =
+            { newModel = model
+            , newMobile = mobile
+            , toUndo = NOOP
+            , cmd = Cmd.none
+            }
+    in
+    case ( event.item, event.action, model.dragging ) of
+        -- SIMPLE CLIC
+        ( IWheel ( id, _ ), Interact.Clicked ( _, False, False ), _ ) ->
             if model.edit == [ id ] then
-                Just ( { model | edit = [] }, Cmd.none )
+                Just { return | newModel = { model | edit = [] } }
 
             else
                 case Wheel.getContent <| Coll.get id mobile.gears of
@@ -2660,7 +2718,7 @@ interactSelectEdit event mobile model =
                             ( wave, cmd ) =
                                 Waveform.update (Waveform.ChgSound <| Sound.getPath s) model.wave
                         in
-                        Just ( { model | edit = [ id ], wave = wave }, Cmd.map WaveMsg cmd )
+                        Just { return | newModel = { model | edit = [ id ], wave = wave }, cmd = Cmd.map WaveMsg cmd }
 
                     Content.C c ->
                         case c.oneSound of
@@ -2669,30 +2727,93 @@ interactSelectEdit event mobile model =
                                     ( wave, cmd ) =
                                         Waveform.update (Waveform.ChgSound one.path) model.wave
                                 in
-                                Just ( { model | edit = [ id ], beadCursor = 0, wave = wave }, Cmd.map WaveMsg cmd )
+                                Just
+                                    { return
+                                        | newModel = { model | edit = [ id ], beadCursor = 0, wave = wave }
+                                        , cmd = Cmd.map WaveMsg cmd
+                                    }
 
                             Nothing ->
-                                Just ( { model | edit = [ id ], beadCursor = 0 }, Cmd.none )
+                                Just { return | newModel = { model | edit = [ id ], beadCursor = 0 } }
 
                     _ ->
-                        Just ( { model | edit = [ id ] }, Cmd.none )
+                        Just { return | newModel = { model | edit = [ id ] } }
 
-        ( IWheel ( id, _ ), Interact.Clicked _ ) ->
+        -- CTRL/CMD/SHIFT CLIC
+        ( IWheel ( id, _ ), Interact.Clicked _, _ ) ->
             let
                 already =
                     List.foldl (\el -> (||) <| el == id) False model.edit
             in
             Just
-                ( { model
-                    | edit =
-                        if already then
-                            List.filter ((/=) id) model.edit
+                { return
+                    | newModel =
+                        { model
+                            | edit =
+                                if already then
+                                    List.filter ((/=) id) model.edit
 
-                        else
-                            id :: model.edit
-                  }
-                , Cmd.none
-                )
+                                else
+                                    id :: model.edit
+                        }
+                }
+
+        -- WEAVE
+        ( ISurface, Interact.Dragged { oldPos, newPos } ZSurface _, NoDrag ) ->
+            Just
+                { return
+                    | newModel =
+                        { model
+                            | dragging =
+                                WeaveBeads ( oldPos, newPos ) <|
+                                    computeTouch ( oldPos, newPos ) mobile.gears
+                        }
+                }
+
+        ( ISurface, Interact.Dragged { newPos } ZSurface _, WeaveBeads ( p1, _ ) _ ) ->
+            Just
+                { return
+                    | newModel =
+                        { model
+                            | dragging =
+                                WeaveBeads ( p1, newPos ) <|
+                                    computeTouch ( p1, newPos ) mobile.gears
+                        }
+                }
+
+        ( ISurface, Interact.DragEnded True, WeaveBeads _ ids ) ->
+            let
+                ( beads, positions ) =
+                    List.unzip <|
+                        List.map
+                            (\g ->
+                                ( { length = Harmo.getLength CommonData.getWheeledContentLength g mobile.gears
+                                  , wheel = g.wheel
+                                  }
+                                , g.pos
+                                )
+                            )
+                        <|
+                            List.sortBy (Vec.getX << .pos) <|
+                                List.map (\id -> Coll.get id mobile.gears) ids
+            in
+            case beads of
+                [] ->
+                    Nothing
+
+                head :: tail ->
+                    let
+                        newGear =
+                            Mobile.gearFromContent (Content.C <| Collar.fromBeads head tail) <|
+                                Vec.scale (1 / (toFloat <| List.length ids)) <|
+                                    List.foldl Vec.add (vec2 0 0) positions
+                    in
+                    Just
+                        { return
+                            | newModel = { model | dragging = NoDrag }
+                            , newMobile = { mobile | gears = Coll.insert newGear mobile.gears }
+                            , toUndo = Do
+                        }
 
         _ ->
             Nothing

@@ -32,6 +32,10 @@ type alias Circle =
     { d : Float, c : Vec2 }
 
 
+type alias Segment =
+    ( Vec2, Vec2 )
+
+
 type alias DrawLink =
     ( Circle, Circle )
 
@@ -97,7 +101,7 @@ viewSelectedLink ( e, f ) mayFract =
 
 
 viewMotorLink : Bool -> DrawLink -> List (Svg msg)
-viewMotorLink cutting ( e, f ) =
+viewMotorLink cutting dl =
     [ S.g
         [ SA.opacity <|
             TypedSvg.Types.Opacity <|
@@ -107,34 +111,41 @@ viewMotorLink cutting ( e, f ) =
                 else
                     1
         ]
-        [ drawMotorLink
-            ( ( e.c, e.d )
-            , ( f.c, f.d )
-            )
-        ]
+        [ drawMotorLink dl ]
     ]
 
 
-drawMotorLink : ( ( Vec2, Float ), ( Vec2, Float ) ) -> Svg msg
-drawMotorLink ( ( p1, d1 ), ( p2, d2 ) ) =
+drawMotorLink : DrawLink -> Svg msg
+drawMotorLink ( c1, c2 ) =
     let
-        dir =
-            Vec.direction p2 p1
+        p1 =
+            c1.c
 
-        contactPoint center diameter clockWise =
-            Vec.add center <|
-                Vec.scale (diameter / 2) (rotate90 dir clockWise)
+        d1 =
+            c1.d
+
+        p2 =
+            c2.c
+
+        d2 =
+            c2.d
 
         gearL =
             d1 + d2 / 2
+
+        ( a1, b1 ) =
+            getPerpandicularDiameter c1 ( p1, p2 )
+
+        ( a2, b2 ) =
+            getPerpandicularDiameter c2 ( p1, p2 )
     in
     S.g []
-        [ drawRawLink ( contactPoint p1 d1 True, contactPoint p2 d2 True ) gearL baseColor
-        , drawRawLink ( contactPoint p1 d1 False, contactPoint p2 d2 False ) gearL baseColor
+        [ drawRawLink ( a1, a2 ) gearL baseColor
+        , drawRawLink ( b1, b2 ) gearL baseColor
         ]
 
 
-drawRawLink : ( Vec2, Vec2 ) -> Float -> Color -> Svg msg
+drawRawLink : Segment -> Float -> Color -> Svg msg
 drawRawLink ( p1, p2 ) gearL c =
     S.polyline
         [ SA.points [ tupleFromVec p1, tupleFromVec p2 ]
@@ -145,7 +156,7 @@ drawRawLink ( p1, p2 ) gearL c =
         []
 
 
-drawCut : ( Vec2, Vec2 ) -> Float -> Svg msg
+drawCut : Segment -> Float -> Svg msg
 drawCut ( p1, p2 ) scale =
     S.polyline
         [ SA.points [ tupleFromVec p1, tupleFromVec p2 ]
@@ -179,7 +190,7 @@ equal l1 l2 =
         || (Tuple.first l1 == Tuple.second l2 && Tuple.first l2 == Tuple.second l1)
 
 
-toSegment : DrawLink -> ( Vec2, Vec2 )
+toSegment : DrawLink -> Segment
 toSegment l =
     Tuple.mapBoth .c .c l
 
@@ -198,11 +209,24 @@ rotate90 v clockWise =
         vec2 -(Vec.getY v) (Vec.getX v)
 
 
+getPerpandicularDiameter : Circle -> Segment -> Segment
+getPerpandicularDiameter { c, d } ( p1, p2 ) =
+    let
+        dir =
+            Vec.direction p2 p1
+
+        projection center diameter clockWise =
+            Vec.add center <|
+                Vec.scale (diameter / 2) (rotate90 dir clockWise)
+    in
+    ( projection c d True, projection c d False )
+
+
 
 -- from https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
 
 
-cuts : ( Vec2, Vec2 ) -> ( Vec2, Vec2 ) -> Bool
+cuts : Segment -> Segment -> Bool
 cuts ( p, p2 ) ( q, q2 ) =
     let
         r =
@@ -233,6 +257,11 @@ cuts ( p, p2 ) ( q, q2 ) =
 
         else
             False
+
+
+touchCircle : Segment -> Circle -> Bool
+touchCircle segment circle =
+    cuts segment <| getPerpandicularDiameter circle segment
 
 
 crossProductLength : Vec2 -> Vec2 -> Float

@@ -107,6 +107,7 @@ type alias Style =
     { mod : Mod
     , motor : Bool
     , dashed : Bool
+    , weaving : Bool
     , baseColor : Maybe Float
     , named : Maybe String
     }
@@ -117,6 +118,7 @@ defaultStyle =
     { mod = None
     , motor = False
     , dashed = False
+    , weaving = False
     , baseColor = Nothing
     , named = Nothing
     }
@@ -308,7 +310,16 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                     (\( inter, l ) -> ( Interact.hoverEvents <| inter l, Interact.draggableEvents <| inter l ))
                     mayWheelInter
     in
-    S.g [ SA.transform [ Translate (getX pos) (getY pos) ] ] <|
+    S.g
+        (SA.transform [ Translate (getX pos) (getY pos) ]
+            :: (if style.weaving then
+                    [ SA.opacity <| Opacity 0.5 ]
+
+                else
+                    []
+               )
+        )
+    <|
         (case style.named of
             Just name ->
                 [ S.text_
