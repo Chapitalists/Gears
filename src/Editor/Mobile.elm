@@ -117,6 +117,7 @@ type Mode
     | SelectMotor
     | Alternate
     | Solo
+    | Clone
 
 
 keyCodeToMode : List ( String, Mode )
@@ -127,6 +128,7 @@ keyCodeToMode =
     , ( "Backspace", SupprMode )
     , ( "KeyQ", Alternate )
     , ( "KeyS", Solo )
+    , ( "KeyA", Clone )
     ]
 
 
@@ -211,7 +213,7 @@ type Msg
     | NewBead Conteet
     | UnpackBead ( Wheel, Float ) Bool
       --
-    | CopyGear (Id Geer)
+    | CopyGear Bool (Id Geer)
     | CopyContent Wheel
     | NewGear Vec2 Conteet
     | DeleteWheel Identifier
@@ -441,12 +443,12 @@ update msg ( model, mobile ) =
            _ ->
                return
         -}
-        CopyGear id ->
+        CopyGear harmo id ->
             let
                 d =
                     vec2 (Mobile.getLengthId id mobile.gears * 1.1) 0
             in
-            { return | mobile = { mobile | gears = Mobile.copy d id mobile.gears }, toUndo = Do }
+            { return | mobile = { mobile | gears = Mobile.copy harmo d id mobile.gears }, toUndo = Do }
 
         CopyContent w ->
             case model.edit of
@@ -2266,6 +2268,15 @@ manageInteractEvent event model mobile =
                 _ ->
                     return
 
+        Clone ->
+            -- TODO hover show pos of new wheel, which is linked to mouse pos to center of wheel
+            case ( event.item, event.action ) of
+                ( IWheel ( id, [] ), Interact.Clicked _ ) ->
+                    update (CopyGear False id) ( model, mobile )
+
+                _ ->
+                    return
+
         Alternate ->
             case model.tool of
                 Play _ _ ->
@@ -2567,7 +2578,7 @@ interactHarmonize event model mobile =
     case ( event.item, event.action, model.dragging ) of
         -- COPY
         ( IWheel ( id, [] ), Interact.Clicked _, _ ) ->
-            update (CopyGear id) ( model, mobile )
+            update (CopyGear True id) ( model, mobile )
 
         -- RESIZE
         ( IResizeHandle id add, Interact.Dragged { startD } _ _, NoDrag ) ->

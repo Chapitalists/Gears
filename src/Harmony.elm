@@ -133,6 +133,15 @@ changeRate id newDur contentLength =
     changeSelfUnit id <| Rate (newDur / contentLength)
 
 
+toRate : (Harmonized g -> Float) -> Id (Harmonized g) -> Coll (Harmonized g) -> Coll (Harmonized g)
+toRate getContentLength id coll =
+    let
+        g =
+            Coll.get id coll
+    in
+    changeSelfUnit id (Rate (getLength getContentLength g coll / getContentLength g)) coll
+
+
 changeDuration : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
 changeDuration id newDur =
     changeSelfUnit id <| Duration newDur

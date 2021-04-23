@@ -60,8 +60,8 @@ newSizedGear p l w =
     { pos = p, harmony = Harmo.newRate (l / getWheeledContentLength { wheel = w }), motor = [], wheel = w }
 
 
-copy : Vec2 -> Id Geer -> Coll Geer -> Coll Geer
-copy move id coll =
+copy : Bool -> Vec2 -> Id Geer -> Coll Geer -> Coll Geer
+copy harmo move id coll =
     let
         g =
             Coll.get id coll
@@ -75,7 +75,11 @@ copy move id coll =
         ( newId, newColl ) =
             Coll.insertTellId newG coll
     in
-    Harmo.makeCopy id newId newColl
+    if harmo then
+        Harmo.makeCopy id newId newColl
+
+    else
+        Harmo.toRate getWheeledContentLength newId newColl
 
 
 toDrawLink : Coll Geer -> Link Geer -> DrawLink
