@@ -98,9 +98,11 @@ isDrawn { drawn } name =
 
 
 type Mark
-    = Cursor Cursor
-    | Start
-    | End
+    = MStart
+    | MEnd
+    | MLoopStart
+    | MLoopEnd
+    | MDiv Int
 
 
 type Msg
@@ -188,10 +190,55 @@ update msg wave =
             ( newWave, requestRedraw newWave )
 
         MoveView d ->
-            update (ChgView wave.zoomFactor (wave.startPercent + mapPxToSoundPercent wave d)) wave
+            update (ChgView wave.zoomFactor <| wave.startPercent + pxToSoundDist wave d) wave
 
         CenterOn cur mayCursors ->
-            Debug.todo "center on cursors"
+            let
+                up pos =
+                    update (ChgView wave.zoomFactor <| pos - 0.5 / wave.zoomFactor) wave
+            in
+            case cur of
+                MStart ->
+                    up 0
+
+                MEnd ->
+                    up 1
+
+                _ ->
+                    case mayCursors of
+                        Just (Sound { start, end, offset }) ->
+                            case cur of
+                                MLoopStart ->
+                                    up start
+
+                                MLoopEnd ->
+                                    up end
+
+                                MDiv _ ->
+                                    up offset
+
+                                _ ->
+                                    ( wave, Cmd.none )
+
+                        Just (CollarDiv { start, end, divs }) ->
+                            case cur of
+                                MLoopStart ->
+                                    up start
+
+                                MLoopEnd ->
+                                    up end
+
+                                MDiv i ->
+                                    Maybe.withDefault ( wave, Cmd.none ) <|
+                                        Maybe.map up <|
+                                            List.head <|
+                                                List.drop i divs
+
+                                _ ->
+                                    ( wave, Cmd.none )
+
+                        Nothing ->
+                            ( wave, Cmd.none )
 
         ZoomPoint delta x ->
             let
@@ -320,12 +367,33 @@ sub =
 
 keyCodeToShortcut : Maybe Cursors -> Dict String Msg
 keyCodeToShortcut mayC =
+    let
+        msg mark =
+            CenterOn mark mayC
+    in
+    Dict.fromList <|
+        ( "Backquote", msg MStart )
+            :: List.concatMap (\( k1, k2, m ) -> [ ( k1, m ), ( k2, m ) ])
+                [ ( "Digit0", "Numpad0", msg MStart )
+                , ( "Digit9", "Numpad9", msg MEnd )
+                , ( "Digit1", "Numpad1", msg MLoopStart )
+                , ( "Digit2", "Numpad2", msg <| MDiv 0 )
+                , ( "Digit3", "Numpad3", msg <| MDiv 1 )
+                , ( "Digit4", "Numpad4", msg <| MDiv 2 )
+                , ( "Digit5", "Numpad5", msg <| MDiv 3 )
+                , ( "Digit6", "Numpad6", msg <| MDiv 4 )
+                , ( "Digit7", "Numpad7", msg <| MDiv 5 )
+                , ( "Digit8", "Numpad8", msg MLoopEnd )
+                ]
+
+
+keyCodeToDirection : Dict String Msg
+keyCodeToDirection =
     Dict.fromList
         [ ( "KeyG", Zoom False )
         , ( "KeyH", Zoom True )
         , ( "KeyB", MoveView -20 )
         , ( "KeyN", MoveView 20 )
-        , ( "Key1", CenterOn Start mayC )
         ]
 
 

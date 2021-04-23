@@ -721,12 +721,12 @@ update msg model =
 
                         Keys.Repeat code ->
                             case Dict.get code keyCodeToDirection of
-                                Just dir ->
+                                Just dirMsg ->
                                     let
-                                        ( doc, cmd ) =
-                                            Doc.update (Doc.DirectionRepeat dir) m.doc
+                                        ( dirModel, cmd ) =
+                                            update dirMsg m
                                     in
-                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
+                                    ( dirModel, Cmd.batch [ c, cmd ] )
 
                                 Nothing ->
                                     ( m, c )
@@ -789,14 +789,19 @@ keyCodeToShortcut model =
         Doc.keyCodeToShortcut model.doc
 
 
-keyCodeToDirection : Dict String PanSvg.Direction
+keyCodeToDirection : Dict String Msg
 keyCodeToDirection =
-    Dict.fromList
-        [ ( "KeyO", PanSvg.Up )
-        , ( "KeyK", PanSvg.Left )
-        , ( "KeyL", PanSvg.Down )
-        , ( "Semicolon", PanSvg.Right )
-        ]
+    Dict.union
+        (Dict.map (always <| DocMsg << Doc.DirectionRepeat) <|
+            Dict.fromList
+                [ ( "KeyO", PanSvg.Up )
+                , ( "KeyK", PanSvg.Left )
+                , ( "KeyL", PanSvg.Down )
+                , ( "Semicolon", PanSvg.Right )
+                ]
+        )
+    <|
+        Dict.map (always DocMsg) Doc.keyCodeToDirection
 
 
 

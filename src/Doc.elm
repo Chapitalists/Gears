@@ -304,6 +304,11 @@ keyCodeToShortcut model =
     Dict.map (always Editor) <| Editor.keyCodeToShortcut model.editor <| getViewing model
 
 
+keyCodeToDirection : Dict String Msg
+keyCodeToDirection =
+    Dict.map (always MobileMsg) Editor.keyCodeToDirection
+
+
 view : Model -> Element Msg
 view doc =
     row [ height fill, width fill ] <|

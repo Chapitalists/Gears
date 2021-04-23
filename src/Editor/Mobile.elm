@@ -137,6 +137,11 @@ keyCodeToShortcut mod mob =
     Dict.map (always WaveMsg) <| Waveform.keyCodeToShortcut <| getWavePoints mod mob
 
 
+keyCodeToDirection : Dict String Msg
+keyCodeToDirection =
+    Dict.map (always WaveMsg) Waveform.keyCodeToDirection
+
+
 type alias LinkInfo =
     { link : Link Geer, fractInput : FractInput }
 
