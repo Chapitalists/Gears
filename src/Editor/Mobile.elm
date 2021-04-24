@@ -2946,9 +2946,30 @@ interactMove event model mobile =
 
                         mayLoop =
                             Waveform.getSelPercents model.wave
+
+                        maySound =
+                            case Wheel.getWheelContent waveW of
+                                Content.S s ->
+                                    Just s
+
+                                Content.C c ->
+                                    case c.oneSound of
+                                        Just _ ->
+                                            case Wheel.getContent (Collar.get 0 c) of
+                                                Content.S s ->
+                                                    Just s
+
+                                                _ ->
+                                                    Nothing
+
+                                        _ ->
+                                            Nothing
+
+                                _ ->
+                                    Nothing
                     in
-                    case ( mayLoop, Wheel.getWheelContent waveW ) of
-                        ( Just ( start, end ), Content.S s ) ->
+                    case ( mayLoop, maySound ) of
+                        ( Just ( start, end ), Just s ) ->
                             let
                                 ( wave, cmd ) =
                                     Waveform.update Waveform.CancelSel model.wave

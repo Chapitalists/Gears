@@ -532,12 +532,6 @@ view wave mayCursors interState wrapInter wrapMsg =
                                                     , curs c.start <| LoopStart Main
                                                     , curs c.end <| LoopEnd Main
                                                     , curs c.offset <| StartOffset Main
-                                                    , case wave.sel of
-                                                        Just points ->
-                                                            sel points Nothing darkGreySel
-
-                                                        Nothing ->
-                                                            []
                                                     ]
 
                                             CollarDiv c ->
@@ -549,6 +543,13 @@ view wave mayCursors interState wrapInter wrapMsg =
                                                     , curs c.end <| LoopEnd Main
                                                     ]
                                                         ++ List.indexedMap (\i div -> curs div (Divide i Main)) c.divs
+                                       )
+                                    ++ (case wave.sel of
+                                            Just points ->
+                                                sel points Nothing darkGreySel
+
+                                            Nothing ->
+                                                []
                                        )
                            )
 
