@@ -2912,7 +2912,10 @@ interactMove event model mobile =
                             Wheel.getLoopPercents waveG
 
                         selPercentLength =
-                            Mobile.getLengthId id mobile.gears * (end - start) / Mobile.getLength waveG mobile.gears
+                            clamp 0 1 <|
+                                Mobile.getLengthId id mobile.gears
+                                    * (end - start)
+                                    / Mobile.getLength waveG mobile.gears
 
                         ( wave, cmd ) =
                             Waveform.update (Waveform.Select ( Vec.getX oldPos, selPercentLength )) model.wave
