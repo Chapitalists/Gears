@@ -58,7 +58,6 @@ type Shortcut
     | Play
     | Left
     | Right
-    | Suppr
     | Pack
     | Editor Editor.Msg
 
@@ -212,14 +211,6 @@ update msg doc =
 
                         Editor.Edit False ->
                             update (MobileMsg <| Editor.PlayGear) doc
-
-                        _ ->
-                            ( doc, Cmd.none )
-
-                Suppr ->
-                    case ( doc.editor.edit, doc.editor.tool ) of
-                        ( [ id ], Editor.Edit _ ) ->
-                            update (MobileMsg <| Editor.DeleteWheel ( id, [] )) doc
 
                         _ ->
                             ( doc, Cmd.none )
