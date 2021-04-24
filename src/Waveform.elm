@@ -131,7 +131,7 @@ update msg wave =
 
         ChgSound name ->
             if wave.drawn == SoundDrawn name then
-                ( wave, Cmd.none )
+                ( { wave | zoomFactor = init.zoomFactor, startPercent = init.startPercent }, Cmd.none )
 
             else
                 let
