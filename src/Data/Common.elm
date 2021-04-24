@@ -85,42 +85,54 @@ deleteWheel :
     -> Mobile Wheel
     -> (Id (Gear Wheel) -> Mobile Wheel -> Mobile Wheel)
     -> (Int -> Collar Wheel -> Collar Wheel)
-    -> Mobile Wheel
+    -> ( Mobile Wheel, Bool ) -- True if there is only one bead left after deleting
 deleteWheel ( id, l ) mobile gRm bRm =
     let
-        rec : Int -> List Int -> Collar Wheel -> Collar Wheel
+        rec : Int -> List Int -> Collar Wheel -> ( Collar Wheel, Bool )
         rec index list col =
             case list of
                 [] ->
-                    bRm index col
+                    let
+                        newCol =
+                            bRm index col
+                    in
+                    ( newCol, (List.length <| Content.getBeads newCol) == 1 )
 
                 i :: rest ->
                     case Wheel.getContent <| Content.getBead index col of
                         Content.C subCol ->
-                            Content.updateBead index (Wheel.setContent <| Content.C <| rec i rest subCol) col
+                            let
+                                ( newSubCol, last ) =
+                                    rec i rest subCol
+                            in
+                            ( Content.updateBead index (Wheel.setContent <| Content.C newSubCol) col, last )
 
                         _ ->
                             let
                                 _ =
                                     Debug.log "Wrong identifier to delete bead" ( id, l, mobile )
                             in
-                            col
+                            ( col, False )
     in
     case l of
         [] ->
-            gRm id mobile
+            ( gRm id mobile, False )
 
         i :: rest ->
             case Wheel.getContent <| Coll.get id mobile.gears of
                 Content.C col ->
-                    Content.updateGear id (Wheel.setContent <| Content.C <| rec i rest col) mobile
+                    let
+                        ( newCol, last ) =
+                            rec i rest col
+                    in
+                    ( Content.updateGear id (Wheel.setContent <| Content.C newCol) mobile, last )
 
                 _ ->
                     let
                         _ =
                             Debug.log "Wrong identifier to delete bead" ( id, l, mobile )
                     in
-                    mobile
+                    ( mobile, False )
 
 
 updateWheel : Identifier -> Wheel.Msg -> Mobile Wheel -> Mobile Wheel

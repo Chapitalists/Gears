@@ -489,18 +489,17 @@ update msg ( model, mobile ) =
 
         DeleteWheel ( id, l ) ->
             let
-                tmp =
+                ( tmp, toUncollar ) =
                     CommonData.deleteWheel ( id, l ) mobile Mobile.rm Collar.rm
 
                 newMob =
-                    case l of
-                        [] ->
-                            tmp
+                    if toUncollar then
+                        Maybe.withDefault tmp <|
+                            Maybe.map Tuple.first <|
+                                uncollar ( id, List.take (List.length l - 1) l ) tmp
 
-                        _ ->
-                            Maybe.withDefault tmp <|
-                                Maybe.map Tuple.first <|
-                                    uncollar ( id, List.take (List.length l - 1) l ) tmp
+                    else
+                        tmp
             in
             { return
                 | model =
@@ -2141,7 +2140,7 @@ uncollar id m =
                                 m.motor
 
                         newMob =
-                            CommonData.deleteWheel id { m | motor = newMotor } Mobile.rm Collar.rm
+                            Tuple.first <| CommonData.deleteWheel id { m | motor = newMotor } Mobile.rm Collar.rm
 
                         ( gearPos, gearLength ) =
                             Mobile.gearPosSize gId m.gears
