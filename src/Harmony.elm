@@ -207,8 +207,8 @@ makeCopy id newId coll =
 
 
 getLengthId : (Harmonized g -> Float) -> Id (Harmonized g) -> Coll (Harmonized g) -> Float
-getLengthId f id coll =
-    getLength f (Coll.get id coll) coll
+getLengthId getContentLength id coll =
+    getLength getContentLength (Coll.get id coll) coll
 
 
 getLength : (Harmonized g -> Float) -> Harmonized g -> Coll (Harmonized g) -> Float

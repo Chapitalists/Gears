@@ -1207,7 +1207,7 @@ viewContent ( model, mobile ) =
                                 _ ->
                                     Wheel.None
 
-                    Just ( IResizeHandle iid _, mode ) ->
+                    Just ( IResizeHandle iid _, _ ) ->
                         if iid /= id then
                             Wheel.None
 
@@ -1282,6 +1282,7 @@ viewContent ( model, mobile ) =
                                 wheel =
                                     g.wheel
 
+                                -- BLINK
                                 w =
                                     case model.dragging of
                                         Alterning ( idd, [] ) mayId ( b, _ ) ->
@@ -1303,6 +1304,7 @@ viewContent ( model, mobile ) =
                                         _ ->
                                             wheel
                             in
+                            -- VIEW WHEEL
                             Wheel.view w
                                 g.pos
                                 (Mobile.getLength g mobile.gears)
@@ -1332,6 +1334,7 @@ viewContent ( model, mobile ) =
                      <|
                         Coll.toList mobile.gears
                     )
+                        -- VIEW DRAGGING
                         ++ (case model.dragging of
                                 HalfLink ( id, pos ) ->
                                     case model.tool of
@@ -1411,6 +1414,7 @@ viewContent ( model, mobile ) =
                                     []
                            )
                         ++ (case model.tool of
+                                -- VIEW MOTOR LINKS
                                 Play _ _ ->
                                     let
                                         cuts =
@@ -1429,7 +1433,9 @@ viewContent ( model, mobile ) =
                                     <|
                                         Motor.getAllLinks mobile.gears
 
+                                -- VIEW HARMO LINKS
                                 Harmonize ->
+                                    -- HOVERED FRACTION
                                     (case Interact.getInteract model.interact of
                                         Just ( ILink l, _ ) ->
                                             Link.viewFractOnLink (toDrawLink mobile.gears l) <|
@@ -1441,10 +1447,12 @@ viewContent ( model, mobile ) =
                                         _ ->
                                             []
                                     )
+                                        -- ALL HARMO LINKS
                                         ++ (List.concatMap (\l -> Link.viewFractLink (toDrawLink mobile.gears l) (ILink l)) <|
                                                 List.concatMap (.harmony >> Harmo.getLinks) <|
                                                     Coll.values mobile.gears
                                            )
+                                        -- SELECTED LINK
                                         ++ (case model.link of
                                                 Just { link, fractInput } ->
                                                     Link.viewSelectedLink (toDrawLink mobile.gears link) <|
@@ -1463,6 +1471,7 @@ viewContent ( model, mobile ) =
                                                     []
                                            )
 
+                                -- COLLAR CURSOR
                                 Edit _ ->
                                     case model.edit of
                                         [ id ] ->
@@ -2474,7 +2483,7 @@ manageInteractEvent event model mobile =
                                                         g =
                                                             Coll.get id mobile.gears
                                                     in
-                                                    case interactWave g event model mobile of
+                                                    case interactWave g event model of
                                                         Just (ReturnWheel subMsg) ->
                                                             update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
 
@@ -2742,7 +2751,7 @@ interactEdit event model mobile =
                     _ ->
                         Just { return | newModel = { model | edit = [ id ] } }
 
-        -- CTRL/CMD/SHIFT CLIC
+        -- CTRL/CMD/ALT CLIC
         ( IWheel ( id, _ ), Interact.Clicked _, _ ) ->
             let
                 already =
@@ -2839,6 +2848,7 @@ interactMove event model mobile =
             }
     in
     case ( event.item, event.action, model.dragging ) of
+        -- START MOVE
         ( IWheel ( id, [] ), Interact.Dragged { newPos } ZSurface _, _ ) ->
             let
                 gearUp =
@@ -2860,9 +2870,11 @@ interactMove event model mobile =
                     , cmd = Cmd.map WaveMsg cmd
                 }
 
+        -- END MOVE
         ( _, Interact.DragEnded _, Moving ) ->
             Just { return | model = { model | dragging = NoDrag }, mobile = mobile, toUndo = Do }
 
+        -- START PACKING
         ( IWheel ( id, [] ), Interact.Dragged { newPos } ZPack _, _ ) ->
             Just
                 { return
@@ -2883,12 +2895,14 @@ interactMove event model mobile =
                         }
                 }
 
-        ( IWheel ( id, [] ), Interact.DragEnded True, Packing ) ->
+        -- END PACKING
+        ( IWheel ( _, [] ), Interact.DragEnded True, Packing ) ->
             Just
                 { return
                     | model = { model | dragging = NoDrag, pack = Pack.update Pack.PackIt model.pack }
                 }
 
+        -- START WAVING
         ( IWheel _, Interact.Dragged { absD } ZWave _, Waving ) ->
             let
                 ( wave, cmd ) =
@@ -2901,6 +2915,7 @@ interactMove event model mobile =
                     , cmd = Cmd.map WaveMsg cmd
                 }
 
+        -- MOVE WAVE SEL
         ( IWheel ( id, [] ), Interact.Dragged { oldPos } ZWave _, _ ) ->
             case model.edit of
                 [ waveId ] ->
@@ -2934,6 +2949,7 @@ interactMove event model mobile =
                 _ ->
                     Nothing
 
+        -- END WAVING
         ( IWheel ( id, [] ), Interact.DragEnded True, Waving ) ->
             case model.edit of
                 [ waveId ] ->
@@ -3010,8 +3026,8 @@ type InteractWaveReturn
     | ReturnWave Waveform.Msg
 
 
-interactWave : Geer -> Interact.Event Interactable Zone -> Model -> Mobeel -> Maybe InteractWaveReturn
-interactWave g event model mobile =
+interactWave : Geer -> Interact.Event Interactable Zone -> Model -> Maybe InteractWaveReturn
+interactWave g event model =
     let
         move part =
             case part of

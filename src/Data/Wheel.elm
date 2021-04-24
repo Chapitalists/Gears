@@ -99,7 +99,7 @@ fromContent c =
 type Mod
     = None
     | Selectable
-    | Selected Bool
+    | Selected Bool -- First selected
     | Resizing
 
 

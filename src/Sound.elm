@@ -14,14 +14,6 @@ type Sound
         }
 
 
-
-{- }
-   fromPath : String -> Sound
-   fromPath p =
-       S { path = p }
--}
-
-
 noSound =
     S { path = "NO_SOUND", duration = 0, startPercent = 0, endPercent = 0 }
 
