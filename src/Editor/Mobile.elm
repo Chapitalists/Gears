@@ -2033,10 +2033,6 @@ doChangeContent id c mayColor model mobile =
 
         gears =
             List.foldl (\el -> Coll.update el chSound) tmpGears group
-
-        newModel =
-            -- TODO Why !!??
-            { model | mode = Normal }
     in
     case mayColor of
         Just color ->
@@ -2047,7 +2043,6 @@ doChangeContent id c mayColor model mobile =
             { return
                 | mobile = { mobile | gears = List.foldl (\el -> Coll.update el chColor) gears group }
                 , toUndo = Do
-                , model = newModel
             }
 
         Nothing ->
@@ -2058,7 +2053,6 @@ doChangeContent id c mayColor model mobile =
             { return
                 | mobile = { mobile | gears = gears }
                 , toUndo = Group
-                , model = newModel
                 , cmd = Random.generate (WheelMsgs << colorToMsgs) colorGen
             }
 
@@ -2259,8 +2253,7 @@ manageInteractEvent event model mobile =
         ChangeSound id ->
             case ( event.item, event.action ) of
                 ( ISound s, Interact.Clicked _ ) ->
-                    -- TODO Should change mode to Normal here instead of if doChangeContent?
-                    doChangeContent id (Content.S s) Nothing model mobile
+                    doChangeContent id (Content.S s) Nothing { model | mode = Normal } mobile
 
                 _ ->
                     return
