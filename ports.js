@@ -91,7 +91,10 @@ function inputRec(args) {
     , start = args[1]
   if (name) {
     micRecorder.stop()
-    micRecorder.exportWAV(bl => app.ports.gotNewSample.send(new File([bl], name + ".wav", {type: "audio/wav"})))
+    micRecorder.exportWAV(bl => app.ports.gotNewSample.send(
+        { type : "rec"
+        , file : new File([bl], name + ".wav", {type: "audio/wav"})
+        }))
     micRecorder.clear()
     recording = false
     if (!scheduler.running) ctx.suspend()
@@ -122,7 +125,11 @@ function cutSample(infos) {
         newBuf.copyToChannel(chan, i)
     }
 
-    app.ports.gotNewSample.send(new File([audioBufferToWav(newBuf)], infos.newFileName + ".wav", {type: "audio/wav"}))
+    app.ports.gotNewSample.send(
+        { type : "cut"
+        , from : infos.fromSoundPath
+        , file : new File([audioBufferToWav(newBuf)], infos.newFileName + ".wav", {type: "audio/wav"})
+        })
 }
 
 function engine(o) {

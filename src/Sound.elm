@@ -36,6 +36,17 @@ getPath (S { path }) =
     path
 
 
+fileNameFromPath : String -> String
+fileNameFromPath =
+    Maybe.withDefault ""
+        << List.head
+        << String.split "."
+        << Maybe.withDefault ""
+        << List.head
+        << List.reverse
+        << String.split "/"
+
+
 getLoopPercentsList : Sound -> List Float
 getLoopPercentsList (S { startPercent, endPercent }) =
     [ startPercent, endPercent ]

@@ -136,6 +136,11 @@ soundMimeTypes =
     [ "audio/x-wav", "audio/wav" ]
 
 
+isValidFile : File -> Bool
+isValidFile file =
+    List.member (File.mime file) soundMimeTypes && File.size file <= (200 * 1024 * 1024)
+
+
 
 -- UPDATE
 
@@ -159,7 +164,7 @@ type Msg
     | EnteredNewRecName String
     | ClickedUploadSound
     | UploadSounds File (List File)
-    | GotNewSample (Result D.Error File)
+    | GotNewSample (Result D.Error ( File, SampleType ))
     | ClickedUploadSave
     | UploadSaves File (List File)
     | ChangedExplorerTab ExTab
@@ -535,7 +540,7 @@ update msg model =
             , Cmd.batch <|
                 List.map
                     (\file ->
-                        if List.member (File.mime file) soundMimeTypes && File.size file <= (200 * 1024 * 1024) then
+                        if isValidFile file then
                             Http.post
                                 { url = Url.toString model.currentUrl ++ "upSound"
                                 , body =
@@ -553,8 +558,29 @@ update msg model =
 
         GotNewSample res ->
             case res of
-                Ok file ->
-                    update (UploadSounds file []) model
+                Ok ( file, stype ) ->
+                    ( model
+                    , if isValidFile file then
+                        Http.post
+                            { url = Url.toString model.currentUrl ++ "upSound"
+                            , body =
+                                Http.multipartBody <|
+                                    Http.filePart "file" file
+                                        :: (case stype of
+                                                Reced ->
+                                                    [ Http.stringPart "type" "REC" ]
+
+                                                Cuted from ->
+                                                    [ Http.stringPart "type" "CUT"
+                                                    , Http.stringPart "from" from
+                                                    ]
+                                           )
+                            , expect = Http.expectWhatever <| always RequestSoundList
+                            }
+
+                      else
+                        Cmd.none
+                    )
 
                 Err err ->
                     let
@@ -748,10 +774,34 @@ subs { doc } =
         [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
         , micOpened <| always MicOpened
-        , gotNewSample <| (GotNewSample << D.decodeValue File.decoder)
+        , gotNewSample <| (GotNewSample << D.decodeValue sampleDecoder)
         ]
             ++ List.map (Sub.map DocMsg) (Doc.subs doc)
             ++ List.map (Sub.map KeysMsg) Keys.subs
+
+
+type SampleType
+    = Reced
+    | Cuted String
+
+
+sampleDecoder : D.Decoder ( File, SampleType )
+sampleDecoder =
+    D.map2 Tuple.pair (D.field "file" File.decoder) <|
+        D.andThen
+            (\s ->
+                case s of
+                    "rec" ->
+                        D.succeed Reced
+
+                    "cut" ->
+                        D.map (Cuted << Sound.fileNameFromPath) <| D.field "from" D.string
+
+                    _ ->
+                        D.fail "not valid type to decode sample"
+            )
+        <|
+            D.field "type" D.string
 
 
 type Mode

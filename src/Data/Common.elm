@@ -21,25 +21,16 @@ getName id mobile =
     let
         w =
             getWheel id mobile
-
-        fileNameFromPath =
-            Maybe.withDefault ""
-                << List.head
-                << String.split "."
-                << Maybe.withDefault ""
-                << List.head
-                << List.reverse
-                << String.split "/"
     in
     if String.isEmpty w.name then
         case Wheel.getWheelContent w of
             Content.S s ->
-                fileNameFromPath <| Sound.getPath s
+                Sound.fileNameFromPath <| Sound.getPath s
 
             Content.C c ->
                 case c.oneSound of
                     Just { path } ->
-                        fileNameFromPath path
+                        Sound.fileNameFromPath path
 
                     Nothing ->
                         toUid id

@@ -105,7 +105,11 @@ const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
                         res.end()
                         return;
                     }
-                    fs.renameSync(files.file.path, soundPath + files.file.name)
+                    let path = soundPath
+                        + (fields.from ? fields.from + '-' : '')
+                        + (fields.type ? fields.type + '/' : '')
+                    if (!fs.existsSync(path)) fs.mkdirSync(path, {recursive:true})
+                    fs.renameSync(files.file.path, path + files.file.name)
                     res.end()
                 })
             } else {
