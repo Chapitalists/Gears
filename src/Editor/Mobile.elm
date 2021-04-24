@@ -1514,23 +1514,6 @@ viewContent ( model, mobile ) =
 
 
 
--- TODO duplicate with Gear.getName and Common.getName
-
-
-getNameWithDefault : Id Geer -> Mobeel -> String
-getNameWithDefault id mobile =
-    let
-        w =
-            (Coll.get id mobile.gears).wheel
-    in
-    if String.isEmpty w.name then
-        Gear.toUID id
-
-    else
-        w.name
-
-
-
 -- TODO split in functions for each component, and maybe move to another file, like Interacting, or good old common
 
 
@@ -1551,7 +1534,7 @@ viewDetails model mobile =
     case model.mode of
         ChangeSound id ->
             [ viewDetailsColumn (rgb 0.5 0.2 0) <|
-                [ text <| getNameWithDefault id mobile
+                [ text <| CommonData.getName ( id, [] ) mobile
                 , text "Choisir un son chargé"
                 , Input.button []
                     { label = text "Annuler"
@@ -1808,7 +1791,7 @@ viewEditDetails model mobile =
                         ++ Harmo.view id
                             mobile.gears
                             (\rId ->
-                                getNameWithDefault rId mobile
+                                CommonData.getName ( rId, [] ) mobile
                             )
                 , text <| "( " ++ (Round.round 2 <| Mobile.getLengthId id mobile.gears) ++ " )"
                 , text <|
@@ -1854,7 +1837,7 @@ viewEditDetails model mobile =
 
         _ :: _ ->
             [ viewDetailsColumn (rgb 0.5 0.5 0.5) <|
-                (List.map (\id -> text <| getNameWithDefault id mobile) <| List.reverse model.edit)
+                (List.map (\id -> text <| CommonData.getName ( id, [] ) mobile) <| List.reverse model.edit)
                     ++ [ Input.button []
                             { label = text "Encapsuler"
                             , onPress = Just <| Capsuled <| List.reverse model.edit
