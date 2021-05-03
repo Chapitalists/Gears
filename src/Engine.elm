@@ -15,9 +15,8 @@ import Data.Collar as Collar exposing (Beed, Colleer)
 import Data.Common exposing (Identifier)
 import Data.Content as Content
 import Data.Gear as Gear exposing (Gear)
-import Data.Mobile exposing (Geer, Mobeel)
+import Data.Mobile as Mobile exposing (Geer, Mobeel)
 import Data.Wheel as Wheel exposing (Wheel)
-import Harmony as Harmo
 import Json.Encode as E
 import Motor
 import Sound
@@ -110,7 +109,7 @@ encodeWheel w hasView parentUid =
     ]
         ++ (case Wheel.getWheelContent w of
                 Content.S s ->
-                    [ ( "soundName", E.string <| Sound.toString s )
+                    [ ( "soundPath", E.string <| Sound.getPath s )
                     , ( "loopPercents", E.list E.float <| Sound.getLoopPercentsList s )
                     ]
 
@@ -129,7 +128,7 @@ encodeGear hasView parentUid coll id =
             Coll.get id coll
 
         length =
-            Harmo.getLength g.harmony coll
+            Mobile.getLength g coll
 
         uid =
             parentUid ++ Gear.toUID id
@@ -153,7 +152,7 @@ encodeGear hasView parentUid coll id =
 encodeMobile : Mobeel -> Bool -> String -> E.Value
 encodeMobile { motor, gears } hasView parentUid =
     E.object
-        [ ( "duration", E.float <| Harmo.getLengthId motor gears )
+        [ ( "duration", E.float <| Mobile.getLengthId motor gears )
         , ( "gears", E.list (encodeGear hasView parentUid gears) <| Motor.getMotored motor gears )
         ]
 

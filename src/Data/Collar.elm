@@ -42,9 +42,19 @@ beadName i collar =
 fromWheel : Wheel -> Float -> Colleer
 fromWheel w l =
     { matrice = 1
-    , loop = l
+    , loop = 0
     , head = { length = l, wheel = w }
     , beads = []
+    , oneSound = Nothing
+    }
+
+
+fromBeads : Beed -> List Beed -> Colleer
+fromBeads head rest =
+    { matrice = List.length rest + 1
+    , loop = 0
+    , head = head
+    , beads = rest
     , oneSound = Nothing
     }
 
@@ -52,7 +62,7 @@ fromWheel w l =
 fromWheelMult : Wheel -> Int -> Float -> Colleer
 fromWheelMult w m l =
     { matrice = m
-    , loop = l * toFloat m
+    , loop = 0
     , head = { length = l, wheel = w }
     , beads = List.repeat (m - 1) { length = l, wheel = w }
     , oneSound = Nothing
@@ -72,17 +82,17 @@ fromSoundDiv s d l =
             List.map Content.S sounds
 
         beads =
-            List.map beadFromContent contents
+            List.map (\c -> { length = l / toFloat d, wheel = Wheel.fromContent c }) contents
     in
     case beads of
         head :: rest ->
             { matrice = d
-            , loop = l
+            , loop = 0
             , head = head
             , beads = rest
             , oneSound =
                 Just
-                    { soundName = Sound.toString s
+                    { path = Sound.getPath s
                     , start = Tuple.first loopPercents
                     , end = Tuple.second loopPercents
                     , divs = divs
@@ -128,22 +138,32 @@ get =
     Content.getBead
 
 
-add : Int -> Beed -> Colleer -> Colleer
-add i b c =
-    if i <= 0 then
-        { c
-            | head = b
-            , beads = c.head :: c.beads
-            , matrice = c.matrice + 1
-            , oneSound = Nothing
-        }
+addBeads : Int -> List Beed -> Colleer -> Colleer
+addBeads i bs c =
+    case bs of
+        [] ->
+            c
 
-    else
-        { c
-            | beads = List.concat [ List.take (i - 1) c.beads, [ b ], List.drop (i - 1) c.beads ]
-            , matrice = c.matrice + 1
-            , oneSound = Nothing
-        }
+        head :: tail ->
+            if i <= 0 then
+                { c
+                    | head = head
+                    , beads = List.concat [ tail, c.head :: c.beads ]
+                    , matrice = c.matrice + List.length bs
+                    , oneSound = Nothing
+                }
+
+            else
+                { c
+                    | beads = List.concat [ List.take (i - 1) c.beads, bs, List.drop (i - 1) c.beads ]
+                    , matrice = c.matrice + List.length bs
+                    , oneSound = Nothing
+                }
+
+
+add : Int -> Beed -> Colleer -> Colleer
+add i b =
+    addBeads i [ b ]
 
 
 rm : Int -> Colleer -> Colleer
@@ -186,4 +206,4 @@ encoder =
 
 decoder : D.Decoder Colleer
 decoder =
-    Content.collarDecoder Wheel.decoder
+    Content.collarDecoder (Wheel.decoder getContentLength)

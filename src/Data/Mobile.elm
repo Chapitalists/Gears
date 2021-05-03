@@ -8,7 +8,8 @@ import Data.Wheel as Wheel exposing (Conteet, Wheel)
 import Harmony as Harmo exposing (Harmony)
 import Json.Decode as D
 import Json.Encode as E
-import Math.Vector2 exposing (Vec2)
+import Link exposing (Circle)
+import Math.Vector2 as Vec exposing (Vec2)
 import Motor
 
 
@@ -48,7 +49,7 @@ defaultGear =
 gearFromContent : Conteet -> Vec2 -> Geer
 gearFromContent c pos =
     { pos = pos
-    , harmony = Harmo.newSelf <| getContentLength c
+    , harmony = Harmo.newRate 1
     , motor = []
     , wheel = Wheel.fromContent c
     }
@@ -56,24 +57,48 @@ gearFromContent c pos =
 
 newSizedGear : Vec2 -> Float -> Wheel -> Geer
 newSizedGear p l w =
-    { pos = p, harmony = Harmo.newSelf l, motor = [], wheel = w }
+    { pos = p, harmony = Harmo.newRate (l / getWheeledContentLength { wheel = w }), motor = [], wheel = w }
 
 
-
--- TODO remove and use Common.getName instead
-
-
-gearName : Id Geer -> Coll Geer -> String
-gearName id coll =
+copy : Bool -> Vec2 -> Id Geer -> Coll Geer -> Coll Geer
+copy harmo move id coll =
     let
-        name =
-            (Coll.get id coll).wheel.name
+        g =
+            Coll.get id coll
+
+        newG =
+            { g
+                | pos = Vec.add g.pos move
+                , motor = []
+            }
+
+        ( newId, newColl ) =
+            Coll.insertTellId newG coll
     in
-    if String.isEmpty name then
-        Gear.toUID id
+    if harmo then
+        Harmo.makeCopy id newId newColl
 
     else
-        name
+        Harmo.toRate getWheeledContentLength newId <| Harmo.hardEmptySelf newId newColl
+
+
+toCircle : Coll Geer -> Id Geer -> Circle
+toCircle coll id =
+    let
+        g =
+            Coll.get id coll
+    in
+    { c = g.pos, d = getLength g coll }
+
+
+getLengthId : Id Geer -> Coll Geer -> Float
+getLengthId =
+    Harmo.getLengthId getWheeledContentLength
+
+
+getLength : Geer -> Coll Geer -> Float
+getLength =
+    Harmo.getLength getWheeledContentLength
 
 
 gearPosSize : Id Geer -> Coll Geer -> ( Vec2, Float )
@@ -82,7 +107,7 @@ gearPosSize id coll =
         g =
             Coll.get id coll
     in
-    ( g.pos, Harmo.getLength g.harmony coll )
+    ( g.pos, getLength g coll )
 
 
 rm : Id Geer -> Mobeel -> Mobeel
@@ -133,4 +158,4 @@ encoder =
 
 decoder : D.Decoder Mobeel
 decoder =
-    Content.mobileDecoder Wheel.decoder Wheel.default
+    Content.mobileDecoder (Wheel.decoder getContentLength) (getContentLength << Wheel.getWheelContent) Wheel.default

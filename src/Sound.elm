@@ -14,14 +14,6 @@ type Sound
         }
 
 
-
-{- }
-   fromPath : String -> Sound
-   fromPath p =
-       S { path = p }
--}
-
-
 noSound =
     S { path = "NO_SOUND", duration = 0, startPercent = 0, endPercent = 0 }
 
@@ -31,20 +23,20 @@ length (S s) =
     s.duration * (s.endPercent - s.startPercent)
 
 
-toString : Sound -> String
-toString (S { path }) =
+getPath : Sound -> String
+getPath (S { path }) =
     path
 
 
-fileName : Sound -> String
-fileName (S { path }) =
-    Maybe.withDefault "" <|
-        List.head <|
-            String.split "." <|
-                Maybe.withDefault "" <|
-                    List.head <|
-                        List.reverse <|
-                            String.split "/" path
+fileNameFromPath : String -> String
+fileNameFromPath =
+    Maybe.withDefault ""
+        << List.head
+        << String.split "."
+        << Maybe.withDefault ""
+        << List.head
+        << List.reverse
+        << String.split "/"
 
 
 getLoopPercentsList : Sound -> List Float

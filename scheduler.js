@@ -48,7 +48,7 @@ let scheduler = {
     this.running = false
     
     let stopWheel = model => {
-      if (model.soundName) {
+      if (model.soundPath) {
         model.players.forEach(pl => pl.node.stop())
       }
       if (model.collar || model.mobile) {
@@ -63,7 +63,7 @@ let scheduler = {
       model.view.moveTo(0)
     }
     
-    if (!recording) ctx.suspend()
+    ctx.suspend()
 
     this.intervalId = -1
     this.nextRequestId = -1
@@ -97,7 +97,7 @@ let scheduler = {
     } // TODO volume should rather be in dB
     model.updateVolume()
     
-    if (model.soundName) {
+    if (model.soundPath) {
       // WARNING in model, startPercent is of whole sound, here it’s of content
       model.startPercent = (model.startPercent - model.loopPercents[0]) / (model.loopPercents[1] - model.loopPercents[0])
 
@@ -108,7 +108,7 @@ let scheduler = {
           , scheduler.lookAhead
         )
       }
-      model.buffer = buffers[model.soundName]
+      model.buffer = buffers[model.soundPath]
       // TODO beware, buffer duration could differ from saved duration in Elm model (due to resampling)
       // probably it’s preferable to use saved duration from elm
       // but, is it compensated by downward TODO ? (in schedulePlayer)
@@ -229,7 +229,7 @@ let scheduler = {
             t = nextState.date // Bring back the time and undo
             if (t <= now) console.error("undoing the past, now : " + now + " scheduler : " + t)
 
-            if (model.soundName) {
+            if (model.soundPath) {
               for (let pl of model.players) {
                 if (pl.startTime <= t && t <= pl.stopTime) {
                   pl.node.stop(this.toCtxTime(t))
@@ -277,7 +277,7 @@ let scheduler = {
 
           } else { // Normal pause
           
-            if (model.soundName) {
+            if (model.soundPath) {
               if (nextState.date <= t) { // No need to play more, even partially
 
                 nextState.percent = clampPercent(0 - model.startPercent)
@@ -335,7 +335,7 @@ let scheduler = {
 
         } else { // And keep playing
 
-          if (model.soundName) {
+          if (model.soundPath) {
             let newPlayers = this.scheduleLoop(t, max, model)
             model.players = model.players.concat(newPlayers)
             t = model.players[model.players.length - 1].stopTime
@@ -363,7 +363,7 @@ let scheduler = {
           
           let contentPercent = clampPercent(lastState.percent + model.startPercent)
 
-          if (model.soundName) {
+          if (model.soundPath) {
             let offsetDur = contentPercent * model.duration + model.loopStartDur
               , newPlayer = this.scheduleStart(t, model, offsetDur)
             model.players.push(newPlayer)

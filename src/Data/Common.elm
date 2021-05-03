@@ -17,31 +17,26 @@ type alias Identifier =
 
 
 getName : Identifier -> Mobile Wheel -> String
-getName ( id, l ) mobile =
+getName id mobile =
     let
         w =
-            getWheel ( id, l ) mobile
+            getWheel id mobile
     in
     if String.isEmpty w.name then
-        case l of
-            [] ->
-                case Wheel.getWheelContent w of
-                    Content.S s ->
-                        let
-                            fileName =
-                                Sound.fileName s
-                        in
-                        if String.isEmpty fileName then
-                            Gear.toUID id
+        case Wheel.getWheelContent w of
+            Content.S s ->
+                Sound.fileNameFromPath <| Sound.getPath s
 
-                        else
-                            fileName
+            Content.C c ->
+                case c.oneSound of
+                    Just { path } ->
+                        Sound.fileNameFromPath path
 
-                    _ ->
-                        Gear.toUID id
+                    Nothing ->
+                        toUid id
 
             _ ->
-                toUid ( id, l )
+                toUid id
 
     else
         w.name
@@ -81,72 +76,72 @@ deleteWheel :
     -> Mobile Wheel
     -> (Id (Gear Wheel) -> Mobile Wheel -> Mobile Wheel)
     -> (Int -> Collar Wheel -> Collar Wheel)
-    -> Mobile Wheel
+    -> ( Mobile Wheel, Bool ) -- True if there is only one bead left after deleting
 deleteWheel ( id, l ) mobile gRm bRm =
     let
-        rec : Int -> List Int -> Collar Wheel -> Collar Wheel
+        rec : Int -> List Int -> Collar Wheel -> ( Collar Wheel, Bool )
         rec index list col =
             case list of
                 [] ->
-                    bRm index col
+                    let
+                        newCol =
+                            bRm index col
+                    in
+                    ( newCol, (List.length <| Content.getBeads newCol) == 1 )
 
                 i :: rest ->
                     case Wheel.getContent <| Content.getBead index col of
                         Content.C subCol ->
-                            Content.updateBead index (Wheel.setContent <| Content.C <| rec i rest subCol) col
+                            let
+                                ( newSubCol, last ) =
+                                    rec i rest subCol
+                            in
+                            ( Content.updateBead index (Wheel.setContent <| Content.C newSubCol) col, last )
 
                         _ ->
                             let
                                 _ =
                                     Debug.log "Wrong identifier to delete bead" ( id, l, mobile )
                             in
-                            col
+                            ( col, False )
     in
     case l of
         [] ->
-            gRm id mobile
-
-        [ i ] ->
-            case Wheel.getContent <| Coll.get id mobile.gears of
-                Content.C col ->
-                    Content.updateGear id (Wheel.setContent <| Content.C <| bRm i col) mobile
-
-                _ ->
-                    let
-                        _ =
-                            Debug.log "Wrong identifier to delete bead" ( id, l, mobile )
-                    in
-                    mobile
+            ( gRm id mobile, False )
 
         i :: rest ->
             case Wheel.getContent <| Coll.get id mobile.gears of
                 Content.C col ->
-                    Content.updateGear id (Wheel.setContent <| Content.C <| rec i rest col) mobile
+                    let
+                        ( newCol, last ) =
+                            rec i rest col
+                    in
+                    ( Content.updateGear id (Wheel.setContent <| Content.C newCol) mobile, last )
 
                 _ ->
                     let
                         _ =
                             Debug.log "Wrong identifier to delete bead" ( id, l, mobile )
                     in
-                    mobile
+                    ( mobile, False )
 
 
 updateWheel : Identifier -> Wheel.Msg -> Mobile Wheel -> Mobile Wheel
 updateWheel ( id, list ) msg m =
     let
-        modify =
+        ( modify, upBead ) =
             case msg of
                 Wheel.ChangeContent _ ->
-                    True
+                    ( True, Content.updateBead )
 
                 Wheel.ChangeStart _ ->
-                    True
+                    ( True, Content.updateBead )
 
                 Wheel.ChangeLoop _ ->
-                    True
+                    ( True, Content.updateBead )
 
                 _ ->
-                    False
+                    ( False, Content.updateBeadKeepOneSound )
 
         rec : List Int -> Wheel -> Wheel
         rec l w =
@@ -160,7 +155,7 @@ updateWheel ( id, list ) msg m =
                         Content.C col ->
                             let
                                 upCol =
-                                    Content.updateBead i (\bead -> { bead | wheel = rec ll bead.wheel }) col
+                                    upBead i (\bead -> { bead | wheel = rec ll bead.wheel }) col
 
                                 newCol =
                                     if modify then
@@ -174,11 +169,16 @@ updateWheel ( id, list ) msg m =
                         _ ->
                             let
                                 _ =
-                                    Debug.log "Wrong identifier to delete bead" ( ( id, l ), msg, m )
+                                    Debug.log "Wrong identifier to update bead" ( ( id, l ), msg, m )
                             in
                             w
     in
     Content.updateGear id (\gear -> { gear | wheel = rec list gear.wheel }) m
+
+
+getWheeledContentLength : Wheeled g -> Float
+getWheeledContentLength =
+    getContentLength << Wheel.getContent
 
 
 getContentLength : Conteet -> Float
@@ -188,7 +188,7 @@ getContentLength c =
             Sound.length s
 
         Content.M m ->
-            Harmo.getLengthId m.motor m.gears
+            Harmo.getLengthId getWheeledContentLength m.motor m.gears
 
         Content.C col ->
             Content.getMatriceLength col

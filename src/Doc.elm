@@ -5,6 +5,7 @@ import Data.Common as Common exposing (Identifier)
 import Data.Content as Content exposing (Content)
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
 import Data.Wheel as Wheel exposing (Conteet, Wheel)
+import Dict exposing (Dict)
 import Editor.Interacting exposing (Interactable, Zone(..))
 import Editor.Mobile as Editor
 import Element exposing (..)
@@ -57,8 +58,8 @@ type Shortcut
     | Play
     | Left
     | Right
-    | Suppr
     | Pack
+    | Editor Editor.Msg
 
 
 type Msg
@@ -214,19 +215,14 @@ update msg doc =
                         _ ->
                             ( doc, Cmd.none )
 
-                Suppr ->
-                    case ( doc.editor.edit, doc.editor.tool ) of
-                        ( [ id ], Editor.Edit _ ) ->
-                            update (MobileMsg <| Editor.DeleteWheel ( id, [] )) doc
-
-                        _ ->
-                            ( doc, Cmd.none )
-
                 Left ->
                     update (MobileMsg <| Editor.CursorLeft) doc
 
                 Right ->
                     update (MobileMsg <| Editor.CursorRight) doc
+
+                Editor subMsg ->
+                    update (MobileMsg subMsg) doc
 
         DirectionRepeat dir ->
             update (MobileMsg <| Editor.SvgMsg <| PanSvg.Pan dir) doc
@@ -292,6 +288,16 @@ subs doc =
 keyCodeToMode : List ( String, Editor.Mode )
 keyCodeToMode =
     Editor.keyCodeToMode
+
+
+keyCodeToShortcut : Model -> Dict String Shortcut
+keyCodeToShortcut model =
+    Dict.map (always Editor) <| Editor.keyCodeToShortcut model.editor <| getViewing model
+
+
+keyCodeToDirection : Dict String Msg
+keyCodeToDirection =
+    Dict.map (always MobileMsg) Editor.keyCodeToDirection
 
 
 view : Model -> Element Msg

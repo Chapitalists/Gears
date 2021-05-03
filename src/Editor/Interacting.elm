@@ -18,16 +18,25 @@ type Interactable
     | ISound Sound
     | IWaveCursor Cursor
     | IWaveSel
+    | IWaveMapSel
 
 
 type Zone
     = ZSurface
     | ZPack
     | ZWave
+    | ZWaveMap
+
+
+type WavePart
+    = Mini
+    | Main
 
 
 type Cursor
-    = LoopStart
-    | LoopEnd
-    | StartOffset
-    | Divide Int
+    = LoopStart WavePart
+    | LoopEnd WavePart
+    | StartOffset WavePart
+    | Divide Int WavePart
+    | ViewStart
+    | ViewEnd

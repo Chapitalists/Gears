@@ -1,7 +1,7 @@
 module Data.Wheel exposing (..)
 
 import Color exposing (Color)
-import Data.Content as Content exposing (Content, Mobile)
+import Data.Content as Content exposing (Bead, Content, Mobile)
 import Html.Attributes
 import Interact
 import Json.Decode as D
@@ -58,6 +58,14 @@ getLoopPercents { wheel } =
         C (Content.S s) ->
             Sound.getLoopPercents s
 
+        C (Content.C c) ->
+            case c.oneSound of
+                Just one ->
+                    ( one.start, one.end )
+
+                _ ->
+                    ( 0, 1 )
+
         _ ->
             ( 0, 1 )
 
@@ -91,7 +99,7 @@ fromContent c =
 type Mod
     = None
     | Selectable
-    | Selected Bool
+    | Selected Bool -- First selected
     | Resizing
 
 
@@ -99,8 +107,9 @@ type alias Style =
     { mod : Mod
     , motor : Bool
     , dashed : Bool
+    , weaving : Bool
     , baseColor : Maybe Float
-    , named : Bool
+    , named : Maybe String
     }
 
 
@@ -109,8 +118,9 @@ defaultStyle =
     { mod = None
     , motor = False
     , dashed = False
+    , weaving = False
     , baseColor = Nothing
-    , named = True
+    , named = Nothing
     }
 
 
@@ -121,6 +131,7 @@ type Msg
     | Mute Bool
     | ChangeStart Float
     | ChangeLoop ( Maybe Float, Maybe Float )
+    | ChangeDiv Int Float
     | Named String
     | ChangeColor Float
     | ToggleContentView
@@ -131,6 +142,32 @@ update msg g =
     let
         wheel =
             g.wheel
+
+        --TODO Very specific to beads, but content or collar doesn’t know wheels, so where is it to put ?
+        chgLoopWithSoundLength : ( Maybe Float, Maybe Float ) -> Bead Wheel -> Bead Wheel
+        chgLoopWithSoundLength p b =
+            let
+                w =
+                    b.wheel
+
+                newSound =
+                    case getWheelContent w of
+                        Content.S s ->
+                            Sound.setLoop p s
+
+                        _ ->
+                            Sound.noSound
+
+                newWheel =
+                    { w
+                        | startPercent = Tuple.first <| Sound.getLoopPercents newSound
+                        , content = C <| Content.S newSound
+                    }
+
+                length =
+                    Sound.length newSound
+            in
+            { wheel = newWheel, length = length }
     in
     case msg of
         ChangeContent c ->
@@ -172,6 +209,30 @@ update msg g =
                             { wheel
                                 | content = C <| Content.S newSound
                                 , startPercent = clamp min max wheel.startPercent
+                            }
+                    }
+
+                C (Content.C c) ->
+                    { g
+                        | wheel =
+                            { wheel
+                                | content =
+                                    C <|
+                                        Content.C <|
+                                            Content.setCollarLoop chgLoopWithSoundLength mayPoints c
+                            }
+                    }
+
+                _ ->
+                    g
+
+        ChangeDiv i percent ->
+            case wheel.content of
+                C (Content.C c) ->
+                    { g
+                        | wheel =
+                            { wheel
+                                | content = C <| Content.C <| Content.setCollarDiv chgLoopWithSoundLength i percent c
                             }
                     }
 
@@ -244,32 +305,31 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                     (\( inter, l ) -> ( Interact.hoverEvents <| inter l, Interact.draggableEvents <| inter l ))
                     mayWheelInter
     in
-    S.g [ SA.transform [ Translate (getX pos) (getY pos) ] ] <|
-        (if style.named then
-            [ S.text_
-                [ SA.x <| Num 0
-                , SA.y <| Num -(length * 3 / 4)
-                , SA.fontSize <| Num (length / 2)
-                , SA.textAnchor AnchorMiddle
-                , SA.stroke Color.white
-                , SA.strokeWidth <| Num (tickW / 4)
+    S.g
+        (SA.transform [ Translate (getX pos) (getY pos) ]
+            :: (if style.weaving then
+                    [ SA.opacity <| Opacity 0.5 ]
+
+                else
+                    []
+               )
+        )
+    <|
+        (case style.named of
+            Just name ->
+                [ S.text_
+                    [ SA.x <| Num 0
+                    , SA.y <| Num -(length * 3 / 4)
+                    , SA.fontSize <| Num (length / 2)
+                    , SA.textAnchor AnchorMiddle
+                    , SA.stroke Color.white
+                    , SA.strokeWidth <| Num (tickW / 4)
+                    ]
+                    [ text name ]
                 ]
-                [ text <|
-                    if String.isEmpty w.name then
-                        case getWheelContent w of
-                            Content.S s ->
-                                Sound.fileName s
 
-                            _ ->
-                                ""
-
-                    else
-                        w.name
-                ]
-            ]
-
-         else
-            [ S.text_ [] [] ]
+            Nothing ->
+                [ S.text_ [] [] ]
          -- Because rotating g cannot be Keyed in TypedSvg, trick to prevent recreation
         )
             ++ [ S.g hoverAttrs <|
@@ -472,7 +532,7 @@ insideCollarView collar mayWheelInter parentUid =
                 ( view b.wheel
                     (vec2 (p + b.length / 2) 0)
                     b.length
-                    { defaultStyle | named = False }
+                    { defaultStyle | named = Nothing }
                     (Maybe.map (\( inter, l ) -> ( inter, l ++ [ i ] )) mayWheelInter)
                     Nothing
                     (Content.beadUIDExtension parentUid i)
@@ -500,9 +560,9 @@ encoder w =
     ]
 
 
-decoder : D.Decoder Wheel
-decoder =
-    Content.decoder (D.lazy (\_ -> decoder)) default
+decoder : (Conteet -> Float) -> D.Decoder Wheel
+decoder getContentLength =
+    Content.decoder (D.lazy (\_ -> decoder getContentLength)) (getContentLength << getWheelContent) default
         |> D.andThen
             (\content ->
                 Field.attempt "viewContent" D.bool <|

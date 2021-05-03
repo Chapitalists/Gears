@@ -47,7 +47,7 @@ port openMic : () -> Cmd msg
 port micOpened : (() -> msg) -> Sub msg
 
 
-port inputRec : String -> Cmd msg
+port inputRec : ( String, Bool ) -> Cmd msg
 
 
 port gotNewSample : (D.Value -> msg) -> Sub msg
@@ -80,7 +80,7 @@ main =
 type alias Model =
     { connected : Bool
     , currentUrl : Url.Url
-    , micState : Maybe ( Bool, String )
+    , micState : Maybe ( Bool, String ) -- Recording, FileName
     , soundList : Dict String SoundListType
     , loadedSoundList : List Sound
     , showDirLoad : Bool
@@ -136,6 +136,11 @@ soundMimeTypes =
     [ "audio/x-wav", "audio/wav" ]
 
 
+isValidFile : File -> Bool
+isValidFile file =
+    List.member (File.mime file) soundMimeTypes && File.size file <= (200 * 1024 * 1024)
+
+
 
 -- UPDATE
 
@@ -159,7 +164,7 @@ type Msg
     | EnteredNewRecName String
     | ClickedUploadSound
     | UploadSounds File (List File)
-    | GotNewSample (Result D.Error File)
+    | GotNewSample (Result D.Error ( File, SampleType ))
     | ClickedUploadSave
     | UploadSaves File (List File)
     | ChangedExplorerTab ExTab
@@ -295,7 +300,7 @@ update msg model =
                                     else
                                         let
                                             path =
-                                                List.concatMap (String.split "\\") <| String.split "/" <| Sound.toString s
+                                                List.concatMap (String.split "\\") <| String.split "/" <| Sound.getPath s
                                         in
                                         case path of
                                             [] ->
@@ -325,6 +330,10 @@ update msg model =
                                                             Just str ->
                                                                 case searchReplacement str soundLib of
                                                                     Nothing ->
+                                                                        let
+                                                                            _ =
+                                                                                Debug.log "Cannot find replacement for a sound" str
+                                                                        in
                                                                         Nothing
 
                                                                     Just p ->
@@ -365,7 +374,7 @@ update msg model =
                                                     Just ( collar, sl, cc ) ->
                                                         case checkLoad (Wheel.getContent b) sl cc of
                                                             Just ( newContent, newSL, newCmds ) ->
-                                                                Just ( Collar.updateBead i (Wheel.setContent newContent) collar, newSL, newCmds )
+                                                                Just ( Content.updateBeadKeepOneSound i (Wheel.setContent newContent) collar, newSL, newCmds )
 
                                                             _ ->
                                                                 Nothing
@@ -510,12 +519,12 @@ update msg model =
 
         StartMicRec ->
             ( { model | micState = Maybe.map (Tuple.mapFirst <| always True) model.micState }
-            , inputRec ""
+            , inputRec ( "", Coll.isEmpty (Doc.getViewing model.doc).gears )
             )
 
         EndMicRec fileName ->
             ( { model | micState = Maybe.map (Tuple.mapFirst <| always False) model.micState }
-            , inputRec fileName
+            , inputRec ( fileName, True )
             )
 
         EnteredNewRecName fileName ->
@@ -531,7 +540,7 @@ update msg model =
             , Cmd.batch <|
                 List.map
                     (\file ->
-                        if List.member (File.mime file) soundMimeTypes && File.size file <= (200 * 1024 * 1024) then
+                        if isValidFile file then
                             Http.post
                                 { url = Url.toString model.currentUrl ++ "upSound"
                                 , body =
@@ -549,8 +558,29 @@ update msg model =
 
         GotNewSample res ->
             case res of
-                Ok file ->
-                    update (UploadSounds file []) model
+                Ok ( file, stype ) ->
+                    ( model
+                    , if isValidFile file then
+                        Http.post
+                            { url = Url.toString model.currentUrl ++ "upSound"
+                            , body =
+                                Http.multipartBody <|
+                                    Http.filePart "file" file
+                                        :: (case stype of
+                                                Reced ->
+                                                    [ Http.stringPart "type" "REC" ]
+
+                                                Cuted from ->
+                                                    [ Http.stringPart "type" "CUT"
+                                                    , Http.stringPart "from" from
+                                                    ]
+                                           )
+                            , expect = Http.expectWhatever <| always RequestSoundList
+                            }
+
+                      else
+                        Cmd.none
+                    )
 
                 Err err ->
                     let
@@ -661,16 +691,22 @@ update msg model =
 
         DocMsg subMsg ->
             let
-                ( doc, cmd ) =
+                ( newModel, cmd ) =
+                    case ( model.micState, subMsg, model.doc.editor.tool ) of
+                        -- FIXME Absurd... Should be a commonMsg and common ChangedMode
+                        ( _, Doc.MobileMsg (Editor.ChangedMode (Editor.ChangeSound _)), _ ) ->
+                            ( { model | fileExplorerTab = LoadedSounds }, Cmd.none )
+
+                        ( Just ( True, name ), Doc.MobileMsg Editor.ToggleEngine, Editor.Play True _ ) ->
+                            update (EndMicRec name) model
+
+                        _ ->
+                            ( model, Cmd.none )
+
+                ( doc, subCmd ) =
                     Doc.update subMsg model.doc
             in
-            case subMsg of
-                -- FIXME Absurd... Should be a commonMsg and common ChangedMode
-                Doc.MobileMsg (Editor.ChangedMode (Editor.ChangeSound _)) ->
-                    ( { model | doc = doc, fileExplorerTab = LoadedSounds }, Cmd.map DocMsg cmd )
-
-                _ ->
-                    ( { model | doc = doc }, Cmd.map DocMsg cmd )
+            ( { newModel | doc = doc }, Cmd.batch <| cmd :: [ Cmd.map DocMsg subCmd ] )
 
         -- TODO Should dispatch KeysMsg, not specific messages to each part, too big of a dependency
         KeysMsg subMsg ->
@@ -690,25 +726,33 @@ update msg model =
                                     Tuple.mapSecond (\cm -> Cmd.batch [ cm, c ]) <| update (ChangedMode NoMode) m
 
                         Keys.Press code ->
-                            case Dict.get code keyCodeToShortcut of
+                            case Dict.get code <| keyCodeToShortcut model of
                                 Just press ->
                                     let
-                                        ( doc, cmd ) =
-                                            Doc.update (Doc.KeyPressed press) m.doc
+                                        ( newModel, cmd ) =
+                                            case ( model.micState, press, model.doc.editor.tool ) of
+                                                ( Just ( True, name ), Doc.Play, Editor.Play True _ ) ->
+                                                    update (EndMicRec name) model
+
+                                                _ ->
+                                                    ( m, Cmd.none )
+
+                                        ( doc, docCmd ) =
+                                            Doc.update (Doc.KeyPressed press) newModel.doc
                                     in
-                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
+                                    ( { newModel | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg docCmd, cmd ] )
 
                                 Nothing ->
                                     ( m, c )
 
                         Keys.Repeat code ->
                             case Dict.get code keyCodeToDirection of
-                                Just dir ->
+                                Just dirMsg ->
                                     let
-                                        ( doc, cmd ) =
-                                            Doc.update (Doc.DirectionRepeat dir) m.doc
+                                        ( dirModel, cmd ) =
+                                            update dirMsg m
                                     in
-                                    ( { m | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg cmd ] )
+                                    ( dirModel, Cmd.batch [ c, cmd ] )
 
                                 Nothing ->
                                     ( m, c )
@@ -730,10 +774,34 @@ subs { doc } =
         [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
         , micOpened <| always MicOpened
-        , gotNewSample <| (GotNewSample << D.decodeValue File.decoder)
+        , gotNewSample <| (GotNewSample << D.decodeValue sampleDecoder)
         ]
             ++ List.map (Sub.map DocMsg) (Doc.subs doc)
             ++ List.map (Sub.map KeysMsg) Keys.subs
+
+
+type SampleType
+    = Reced
+    | Cuted String
+
+
+sampleDecoder : D.Decoder ( File, SampleType )
+sampleDecoder =
+    D.map2 Tuple.pair (D.field "file" File.decoder) <|
+        D.andThen
+            (\s ->
+                case s of
+                    "rec" ->
+                        D.succeed Reced
+
+                    "cut" ->
+                        D.map (Cuted << Sound.fileNameFromPath) <| D.field "from" D.string
+
+                    _ ->
+                        D.fail "not valid type to decode sample"
+            )
+        <|
+            D.field "type" D.string
 
 
 type Mode
@@ -752,29 +820,36 @@ keyCodeToMode =
             ++ List.map (Tuple.mapSecond EditorMode) Doc.keyCodeToMode
 
 
-keyCodeToShortcut : Dict String Doc.Shortcut
-keyCodeToShortcut =
-    Dict.fromList
-        [ ( "KeyZ", Doc.Tool 1 )
-        , ( "KeyX", Doc.Tool 2 )
-        , ( "KeyC", Doc.Tool 3 )
-        , ( "Space", Doc.Play )
-        , ( "ArrowLeft", Doc.Left )
-        , ( "ArrowRight", Doc.Right )
-        , ( "Backspace", Doc.Suppr )
-        , ( "Delete", Doc.Suppr )
-        , ( "KeyT", Doc.Pack )
-        ]
+keyCodeToShortcut : Model -> Dict String Doc.Shortcut
+keyCodeToShortcut model =
+    Dict.union
+        (Dict.fromList
+            [ ( "KeyZ", Doc.Tool 1 )
+            , ( "KeyX", Doc.Tool 2 )
+            , ( "KeyC", Doc.Tool 3 )
+            , ( "Space", Doc.Play )
+            , ( "ArrowLeft", Doc.Left )
+            , ( "ArrowRight", Doc.Right )
+            , ( "KeyT", Doc.Pack )
+            ]
+        )
+    <|
+        Doc.keyCodeToShortcut model.doc
 
 
-keyCodeToDirection : Dict String PanSvg.Direction
+keyCodeToDirection : Dict String Msg
 keyCodeToDirection =
-    Dict.fromList
-        [ ( "KeyO", PanSvg.Up )
-        , ( "KeyK", PanSvg.Left )
-        , ( "KeyL", PanSvg.Down )
-        , ( "Semicolon", PanSvg.Right )
-        ]
+    Dict.union
+        (Dict.map (always <| DocMsg << Doc.DirectionRepeat) <|
+            Dict.fromList
+                [ ( "KeyO", PanSvg.Up )
+                , ( "KeyK", PanSvg.Left )
+                , ( "KeyL", PanSvg.Down )
+                , ( "Semicolon", PanSvg.Right )
+                ]
+        )
+    <|
+        Dict.map (always DocMsg) Doc.keyCodeToDirection
 
 
 
@@ -883,15 +958,17 @@ viewSounds model =
             , column [ width fill, spacing 20 ] <|
                 case model.micState of
                     Just ( False, name ) ->
-                        [ Input.button []
-                            { onPress =
-                                if String.isEmpty name then
-                                    Nothing
+                        [ row []
+                            [ Input.button []
+                                { onPress =
+                                    if String.isEmpty name then
+                                        Nothing
 
-                                else
-                                    Just StartMicRec
-                            , label = text "Rec Mic"
-                            }
+                                    else
+                                        Just StartMicRec
+                                , label = text "Rec Mic"
+                                }
+                            ]
                         , Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
                             { text = name
                             , placeholder = Just <| Input.placeholder [] <| text "Nom du fichier"
@@ -964,7 +1041,7 @@ viewSoundInLib model s id playing loading =
     row [ spacing 5 ]
         ([ Input.button
             [ Font.color <|
-                if List.any ((==) <| String.join "/" id) <| List.map Sound.toString model.loadedSoundList then
+                if List.any ((==) <| String.join "/" id) <| List.map Sound.getPath model.loadedSoundList then
                     rgb 0.2 0.8 0.2
 
                 else if loading then
@@ -1054,8 +1131,8 @@ viewLoaded model =
             }
          ]
             ++ (List.map (soundView model.showDirLoad) <|
-                    List.sortWith (\s t -> Natural.compare (Sound.toString s) (Sound.toString t)) <|
-                        filterFiles model.fileFilter Sound.toString model.loadedSoundList
+                    List.sortWith (\s t -> Natural.compare (Sound.getPath s) (Sound.getPath t)) <|
+                        filterFiles model.fileFilter Sound.getPath model.loadedSoundList
                )
         )
     ]
@@ -1065,7 +1142,7 @@ soundView : Bool -> Sound -> Element Msg
 soundView showDir s =
     let
         fullPath =
-            cutExtension <| Sound.toString s
+            cutExtension <| Sound.getPath s
 
         l =
             List.concatMap (String.split "/") <| String.split "\\" fullPath
