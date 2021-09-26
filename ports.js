@@ -5,8 +5,9 @@ if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 if (app.ports.toggleRecord) app.ports.toggleRecord.subscribe(toggleRecord)
 if (app.ports.requestSoundDraw) app.ports.requestSoundDraw.subscribe(drawSound)
 if (app.ports.requestCutSample) app.ports.requestCutSample.subscribe(cutSample)
-if (app.ports.openMic) app.ports.openMic.subscribe(openMic)
-if (app.ports.inputRec) app.ports.inputRec.subscribe(inputRec)
+if (app.ports.requestMicOpening) app.ports.openMic.subscribe(openMic)
+if (app.ports.requestMicRecStart) app.ports.inputRec.subscribe(startMicRec)
+if (app.ports.requestMicRecStop) app.ports.inputRec.subscribe(stopMicRec)
 
 const buffers = {}
     , ro = new ResizeObserver(sendSize)
@@ -77,34 +78,45 @@ let mic
   , micToRecord
   , micRecorder
   , recording
+
+function tellIfRunning() {
+  app.ports.gotMicRecState.send(ctx.state == "running")
+}
+
 function openMic() {
   navigator.mediaDevices.getUserMedia({audio : true}).then(stream => {
     mic = stream
     micToRecord = ctx.createMediaStreamSource(mic)
     micRecorder = new Recorder(micToRecord)
-    app.ports.micOpened.send(null)
+    app.ports.gotMicOpened.send(null)
   }).catch(console.error)
 }
 
-function inputRec(args) {
-  let name = args[0]
-    , start = args[1]
-  if (name) {
-    micRecorder.stop()
-    micRecorder.exportWAV(bl => app.ports.gotNewSample.send(
-        { type : "rec"
-        , file : new File([bl], name + ".wav", {type: "audio/wav"})
-        }))
-    micRecorder.clear()
-    recording = false
-    if (!scheduler.running) ctx.suspend()
-  } else {
-    if (mic) {
-      if (start) ctx.resume()
-      micRecorder.record()
-      recording = true
-    } else console.error("won’t record mic if it ain’t opened !")
+function startMicRec(now) {
+  if (!mic) console.error("won’t record mic if it ain’t opened!")
+  else if (!recording) {
+    micRecorder.record()
+    isRunning()
+    ctx.onstatechange = isRunning
+    recording = true
   }
+  if (now) ctx.resume()
+}
+
+function stopMicRec(name) {
+  ctx.onstatechange = null
+  micRecorder.stop()
+  recording = false
+
+  if (name) {
+    micRecorder.exportWAV(bl => app.ports.gotNewSample.send(
+      { type : "rec"
+      , file : new File([bl], name + ".wav", {type: "audio/wav"})
+      }))
+    if (!scheduler.running) ctx.suspend()
+  } else console.error("won’t export record without a filename")
+
+  micRecorder.clear()
 }
 
 function cutSample(infos) {
