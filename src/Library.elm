@@ -605,12 +605,12 @@ update msg (Model model) =
         |> (\ret -> ( Model ret.model, ret.cmd, ret.wheel ))
 
 
-sub : Sub msg
+sub : Sub Msg
 sub =
-    Sub.batch
-        [ gotSoundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
-        , gotNewSample <| (GotNewSample << D.decodeValue sampleDecoder)
-        ]
+    [ gotSoundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
+    , gotNewSample <| (GotNewSample << D.decodeValue sampleDecoder)
+    ]
+        |> Sub.batch
 
 
 type SampleType

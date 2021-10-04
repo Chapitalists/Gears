@@ -1040,13 +1040,13 @@ update msg ( model, mobile ) =
                             manageInteractEvent inEvent newModel mobile
 
 
-subs : Model -> List (Sub Msg)
-subs { interact, dragging } =
+sub : Model -> Sub Msg
+sub { interact, dragging } =
     [ PanSvg.newSVGSize (SVGSize << D.decodeValue PanSvg.sizeDecoder)
     , Sub.map WaveMsg Waveform.sub
     , gotRecord <| (GotRecord << D.decodeValue D.string)
+    , Sub.map InteractMsg <| Interact.sub interact
     ]
-        ++ (List.map (Sub.map InteractMsg) <| Interact.subs interact)
         ++ (case dragging of
                 Alterning _ _ ( _, t ) ->
                     [ Time.every t <| always <| Blink ]
@@ -1054,6 +1054,7 @@ subs { interact, dragging } =
                 _ ->
                     []
            )
+        |> Sub.batch
 
 
 viewTools : Model -> Element Msg

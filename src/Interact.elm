@@ -246,9 +246,9 @@ update msg (S state) =
             ( S state, Nothing )
 
 
-subs : State item zone -> List (Sub (Msg item zone))
-subs (S { click }) =
-    case click of
+sub : State item zone -> Sub (Msg item zone)
+sub (S { click }) =
+    (case click of
         Nothing ->
             []
 
@@ -273,6 +273,8 @@ subs (S { click }) =
                         _ ->
                             []
                    )
+    )
+        |> Sub.batch
 
 
 dragSpaceEvents : State item zone -> zone -> List (Html.Attribute (Msg item zone))

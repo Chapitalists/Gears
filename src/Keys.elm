@@ -51,8 +51,8 @@ update msg state =
             )
 
 
-subs : List (Sub Msg)
-subs =
+sub : Sub Msg
+sub =
     [ BE.onKeyDown <|
         D.andThen
             (\node ->
@@ -69,3 +69,4 @@ subs =
             D.at [ "target", "nodeName" ] D.string
     , BE.onKeyUp <| D.andThen (\str -> D.succeed <| HoldUp str) <| D.field "code" D.string
     ]
+        |> Sub.batch

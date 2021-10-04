@@ -101,10 +101,10 @@ update msg (Model model) =
 
 sub : Sub Msg
 sub =
-    Sub.batch
-        [ gotMicOpened <| always MicOpened
-        , gotMicRecState RecordState
-        ]
+    [ gotMicOpened <| always MicOpened
+    , gotMicRecState RecordState
+    ]
+        |> Sub.batch
 
 
 view : SoundCard -> Element Msg

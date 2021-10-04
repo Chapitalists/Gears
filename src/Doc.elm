@@ -280,9 +280,9 @@ update msg doc =
             update (MobileMsg <| Editor.InteractMsg subMsg) doc
 
 
-subs : Model -> List (Sub Msg)
-subs doc =
-    List.map (Sub.map MobileMsg) <| Editor.subs doc.editor
+sub : Model -> Sub Msg
+sub doc =
+    Sub.map MobileMsg <| Editor.sub doc.editor
 
 
 keyCodeToMode : List ( String, Editor.Mode )
