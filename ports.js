@@ -5,9 +5,9 @@ if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 if (app.ports.toggleRecord) app.ports.toggleRecord.subscribe(toggleRecord)
 if (app.ports.requestSoundDraw) app.ports.requestSoundDraw.subscribe(drawSound)
 if (app.ports.requestCutSample) app.ports.requestCutSample.subscribe(cutSample)
-if (app.ports.requestMicOpening) app.ports.openMic.subscribe(openMic)
-if (app.ports.requestMicRecStart) app.ports.inputRec.subscribe(startMicRec)
-if (app.ports.requestMicRecStop) app.ports.inputRec.subscribe(stopMicRec)
+if (app.ports.requestMicOpening) app.ports.requestMicOpening.subscribe(openMic)
+if (app.ports.requestMicRecStart) app.ports.requestMicRecStart.subscribe(startMicRec)
+if (app.ports.requestMicRecStop) app.ports.requestMicRecStop.subscribe(stopMicRec)
 
 const buffers = {}
     , ro = new ResizeObserver(sendSize)
