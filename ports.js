@@ -1,6 +1,6 @@
 const app = Elm.Main.init({flags : {width : window.innerWidth, height : window.innerHeight}})
 
-if (app.ports.loadSound) app.ports.loadSound.subscribe(loadSound)
+if (app.ports.requestSoundLoading) app.ports.requestSoundLoading.subscribe(loadSound)
 if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 if (app.ports.toggleRecord) app.ports.toggleRecord.subscribe(toggleRecord)
 if (app.ports.requestSoundDraw) app.ports.requestSoundDraw.subscribe(drawSound)
@@ -37,7 +37,7 @@ function drawSound(sv) {
 
 function loadSound(soundPath) {
   if (buffers[soundPath]) {
-    app.ports.soundLoaded.send(soundPath + ' already Loaded')
+    app.ports.gotSoundLoaded.send(soundPath + ' already Loaded')
   } else {
     createBuffer(soundPath).then(b => {
       buffers[soundPath] = b
@@ -54,7 +54,7 @@ async function createBuffer(soundPath) {
 }
 
 function loadOk(soundPath) {
-  app.ports.soundLoaded.send(
+  app.ports.gotSoundLoaded.send(
   { path : soundPath
   , length : buffers[soundPath].duration
   })
@@ -62,7 +62,7 @@ function loadOk(soundPath) {
 
 function loadErr(err, soundPath) {
   console.error(err)
-  app.ports.soundLoaded.send(soundPath + ' got ' + err)
+  app.ports.gotSoundLoaded.send(soundPath + ' got ' + err)
 }
 
 function toggleRecord(bool) {
