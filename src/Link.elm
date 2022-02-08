@@ -1,13 +1,13 @@
 module Link exposing (..)
 
-import Coll exposing (Coll, Id)
 import Color exposing (Color)
-import Fraction exposing (Fraction)
-import Interact
 import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Encode as E
 import Math.Vector2 as Vec exposing (Vec2, vec2)
+import Tools.Coll as Coll exposing (Coll, Id)
+import Tools.Fraction exposing (Fraction)
+import Tools.Interact as Interact
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)

@@ -1,4 +1,4 @@
-module Coll exposing
+module Tools.Coll exposing
     ( Coll
     , Id
     , decoder

@@ -1,6 +1,5 @@
 module Pack exposing (..)
 
-import Coll exposing (Coll, Id)
 import Data.Wheel as Wheel exposing (Wheel)
 import Element exposing (..)
 import Element.Background as Bg
@@ -8,10 +7,11 @@ import Element.Border as Border
 import Element.Input as Input
 import Html
 import Html.Attributes
-import Interact
 import Math.Vector2 exposing (Vec2, vec2)
-import PanSvg
 import Svg
+import Tools.Coll as Coll exposing (Coll, Id)
+import Tools.Interact as Interact
+import Tools.PanSvg as PanSvg
 import TypedSvg as S
 
 

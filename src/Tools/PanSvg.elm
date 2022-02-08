@@ -1,4 +1,4 @@
-port module PanSvg exposing (..)
+port module Tools.PanSvg exposing (..)
 
 import Html.Attributes
 import Html.Events.Extra.Wheel as Wheel

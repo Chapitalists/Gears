@@ -10,10 +10,10 @@ module Motor exposing
     , remove
     )
 
-import Coll exposing (Coll, Id)
 import Json.Decode as D
 import Json.Encode as E
 import Link exposing (DrawLink, Link)
+import Tools.Coll as Coll exposing (Coll, Id)
 
 
 

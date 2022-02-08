@@ -1,4 +1,4 @@
-module Keys exposing (..)
+module Tools.Keys exposing (..)
 
 import Browser.Events as BE
 import Json.Decode as D

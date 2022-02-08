@@ -1,6 +1,5 @@
 module Data.Mobile exposing (..)
 
-import Coll exposing (Coll, Id)
 import Data.Common exposing (..)
 import Data.Content as Content exposing (Content, Mobile)
 import Data.Gear as Gear exposing (Gear)
@@ -11,6 +10,7 @@ import Json.Encode as E
 import Link exposing (Circle)
 import Math.Vector2 as Vec exposing (Vec2)
 import Motor
+import Tools.Coll as Coll exposing (Coll, Id)
 
 
 

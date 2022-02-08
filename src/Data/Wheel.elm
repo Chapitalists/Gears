@@ -3,12 +3,12 @@ module Data.Wheel exposing (..)
 import Color exposing (Color)
 import Data.Content as Content exposing (Bead, Content, Mobile)
 import Html.Attributes
-import Interact
 import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Encode as E
 import Math.Vector2 exposing (..)
 import Sound
+import Tools.Interact as Interact
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core exposing (..)

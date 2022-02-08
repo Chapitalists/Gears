@@ -1,6 +1,5 @@
 port module Doc exposing (..)
 
-import Data exposing (Data)
 import Data.Common as Common exposing (Identifier)
 import Data.Content as Content exposing (Content)
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
@@ -14,12 +13,13 @@ import Element.Font as Font
 import Element.Input as Input
 import Engine
 import Html.Attributes
-import Interact
 import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Encode as E
 import Pack exposing (Pack)
-import PanSvg
+import Tools.Data as Data exposing (Data)
+import Tools.Interact as Interact
+import Tools.PanSvg as PanSvg
 import Url exposing (Url)
 
 

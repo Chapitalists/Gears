@@ -1,4 +1,4 @@
-module Data exposing (..)
+module Tools.Data exposing (..)
 
 import Http
 import Json.Encode as E

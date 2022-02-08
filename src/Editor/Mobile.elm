@@ -1,6 +1,5 @@
 port module Editor.Mobile exposing (..)
 
-import Coll exposing (Coll, Id)
 import Color
 import Data.Collar as Collar exposing (Beed)
 import Data.Common as CommonData exposing (Identifier)
@@ -17,23 +16,24 @@ import Element.Font as Font
 import Element.Input as Input
 import Engine exposing (Engine)
 import File.Download as DL
-import Fraction as Fract exposing (Fraction)
 import Harmony as Harmo
 import Html
 import Html.Attributes
 import Html.Events
-import Interact exposing (Interact)
 import Json.Decode as D
 import Json.Encode as E
 import Link exposing (DrawLink, Link, Segment)
 import Math.Vector2 as Vec exposing (Vec2, getX, getY, vec2)
 import Motor
 import Pack exposing (Pack, Packed)
-import PanSvg
 import Random
 import Round
 import Sound exposing (Sound)
 import Time
+import Tools.Coll as Coll exposing (Coll, Id)
+import Tools.Fraction as Fract exposing (Fraction)
+import Tools.Interact as Interact exposing (Interact)
+import Tools.PanSvg as PanSvg
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)

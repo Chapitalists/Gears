@@ -1,12 +1,12 @@
 module Harmony exposing (..)
 
-import Coll exposing (Coll, Id)
-import Fraction as Fract exposing (Fraction)
 import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Encode as E
 import Link exposing (Link)
 import Round
+import Tools.Coll as Coll exposing (Coll, Id)
+import Tools.Fraction as Fract exposing (Fraction)
 
 
 

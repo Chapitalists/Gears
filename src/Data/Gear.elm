@@ -1,13 +1,13 @@
 module Data.Gear exposing (..)
 
-import Coll exposing (Id)
-import Fraction as Fract exposing (Fraction)
 import Harmony as Harmo exposing (Harmony)
 import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Encode as E
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Motor exposing (Motor)
+import Tools.Coll as Coll exposing (Id)
+import Tools.Fraction as Fract exposing (Fraction)
 
 
 type alias Gear item =

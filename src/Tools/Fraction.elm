@@ -1,4 +1,4 @@
-module Fraction exposing (..)
+module Tools.Fraction exposing (..)
 
 import Json.Decode as D
 import Json.Encode as E

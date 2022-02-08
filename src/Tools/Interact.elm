@@ -1,4 +1,4 @@
-module Interact exposing (..)
+module Tools.Interact exposing (..)
 
 import Browser.Events as BE
 import Html

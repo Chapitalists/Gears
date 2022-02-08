@@ -10,7 +10,6 @@ module Engine exposing
     , volumeChanged
     )
 
-import Coll exposing (Coll, Id)
 import Data.Collar as Collar exposing (Beed, Colleer)
 import Data.Common exposing (Identifier)
 import Data.Content as Content
@@ -20,6 +19,7 @@ import Data.Wheel as Wheel exposing (Wheel)
 import Json.Encode as E
 import Motor
 import Sound
+import Tools.Coll as Coll exposing (Coll, Id)
 
 
 type Engine

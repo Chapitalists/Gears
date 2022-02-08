@@ -1,12 +1,12 @@
 module Data.Content exposing (..)
 
-import Coll exposing (Coll, Id)
 import Data.Gear as Gear exposing (Gear)
 import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as E
 import Sound exposing (Sound)
+import Tools.Coll as Coll exposing (Coll, Id)
 
 
 type Content item

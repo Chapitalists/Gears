@@ -7,7 +7,6 @@ port module Library exposing
     , viewFileExplorer
     )
 
-import Coll
 import Data.Collar as Collar
 import Data.Content as Content
 import Data.Wheel as Wheel exposing (Wheel)
@@ -29,6 +28,7 @@ import Json.Decode as D
 import NaturalOrdering as Natural
 import Set exposing (Set)
 import Sound exposing (Sound)
+import Tools.Coll as Coll
 import Url exposing (Url)
 import Url.Builder
 

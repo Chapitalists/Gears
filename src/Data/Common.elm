@@ -1,11 +1,11 @@
 module Data.Common exposing (..)
 
-import Coll exposing (Id)
 import Data.Content as Content exposing (Bead, Collar, Content, Mobile)
 import Data.Gear as Gear exposing (Gear)
 import Data.Wheel as Wheel exposing (Conteet, Wheel, Wheeled)
 import Harmony as Harmo
 import Sound
+import Tools.Coll as Coll exposing (Id)
 
 
 

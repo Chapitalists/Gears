@@ -9,8 +9,8 @@ import Element.Border as Border
 import Html exposing (canvas)
 import Html.Attributes as Attr
 import Html.Events as Events
-import Interact
 import Json.Decode as D
+import Tools.Interact as Interact
 
 
 
