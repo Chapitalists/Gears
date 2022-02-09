@@ -303,28 +303,23 @@ keyCodeToDirection =
 view : Model -> Element Msg
 view doc =
     row [ height fill, width fill ] <|
-        (column [ width fill, height fill ]
-            ([ viewTop doc
-             , el
-                [ width fill
-                , height fill
-                , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
+        (el
+            [ width fill
+            , height fill
+            , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
 
-                -- THX to https://discourse.elm-lang.org/t/elm-ui-parent-element-grows-to-encompass-children-instead-of-scrolling/5032
-                , clip
-                , htmlAttribute <| Html.Attributes.style "flex-shrink" "1"
-                ]
-               <|
-                viewContent doc
-             ]
-                ++ viewBottom doc
-            )
-            :: viewSide doc
+            -- THX to https://discourse.elm-lang.org/t/elm-ui-parent-element-grows-to-encompass-children-instead-of-scrolling/5032
+            , clip
+            , htmlAttribute <| Html.Attributes.style "flex-shrink" "1"
+            ]
+         <|
+            viewContent doc
         )
+            :: viewSide doc
 
 
-viewTop : Model -> Element Msg
-viewTop doc =
+viewMenu : Model -> Element Msg
+viewMenu doc =
     column
         ([ width fill ]
             ++ (if doc.viewComment then
@@ -408,8 +403,8 @@ viewNav doc =
         )
 
 
-viewBottom : Model -> List (Element Msg)
-viewBottom doc =
+viewPlay : Model -> List (Element Msg)
+viewPlay doc =
     [ Element.map MobileMsg <| Editor.viewExtraTools doc.editor ]
 
 

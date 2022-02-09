@@ -5,9 +5,11 @@ import Browser.Events as BE
 import Browser.Navigation as Nav
 import Doc exposing (Doc)
 import Element exposing (..)
+import Html.Attributes as Attr
 import Library exposing (Library)
 import Pack exposing (Pack)
 import SoundCard exposing (SoundCard)
+import Tools.Panel as P
 import Url exposing (Url)
 import Waveform exposing (Waveform)
 
@@ -47,28 +49,37 @@ type alias Model =
 
 
 type alias ScreenSize =
-    { width : Int, height : Int }
+    P.Size
 
 
 type alias Views =
-    { lib : ViewType
-    , pack : ViewType
-    , soundCard : ViewType
-    , wave : Maybe ( Waveform, ViewType )
+    { lib : FullPanel
+    , menu : P.ViewType
+    , soundCard : P.ViewType
     }
 
 
-type ViewType
-    = Hidden
-    | Panel
-    | FullScreen
+type FullPanel
+    = Full Int
+    | Panel P.ViewType
 
 
+
+--type Panel
+--    = Library
+--    | Properties
+--    | Tools
+--    | Wave
+--    | SoundCard
+--    | Pack
+--    | Menu
+
+
+initViews : Views
 initViews =
-    { lib = Panel
-    , pack = Hidden
-    , soundCard = Panel
-    , wave = Nothing
+    { lib = Panel P.Shown
+    , menu = P.Shown
+    , soundCard = P.Shown
     }
 
 
@@ -95,6 +106,9 @@ init screen url _ =
 
 type Msg
     = GotScreenSize ScreenSize
+    | ViewLibChg FullPanel
+    | ViewMenuChg P.ViewType
+    | ViewSoundChg P.ViewType
     | DocMsg Doc.Msg
     | LibMsg Library.Msg
     | SoundMsg SoundCard.Msg
@@ -106,6 +120,27 @@ update msg model =
     case msg of
         GotScreenSize size ->
             ( { model | screenSize = size }, Cmd.none )
+
+        ViewLibChg fp ->
+            let
+                views =
+                    model.views
+            in
+            ( { model | views = { views | lib = fp } }, Cmd.none )
+
+        ViewMenuChg vt ->
+            let
+                views =
+                    model.views
+            in
+            ( { model | views = { views | menu = vt } }, Cmd.none )
+
+        ViewSoundChg vt ->
+            let
+                views =
+                    model.views
+            in
+            ( { model | views = { views | soundCard = vt } }, Cmd.none )
 
         DocMsg subMsg ->
             let
@@ -155,9 +190,43 @@ view model =
     { title = "Gears !"
     , body =
         [ layout [] <|
-            row [ height <| px model.screenSize.height, width <| px model.screenSize.width ]
-                [ Element.map LibMsg <| Library.viewFileExplorer model.lib
-                , Element.map DocMsg <| Doc.view model.doc
-                ]
+            el
+                ((case model.views.lib of
+                    Panel vt ->
+                        P.view
+                            ( ViewLibChg << Panel
+                            , map LibMsg <| Library.viewFileExplorer model.lib
+                            )
+                            P.Right
+                            vt
+                            model.screenSize
+
+                    _ ->
+                        Debug.todo "FullLib"
+                 )
+                    :: P.view
+                        ( ViewMenuChg
+                        , map DocMsg <| Doc.viewMenu model.doc
+                        )
+                        P.Top
+                        model.views.menu
+                        model.screenSize
+                    :: P.view
+                        ( ViewSoundChg
+                        , column [] <|
+                            (map SoundMsg <| SoundCard.view model.soundCard)
+                                :: (List.map (map DocMsg) <| Doc.viewPlay model.doc)
+                        )
+                        P.Left
+                        model.views.soundCard
+                        model.screenSize
+                    :: [ height <| px model.screenSize.height
+                       , width <| px model.screenSize.width
+                       , htmlAttribute <| Attr.style "flex-direction" "row"
+                       ]
+                )
+                (map DocMsg <|
+                    Doc.view model.doc
+                )
         ]
     }
