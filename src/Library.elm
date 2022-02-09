@@ -728,7 +728,13 @@ viewSounds model =
 
 viewLibColumn : List (Element Msg) -> Element Msg
 viewLibColumn =
-    column [ width fill, spacing 5, padding 2, scrollbarY ]
+    column
+        [ width fill
+        , spacing 5
+        , padding 2
+        , scrollbarY
+        , htmlAttribute <| Attr.style "overflow-x" "hidden"
+        ]
 
 
 viewLib : Internals -> List String -> Dict String SoundListType -> List (Element Msg)
@@ -853,19 +859,19 @@ viewDirInLib model str id dict opened =
 
 viewLoaded : Internals -> List (Element Msg)
 viewLoaded model =
-    [ column [ width fill, height <| fillPortion 3, spacing 10, padding 2, scrollbarY ]
-        ([ Input.checkbox []
+    [ column [ height <| fillPortion 1, width fill, spacing 20, scrollbarY ]
+        [ Input.checkbox []
             { label = Input.labelLeft [] <| text "Voir dossiers"
             , checked = model.showDirLoad
             , onChange = ToggleShowDirLoad
             , icon = Input.defaultCheckbox
             }
-         ]
-            ++ (List.map (soundView model.showDirLoad) <|
-                    List.sortWith (\s t -> Natural.compare (Sound.getPath s) (Sound.getPath t)) <|
-                        filterFiles model.fileFilter Sound.getPath model.loadedSoundList
-               )
-        )
+        , viewLibColumn <|
+            (List.map (soundView model.showDirLoad) <|
+                List.sortWith (\s t -> Natural.compare (Sound.getPath s) (Sound.getPath t)) <|
+                    filterFiles model.fileFilter Sound.getPath model.loadedSoundList
+            )
+        ]
     ]
 
 
@@ -902,7 +908,7 @@ viewSaveFiles : Internals -> List (Element Msg)
 viewSaveFiles model =
     [ column [ height <| fillPortion 1, width fill, spacing 20, scrollbarY ] <|
         viewOpenRefreshButtons ClickedUploadSave RequestSavesList model.serverResponding
-            ++ [ column [ width fill, spacing 5, padding 2, scrollbarY ] <|
+            ++ [ viewLibColumn <|
                     (List.map (\s -> el [ onClick (RequestSaveLoad s) ] (text <| cutExtension s)) <|
                         List.sortWith Natural.compare <|
                             filterFiles model.fileFilter identity <|
