@@ -1,5 +1,5 @@
 /*
-Copyright ou © ou Copr. Clément Bossut, (2018)
+Copyright ou © ou Copr. Clément Bossut, (2022)
 <bossut.clement@gmail.com>
 */
 
@@ -52,7 +52,7 @@ const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
     , externCallback = staticRoute()
 
     , dynamicCallbacks = {
-      
+
         soundList : (req, res) => {
             res.end(readdirRec(soundPath)
                 .filter(hidedFileFilter)

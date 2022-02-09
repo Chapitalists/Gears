@@ -18,7 +18,8 @@ import Waveform exposing (Waveform)
 -- TODO refactor existing Debug.log with "key" value
 -- TODO check msg or Msg in types, if unused, maybe replace by x
 -- TODO clean all module exposings decl
--- TODO is "No error handling in update, everything comes Checked before" is a good pattern ?
+-- TODO is "No error handling in update, everything comes Checked before"
+-- TODO    a good pattern ?
 -- TODO change all debug and silent edge or fail (_/NOOP) to debug.log
 -- MAIN
 
