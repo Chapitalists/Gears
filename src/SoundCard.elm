@@ -2,6 +2,7 @@ port module SoundCard exposing
     ( Msg
     , SoundCard
     , init
+    , stopMicRec
     , sub
     , update
     , view
@@ -80,7 +81,7 @@ update msg (Model model) =
             )
 
         ClickStopMicRec ->
-            stopMicRec model
+            stopMicRec_ model
 
         RecordState running ->
             if running then
@@ -89,7 +90,7 @@ update msg (Model model) =
                 )
 
             else
-                stopMicRec model
+                stopMicRec_ model
 
         EnteredNewRecName fileName ->
             ( { model | micRecName = fileName }
@@ -156,8 +157,18 @@ view (Model model) =
                 ]
 
 
-stopMicRec : Internals -> ( Internals, Cmd msg )
-stopMicRec model =
+stopMicRec_ : Internals -> ( Internals, Cmd msg )
+stopMicRec_ model =
     ( { model | micState = Ready }
     , requestMicRecStop model.micRecName
     )
+
+
+stopMicRec : SoundCard -> ( SoundCard, Cmd msg )
+stopMicRec (Model model) =
+    if model.micState == Recording then
+        stopMicRec_ model
+            |> Tuple.mapFirst Model
+
+    else
+        ( Model model, Cmd.none )
