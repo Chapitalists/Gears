@@ -28,6 +28,7 @@ import Json.Decode as D
 import Keys
 import NaturalOrdering as Natural
 import PanSvg
+import Panel exposing (Panel)
 import Result exposing (Result)
 import Set exposing (Set)
 import Sound exposing (Sound)
@@ -103,6 +104,7 @@ type alias Model =
     , screenSize : ScreenSize
     , fileExplorerTab : ExTab
     , fileFilter : String
+    , libPanel : Panel
     , mode : Mode
     , keys : Keys.State
     }
@@ -166,6 +168,7 @@ init { hasSinkId, screen } url _ =
         screen
         Sounds
         ""
+        (Panel Panel.Shown Panel.Left 200)
         NoMode
         Keys.init
     , Cmd.batch [ fetchSoundList url, fetchSavesList url ]
@@ -218,6 +221,7 @@ type Msg
     | ChgFilter String
     | ChangedMode Mode
     | GotScreenSize ScreenSize
+    | PanelMsg Panel.Msg
     | DocMsg Doc.Msg
     | KeysMsg Keys.Msg
     | NOOP
@@ -762,6 +766,9 @@ update msg model =
         GotScreenSize size ->
             ( { model | screenSize = size }, Cmd.none )
 
+        PanelMsg subMsg ->
+            ( { model | libPanel = Panel.update subMsg model.libPanel }, Cmd.none )
+
         DocMsg subMsg ->
             let
                 ( doc, chans ) =
@@ -950,10 +957,13 @@ view model =
                )
     , body =
         [ layout [] <|
-            row [ height <| px model.screenSize.height, width <| px model.screenSize.width ]
-                [ viewFileExplorer model
-                , Element.map DocMsg <| Doc.view model.doc
+            row
+                [ height <| px model.screenSize.height
+                , width <| px model.screenSize.width
+                , Panel.view PanelMsg model.screenSize model.libPanel <|
+                    viewFileExplorer model
                 ]
+                [ Element.map DocMsg <| Doc.view model.doc ]
         ]
     }
 
