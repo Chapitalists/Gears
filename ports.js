@@ -10,7 +10,6 @@ if (app.ports.inputRec) app.ports.inputRec.subscribe(inputRec)
 
 const buffers = {}
     , ro = new ResizeObserver(sendSize)
-    , recorder = new Recorder(masterGain)
 ro.observe(document.getElementById('svgResizeObserver'))
 
 let deb = null
@@ -64,13 +63,31 @@ function loadErr(err, soundPath) {
   app.ports.soundLoaded.send(soundPath + ' got ' + err)
 }
 
-function toggleRecord(bool) {
-    if (bool) recorder.record()
-    else {
-        recorder.stop()
-        recorder.exportWAV(bl => app.ports.gotRecord.send(URL.createObjectURL(bl)))
-        recorder.clear()
+let recorders = [new Recorder(masterGain)]
+function toggleRecord(channels) { //-1 for stop
+  if (channels ==-1) {
+    let zip = new JSZip()
+      , proms = []
+    recorders.forEach((r,i) => {
+      r.stop()
+      proms.push(
+        new Promise((res, rej) =>
+          r.exportWAV(bl => {zip.file(i+'.wav', bl);res()})
+        )
+      )
+      r.clear()
+    })
+    Promise.all(proms).then(() => {
+      zip.generateAsync({type:'blob'})
+        .then(bl => app.ports.gotRecord.send(URL.createObjectURL(bl)))
+    })
+  } else {
+    for (let i = 1 ; i <= channels ; i++) {
+      auxGains[i] = ctx.createGain()
+      recorders[i] = new Recorder(auxGains[i])
     }
+    recorders.forEach(el => el.record())
+  }
 }
 
 let mic

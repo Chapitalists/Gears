@@ -104,6 +104,7 @@ encodeWheel : Wheel -> Bool -> String -> List ( String, E.Value )
 encodeWheel w hasView parentUid =
     [ ( "mute", E.bool w.mute )
     , ( "volume", E.float <| clamp 0 1 w.volume )
+    , ( "channel", E.int w.channel )
     , ( "startPercent", E.float w.startPercent )
     , ( "view", E.bool hasView )
     ]

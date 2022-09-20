@@ -4,6 +4,7 @@
 const playPauseLatency = .1
     , ctx = new AudioContext()
     , masterGain = ctx.createGain()
+let auxGains = []
 ctx.suspend()
 masterGain.connect(ctx.destination)
 
@@ -74,7 +75,7 @@ let scheduler = {
   
   
   , playingTopModels : {}
-  , prepare(t, model, destination, parentRate) {
+  , prepare(t, model, destination, parentRate, parentAuxed) {
     // TODO this is creating a new func instance for each method for each model
     // It’s bad!! Should be in proto ?
     model.lastScheduledTime = t
@@ -90,7 +91,12 @@ let scheduler = {
     }
 
     let gain = ctx.createGain()
+      , auxed = false
     gain.connect(destination)
+    if (!parentAuxed && model.channel && auxGains[model.channel]) {
+      gain.connect(auxGains[model.channel])
+      auxed = true
+    }
     model.gainNode = gain
     model.updateVolume = function() {
       this.gainNode.gain.value = this.mute ? 0 : this.volume
@@ -132,7 +138,7 @@ let scheduler = {
         model.beadsCumulDurs.push(cumul)
       }
       model.rate = parentRate * model.duration / model.length
-      model.subWheels = model.collar.beads.map(v => this.prepare(t, v, model.gainNode, model.rate))
+      model.subWheels = model.collar.beads.map(v => this.prepare(t, v, model.gainNode, model.rate, auxed))
     }
     
     if (model.mobile) {
@@ -141,7 +147,7 @@ let scheduler = {
 
       model.duration = model.mobile.duration
       model.rate = parentRate * model.duration / model.length
-      model.subWheels = model.mobile.gears.map(v => this.prepare(t, v, model.gainNode, model.rate))
+      model.subWheels = model.mobile.gears.map(v => this.prepare(t, v, model.gainNode, model.rate, auxed))
     }
     
     model.realLength = model.length / parentRate

@@ -10,6 +10,8 @@
     , "elmApp.js"
     , "lib/recorder.js"
     , "lib/audiobuffer-to-wav.js"
+    , "lib/FileSaver.js"
+    , "lib/jszip.js"
     , "LICENSE.md"
     ]
   }
