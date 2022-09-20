@@ -41,7 +41,7 @@ import TypedSvg.Types exposing (Fill(..), Length(..), Opacity(..), Transform(..)
 import Waveform exposing (Waveform)
 
 
-port toggleRecord : Bool -> Cmd msg
+port toggleRecord : Int -> Cmd msg
 
 
 port gotRecord : (D.Value -> msg) -> Sub msg
@@ -216,7 +216,7 @@ type Msg
     | ToggleEngine
     | PlayGear
     | StopGear
-    | ToggleRecord Bool
+    | ToggleRecord Bool -- TODO Should be at Doc lever to prevent passing channels all the way through
     | GotRecord (Result D.Error String)
       -- COLLAR EDIT
     | CursorRight
@@ -281,8 +281,8 @@ type Collaring
     | Div Sound Int
 
 
-update : Msg -> ( Model, Mobeel ) -> Return
-update msg ( model, mobile ) =
+update : Int -> Msg -> ( Model, Mobeel ) -> Return
+update channels msg ( model, mobile ) =
     let
         return =
             { model = model
@@ -354,7 +354,16 @@ update msg ( model, mobile ) =
         ToggleRecord rec ->
             case model.tool of
                 Play on _ ->
-                    { return | model = { model | tool = Play on rec }, cmd = toggleRecord rec }
+                    { return
+                        | model = { model | tool = Play on rec }
+                        , cmd =
+                            toggleRecord <|
+                                if rec then
+                                    channels
+
+                                else
+                                    -1
+                    }
 
                 _ ->
                     return
@@ -1037,7 +1046,7 @@ update msg ( model, mobile ) =
                                         _ ->
                                             e
                             in
-                            manageInteractEvent inEvent newModel mobile
+                            manageInteractEvent channels inEvent newModel mobile
 
 
 subs : Model -> List (Sub Msg)
@@ -2250,8 +2259,8 @@ computeTouch weave gears =
 -- TODO Maybe forward straight away to Pack if event.item is IPack ?
 
 
-manageInteractEvent : Interact.Event Interactable Zone -> Model -> Mobeel -> Return
-manageInteractEvent event model mobile =
+manageInteractEvent : Int -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
+manageInteractEvent channels event model mobile =
     let
         return =
             { model = model
@@ -2261,6 +2270,9 @@ manageInteractEvent event model mobile =
             , outMsg = Nothing
             , cmd = Cmd.none
             }
+
+        up =
+            update channels
     in
     -- TODO Find good pattern for big mess there
     case model.mode of
@@ -2272,7 +2284,7 @@ manageInteractEvent event model mobile =
                             { return | outMsg = Just <| Inside id }
 
                         _ ->
-                            update (WheelMsgs [ ( id, Wheel.ToggleContentView ) ]) ( model, mobile )
+                            up (WheelMsgs [ ( id, Wheel.ToggleContentView ) ]) ( model, mobile )
 
                 _ ->
                     return
@@ -2313,10 +2325,10 @@ manageInteractEvent event model mobile =
         SupprMode ->
             case ( event.item, event.action ) of
                 ( IWheel id, Interact.Clicked _ ) ->
-                    update (DeleteWheel id) ( model, mobile )
+                    up (DeleteWheel id) ( model, mobile )
 
                 ( IPacked id, Interact.Clicked _ ) ->
-                    update (PackMsg <| Pack.Unpack id) ( model, mobile )
+                    up (PackMsg <| Pack.Unpack id) ( model, mobile )
 
                 _ ->
                     return
@@ -2357,7 +2369,7 @@ manageInteractEvent event model mobile =
             -- TODO hover show pos of new wheel, which is linked to mouse pos to center of wheel
             case ( event.item, event.action ) of
                 ( IWheel ( id, [] ), Interact.Clicked _ ) ->
-                    update (CopyGear False id) ( model, mobile )
+                    up (CopyGear False id) ( model, mobile )
 
                 _ ->
                     return
@@ -2419,16 +2431,16 @@ manageInteractEvent event model mobile =
                                 Content.C _ ->
                                     case model.tool of
                                         Edit _ ->
-                                            update (NewBead <| Content.S s) ( model, mobile )
+                                            up (NewBead <| Content.S s) ( model, mobile )
 
                                         _ ->
-                                            update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
+                                            up (NewGear defaultAddPos <| Content.S s) ( model, mobile )
 
                                 _ ->
-                                    update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
+                                    up (NewGear defaultAddPos <| Content.S s) ( model, mobile )
 
                         _ ->
-                            update (NewGear defaultAddPos <| Content.S s) ( model, mobile )
+                            up (NewGear defaultAddPos <| Content.S s) ( model, mobile )
 
                 ( ISound s, Interact.Dragged { newPos } ZSurface _, _ ) ->
                     { return
@@ -2436,7 +2448,7 @@ manageInteractEvent event model mobile =
                     }
 
                 ( ISound s, Interact.DragEnded True, Content ( p, _ ) ) ->
-                    update (NewGear p <| Content.S s) ( { model | dragging = NoDrag }, mobile )
+                    up (NewGear p <| Content.S s) ( { model | dragging = NoDrag }, mobile )
 
                 -- FROM PACK
                 ( IPacked pId, Interact.Clicked _, _ ) ->
@@ -2450,7 +2462,7 @@ manageInteractEvent event model mobile =
                                                 p =
                                                     Coll.get pId model.pack.wheels
                                             in
-                                            update (UnpackBead ( p.wheel, p.length ) True) ( model, mobile )
+                                            up (UnpackBead ( p.wheel, p.length ) True) ( model, mobile )
 
                                         _ ->
                                             return
@@ -2502,7 +2514,7 @@ manageInteractEvent event model mobile =
 
                         -- LINK --------
                         Harmonize ->
-                            interactHarmonize event model mobile
+                            interactHarmonize channels event model mobile
 
                         -- EDIT --------
                         Edit _ ->
@@ -2515,7 +2527,7 @@ manageInteractEvent event model mobile =
                                         Just { newModel, newMobile, toUndo, cmd } ->
                                             let
                                                 ret =
-                                                    update StopGear ( newModel, newMobile )
+                                                    up StopGear ( newModel, newMobile )
                                             in
                                             { ret | toUndo = toUndo, cmd = Cmd.batch [ cmd, ret.cmd ] }
 
@@ -2528,10 +2540,10 @@ manageInteractEvent event model mobile =
                                                     in
                                                     case interactWave g event model of
                                                         Just (ReturnWheel subMsg) ->
-                                                            update (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
+                                                            up (WheelMsgs [ ( ( id, [] ), subMsg ) ]) ( model, mobile )
 
                                                         Just (ReturnWave subMsg) ->
-                                                            update (WaveMsg subMsg) ( model, mobile )
+                                                            up (WaveMsg subMsg) ( model, mobile )
 
                                                         Nothing ->
                                                             return
@@ -2667,8 +2679,8 @@ interactPlay on event model mobile =
             return
 
 
-interactHarmonize : Interact.Event Interactable Zone -> Model -> Mobeel -> Return
-interactHarmonize event model mobile =
+interactHarmonize : Int -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
+interactHarmonize channels event model mobile =
     let
         return =
             { model = model
@@ -2682,7 +2694,7 @@ interactHarmonize event model mobile =
     case ( event.item, event.action, model.dragging ) of
         -- COPY
         ( IWheel ( id, [] ), Interact.Clicked _, _ ) ->
-            update (CopyGear True id) ( model, mobile )
+            update channels (CopyGear True id) ( model, mobile )
 
         -- RESIZE
         ( IResizeHandle id add, Interact.Dragged { startD } _ _, NoDrag ) ->

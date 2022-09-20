@@ -251,7 +251,10 @@ update msg doc =
                     getViewing doc
 
                 res =
-                    Editor.update subMsg ( doc.editor, mobile )
+                    Editor.update
+                        (Data.current doc.data).channels
+                        subMsg
+                        ( doc.editor, mobile )
 
                 newMobile =
                     updateViewing doc.viewing (always res.mobile) (Data.current doc.data).mobile
