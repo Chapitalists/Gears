@@ -1070,57 +1070,63 @@ viewTools model =
         }
 
 
-viewExtraTools : Model -> Element Msg
-viewExtraTools model =
+viewExtraTools : (Msg -> msg) -> Model -> Element msg -> Element msg
+viewExtraTools mapMsg model chanEl =
     row [ width fill, padding 20, spacing 20 ]
         (case model.tool of
             Play on rec ->
-                [ Input.button [ centerX ]
-                    { label =
-                        if on then
-                            text "Stop"
-
-                        else
-                            text "Jouer"
-                    , onPress = Just ToggleEngine
-                    }
-                , Input.button
-                    ([ centerX ]
-                        ++ (if rec then
-                                [ Bg.color (rgb 1 0 0) ]
-
-                            else
-                                []
-                           )
-                    )
-                    { label =
-                        if rec then
-                            text "Cut"
-
-                        else
-                            text "Rec"
-                    , onPress = Just <| ToggleRecord <| not rec
-                    }
-                ]
-
-            Edit play ->
-                if not <| List.isEmpty model.edit then
+                (List.map (Element.map mapMsg) <|
                     [ Input.button [ centerX ]
                         { label =
-                            if play then
+                            if on then
                                 text "Stop"
 
                             else
-                                text "Entendre"
-                        , onPress =
-                            Just <|
-                                if play then
-                                    StopGear
+                                text "Jouer"
+                        , onPress = Just ToggleEngine
+                        }
+                    , Input.button
+                        ([ centerX ]
+                            ++ (if rec then
+                                    [ Bg.color (rgb 1 0 0) ]
 
                                 else
-                                    PlayGear
+                                    []
+                               )
+                        )
+                        { label =
+                            if rec then
+                                text "Cut"
+
+                            else
+                                text "Rec"
+                        , onPress = Just <| ToggleRecord <| not rec
                         }
                     ]
+                )
+                    ++ [ chanEl ]
+
+            Edit play ->
+                if not <| List.isEmpty model.edit then
+                    (List.map (Element.map mapMsg) <|
+                        [ Input.button [ centerX ]
+                            { label =
+                                if play then
+                                    text "Stop"
+
+                                else
+                                    text "Entendre"
+                            , onPress =
+                                Just <|
+                                    if play then
+                                        StopGear
+
+                                    else
+                                        PlayGear
+                            }
+                        ]
+                    )
+                        ++ [ chanEl ]
 
                 else
                     []
@@ -1538,8 +1544,40 @@ viewDetailsColumn bg =
         ]
 
 
-viewDetails : Model -> Mobeel -> List (Element Msg)
-viewDetails model mobile =
+viewChannelSel : Identifier -> Int -> Int -> List (Element Msg)
+viewChannelSel wId cur max =
+    if max > 0 then
+        [ text " | "
+        , Input.text
+            [ paddingXY 2 0
+            , width <| minimum 50 <| fill
+            , Font.color <| rgb 0 0 0
+            , htmlAttribute <| Html.Attributes.type_ "number"
+            , htmlAttribute <| Html.Attributes.min "0"
+            , htmlAttribute <| Html.Attributes.max <| String.fromInt max
+            ]
+            { onChange =
+                \str ->
+                    WheelMsgs
+                        [ ( wId
+                          , Wheel.ChangeChannel <|
+                                clamp 0 max <|
+                                    Maybe.withDefault 0 <|
+                                        String.toInt str
+                          )
+                        ]
+            , text = String.fromInt cur
+            , placeholder = Nothing
+            , label = Input.labelLeft [] <| text "Canal :"
+            }
+        ]
+
+    else
+        []
+
+
+viewDetails : Int -> Model -> Mobeel -> List (Element Msg)
+viewDetails channels model mobile =
     case model.mode of
         ChangeSound id ->
             [ viewDetailsColumn (rgb 0.5 0.2 0) <|
@@ -1565,7 +1603,7 @@ viewDetails model mobile =
         _ ->
             case model.tool of
                 Edit _ ->
-                    viewEditDetails model mobile
+                    viewEditDetails channels model mobile
 
                 Harmonize ->
                     viewHarmonizeDetails model mobile
@@ -1574,8 +1612,8 @@ viewDetails model mobile =
                     []
 
 
-viewEditDetails : Model -> Mobeel -> List (Element Msg)
-viewEditDetails model mobile =
+viewEditDetails : Int -> Model -> Mobeel -> List (Element Msg)
+viewEditDetails channels model mobile =
     case model.edit of
         [ id ] ->
             let
@@ -1634,7 +1672,12 @@ viewEditDetails model mobile =
                                 ]
                                 Element.none
                         ]
-                        { label = Input.labelAbove [] <| text "Volume"
+                        { label =
+                            Input.labelAbove [] <|
+                                row [] <|
+                                    (text "Volume"
+                                        :: viewChannelSel wId g.wheel.channel channels
+                                    )
                         , onChange = \f -> WheelMsgs [ ( wId, Wheel.ChangeVolume f ) ]
                         , value = g.wheel.volume
                         , min = 0

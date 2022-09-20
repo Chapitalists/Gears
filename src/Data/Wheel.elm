@@ -26,6 +26,7 @@ type alias Wheel =
     , content : WheelContent
     , viewContent : Bool
     , mute : Bool
+    , channel : Int
     , color : Float
     }
 
@@ -87,6 +88,7 @@ default =
     , content = C <| Content.S Sound.noSound
     , viewContent = True
     , mute = False
+    , channel = 0
     , color = 0
     }
 
@@ -129,6 +131,7 @@ type Msg
     | ChangeVolume Float
     | ToggleMute
     | Mute Bool
+    | ChangeChannel Int
     | ChangeStart Float
     | ChangeLoop ( Maybe Float, Maybe Float )
     | ChangeDiv Int Float
@@ -181,6 +184,9 @@ update msg g =
 
         Mute b ->
             { g | wheel = { wheel | mute = b } }
+
+        ChangeChannel ch ->
+            { g | wheel = { wheel | channel = ch } }
 
         ChangeStart percent ->
             let
@@ -552,6 +558,7 @@ encoder w =
     , ( "startPercent", E.float w.startPercent )
     , ( "volume", E.float w.volume )
     , ( "mute", E.bool w.mute )
+    , ( "channel", E.int w.channel )
     , ( "color", E.float w.color )
     , ( "viewContent", E.bool w.viewContent )
     , case w.content of
@@ -575,28 +582,31 @@ decoder getContentLength =
                                             \volume ->
                                                 Field.require "mute" D.bool <|
                                                     \mute ->
-                                                        Field.attempt "color" D.float <|
-                                                            \mayColor ->
-                                                                Field.attemptAt [ "color", "hue" ] D.float <|
-                                                                    \mayHue ->
-                                                                        D.succeed
-                                                                            { name = Maybe.withDefault "" name
-                                                                            , startPercent = startPercent
-                                                                            , volume = volume
-                                                                            , content = C content
-                                                                            , viewContent = Maybe.withDefault True viewContent
-                                                                            , mute = mute
-                                                                            , color =
-                                                                                case mayColor of
-                                                                                    Just c ->
-                                                                                        c
-
-                                                                                    Nothing ->
-                                                                                        case mayHue of
-                                                                                            Just h ->
-                                                                                                h
+                                                        Field.attempt "channel" D.int <|
+                                                            \mayChannel ->
+                                                                Field.attempt "color" D.float <|
+                                                                    \mayColor ->
+                                                                        Field.attemptAt [ "color", "hue" ] D.float <|
+                                                                            \mayHue ->
+                                                                                D.succeed
+                                                                                    { name = Maybe.withDefault "" name
+                                                                                    , startPercent = startPercent
+                                                                                    , volume = volume
+                                                                                    , content = C content
+                                                                                    , viewContent = Maybe.withDefault True viewContent
+                                                                                    , mute = mute
+                                                                                    , channel = Maybe.withDefault 0 mayChannel
+                                                                                    , color =
+                                                                                        case mayColor of
+                                                                                            Just c ->
+                                                                                                c
 
                                                                                             Nothing ->
-                                                                                                0
-                                                                            }
+                                                                                                case mayHue of
+                                                                                                    Just h ->
+                                                                                                        h
+
+                                                                                                    Nothing ->
+                                                                                                        0
+                                                                                    }
             )

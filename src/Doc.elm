@@ -37,12 +37,13 @@ type alias Model =
 type alias Doc =
     { mobile : Mobeel
     , comment : String
+    , channels : Int
     }
 
 
 init : Maybe Url -> Model
 init url =
-    { data = Data.init (Doc Mobile.new "") url
+    { data = Data.init (Doc Mobile.new "" 0) url
     , viewing = []
     , editor = Editor.init
     , viewComment = False
@@ -64,6 +65,7 @@ type Shortcut
 
 type Msg
     = EnteredFileName String
+    | EnteredChannels String
     | ChangedComment String
     | ToggleCommentView
     | Save
@@ -92,6 +94,22 @@ update msg doc =
             else
                 ( doc, Cmd.none )
 
+        EnteredChannels str ->
+            let
+                oldData =
+                    Data.current doc.data
+            in
+            ( { doc
+                | data =
+                    Data.do
+                        { oldData
+                            | channels = Maybe.withDefault 0 <| String.toInt str
+                        }
+                        doc.data
+              }
+            , Cmd.none
+            )
+
         ChangedComment str ->
             let
                 oldData =
@@ -115,7 +133,7 @@ update msg doc =
 
         New ->
             ( { doc
-                | data = Data.new (Doc Mobile.new "") doc.data
+                | data = Data.new (Doc Mobile.new "" 0) doc.data
                 , viewing = []
                 , editor = Editor.changeView Nothing "" doc.editor
               }
@@ -410,12 +428,14 @@ viewNav doc =
 
 viewBottom : Model -> List (Element Msg)
 viewBottom doc =
-    [ Element.map MobileMsg <| Editor.viewExtraTools doc.editor ]
+    [ Editor.viewExtraTools MobileMsg doc.editor <| viewChannels doc ]
 
 
 viewSide : Model -> List (Element Msg)
 viewSide doc =
-    List.map (Element.map MobileMsg) <| Editor.viewDetails doc.editor <| getViewing doc
+    List.map (Element.map MobileMsg) <|
+        Editor.viewDetails (Data.current doc.data).channels doc.editor <|
+            getViewing doc
 
 
 viewContent : Model -> Element Msg
@@ -434,9 +454,30 @@ viewComment { data } =
         }
 
 
+viewChannels : Model -> Element Msg
+viewChannels { data } =
+    Input.text
+        [ centerX
+        , paddingXY 4 0
+        , width <| minimum 60 <| maximum 100 <| fill
+        , Font.color <| rgb 0 0 0
+        , htmlAttribute <| Html.Attributes.type_ "number"
+        , htmlAttribute <| Html.Attributes.min "0"
+        ]
+        { onChange = EnteredChannels
+        , text = String.fromInt (Data.current data).channels
+        , placeholder = Nothing
+        , label = Input.labelLeft [] <| text "Canaux :"
+        }
+
+
 encoder : Doc -> E.Value
 encoder d =
-    E.object [ ( "mobile", Mobile.encoder d.mobile ), ( "comment", E.string d.comment ) ]
+    E.object
+        [ ( "mobile", Mobile.encoder d.mobile )
+        , ( "comment", E.string d.comment )
+        , ( "channels", E.int d.channels )
+        ]
 
 
 decoder : D.Decoder Doc
@@ -445,12 +486,17 @@ decoder =
         \mayMobile ->
             case mayMobile of
                 Just mobile ->
-                    Field.attempt "comment" D.string <|
-                        \mayComment ->
-                            D.succeed <| Doc mobile <| Maybe.withDefault "" mayComment
+                    Field.attempt "channels" D.int <|
+                        \mayChannels ->
+                            Field.attempt "comment" D.string <|
+                                \mayComment ->
+                                    D.succeed <|
+                                        Doc mobile
+                                            (Maybe.withDefault "" mayComment)
+                                            (Maybe.withDefault 0 mayChannels)
 
                 Nothing ->
-                    Mobile.decoder |> D.andThen (\m -> D.succeed <| Doc m "")
+                    Mobile.decoder |> D.andThen (\m -> D.succeed <| Doc m "" 0)
 
 
 type alias ViewRes =
