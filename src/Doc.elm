@@ -252,7 +252,9 @@ update msg doc =
 
                 res =
                     Editor.update
-                        (Data.current doc.data).channels
+                        ( (Data.current doc.data).channels
+                        , Data.getName doc.data
+                        )
                         subMsg
                         ( doc.editor, mobile )
 

@@ -64,7 +64,9 @@ function loadErr(err, soundPath) {
 }
 
 let recorders = [new Recorder(masterGain)]
-function toggleRecord(channels) { //-1 for stop
+function toggleRecord(args) {
+  let channels = args[0] //-1 for stop
+    , saveName = args[1]
   if (channels ==-1) {
     let zip = new JSZip()
       , proms = []
@@ -72,14 +74,19 @@ function toggleRecord(channels) { //-1 for stop
       r.stop()
       proms.push(
         new Promise((res, rej) =>
-          r.exportWAV(bl => {zip.file(i+'.wav', bl);res()})
+          r.exportWAV(bl => {zip.file(saveName+'-'+i+'.wav', bl);res()})
         )
       )
       r.clear()
     })
     Promise.all(proms).then(() => {
       zip.generateAsync({type:'blob'})
-        .then(bl => app.ports.gotRecord.send(URL.createObjectURL(bl)))
+        .then(bl => {
+            let link = document.createElement('a')
+            link.download = saveName + '.zip'
+            link.href = URL.createObjectURL(bl)
+            link.click()
+        })
     })
   } else {
     for (let i = 1 ; i <= channels ; i++) {

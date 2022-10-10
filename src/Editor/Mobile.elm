@@ -41,7 +41,7 @@ import TypedSvg.Types exposing (Fill(..), Length(..), Opacity(..), Transform(..)
 import Waveform exposing (Waveform)
 
 
-port toggleRecord : Int -> Cmd msg
+port toggleRecord : ( Int, String ) -> Cmd msg
 
 
 port gotRecord : (D.Value -> msg) -> Sub msg
@@ -281,8 +281,8 @@ type Collaring
     | Div Sound Int
 
 
-update : Int -> Msg -> ( Model, Mobeel ) -> Return
-update channels msg ( model, mobile ) =
+update : ( Int, String ) -> Msg -> ( Model, Mobeel ) -> Return
+update chanName msg ( model, mobile ) =
     let
         return =
             { model = model
@@ -358,11 +358,15 @@ update channels msg ( model, mobile ) =
                         | model = { model | tool = Play on rec }
                         , cmd =
                             toggleRecord <|
-                                if rec then
-                                    channels
+                                Tuple.pair
+                                    (if rec then
+                                        Tuple.first chanName
 
-                                else
-                                    -1
+                                     else
+                                        -1
+                                    )
+                                <|
+                                    Tuple.second chanName
                     }
 
                 _ ->
@@ -1046,7 +1050,7 @@ update channels msg ( model, mobile ) =
                                         _ ->
                                             e
                             in
-                            manageInteractEvent channels inEvent newModel mobile
+                            manageInteractEvent chanName inEvent newModel mobile
 
 
 subs : Model -> List (Sub Msg)
@@ -2259,8 +2263,8 @@ computeTouch weave gears =
 -- TODO Maybe forward straight away to Pack if event.item is IPack ?
 
 
-manageInteractEvent : Int -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
-manageInteractEvent channels event model mobile =
+manageInteractEvent : ( Int, String ) -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
+manageInteractEvent chanName event model mobile =
     let
         return =
             { model = model
@@ -2272,7 +2276,7 @@ manageInteractEvent channels event model mobile =
             }
 
         up =
-            update channels
+            update chanName
     in
     -- TODO Find good pattern for big mess there
     case model.mode of
@@ -2514,7 +2518,7 @@ manageInteractEvent channels event model mobile =
 
                         -- LINK --------
                         Harmonize ->
-                            interactHarmonize channels event model mobile
+                            interactHarmonize chanName event model mobile
 
                         -- EDIT --------
                         Edit _ ->
@@ -2679,8 +2683,8 @@ interactPlay on event model mobile =
             return
 
 
-interactHarmonize : Int -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
-interactHarmonize channels event model mobile =
+interactHarmonize : ( Int, String ) -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
+interactHarmonize chanName event model mobile =
     let
         return =
             { model = model
@@ -2694,7 +2698,7 @@ interactHarmonize channels event model mobile =
     case ( event.item, event.action, model.dragging ) of
         -- COPY
         ( IWheel ( id, [] ), Interact.Clicked _, _ ) ->
-            update channels (CopyGear True id) ( model, mobile )
+            update chanName (CopyGear True id) ( model, mobile )
 
         -- RESIZE
         ( IResizeHandle id add, Interact.Dragged { startD } _ _, NoDrag ) ->
