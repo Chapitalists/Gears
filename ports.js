@@ -89,6 +89,7 @@ function toggleRecord(args) {
         })
     })
   } else {
+    recorders = [recorders[0]]
     for (let i = 1 ; i <= channels ; i++) {
       auxGains[i] = ctx.createGain()
       recorders[i] = new Recorder(auxGains[i])
