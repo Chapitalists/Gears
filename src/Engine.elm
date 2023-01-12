@@ -161,8 +161,7 @@ encodeMobile { motor, gears } hasView parentUid =
 encodeCollar : Colleer -> Bool -> String -> E.Value
 encodeCollar c hasView parentUid =
     E.object
-        [ ( "duration", E.float <| Collar.getCumulLengthAt c.matrice c )
-        , ( "loopStart", E.float c.loop )
+        [ ( "duration", E.float <| Collar.getTotalLength c )
         , ( "beads", E.list (encodeBead hasView parentUid) <| List.indexedMap (\i el -> ( i, el )) <| Collar.getBeads c )
         ]
 

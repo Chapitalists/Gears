@@ -1520,7 +1520,7 @@ viewContent ( model, mobile ) =
                                                             medLength * 2
 
                                                         scale =
-                                                            length / Content.getMatriceLength col
+                                                            length / Collar.getTotalLength col
                                                     in
                                                     [ S.rect
                                                         [ SA.transform [ Translate (getX pos) (getY pos), Translate (-length / 2) 0, Scale scale scale ]

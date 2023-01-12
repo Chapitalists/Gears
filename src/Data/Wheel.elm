@@ -416,7 +416,7 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                     C (Content.C collar) ->
                                         let
                                             scale =
-                                                lengthTmp / Content.getMatriceLength collar
+                                                lengthTmp / Content.getCollarLength collar
                                         in
                                         [ S.g [ SA.transform [ Translate (-lengthTmp / 2) 0, Scale scale scale ] ] <|
                                             insideCollarView collar mayWheelInter uid

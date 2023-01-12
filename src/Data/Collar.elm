@@ -41,9 +41,7 @@ beadName i collar =
 
 fromWheel : Wheel -> Float -> Colleer
 fromWheel w l =
-    { matrice = 1
-    , loop = 0
-    , head = { length = l, wheel = w }
+    { head = { length = l, wheel = w }
     , beads = []
     , oneSound = Nothing
     }
@@ -51,9 +49,7 @@ fromWheel w l =
 
 fromBeads : Beed -> List Beed -> Colleer
 fromBeads head rest =
-    { matrice = List.length rest + 1
-    , loop = 0
-    , head = head
+    { head = head
     , beads = rest
     , oneSound = Nothing
     }
@@ -61,9 +57,7 @@ fromBeads head rest =
 
 fromWheelMult : Wheel -> Int -> Float -> Colleer
 fromWheelMult w m l =
-    { matrice = m
-    , loop = 0
-    , head = { length = l, wheel = w }
+    { head = { length = l, wheel = w }
     , beads = List.repeat (m - 1) { length = l, wheel = w }
     , oneSound = Nothing
     }
@@ -86,9 +80,7 @@ fromSoundDiv s d l =
     in
     case beads of
         head :: rest ->
-            { matrice = d
-            , loop = 0
-            , head = head
+            { head = head
             , beads = rest
             , oneSound =
                 Just
@@ -115,7 +107,12 @@ getBeads =
 
 getTotalLength : Colleer -> Float
 getTotalLength =
-    List.foldl (\b sum -> sum + b.length) 0 << getBeads
+    Content.getCollarLength
+
+
+getCumulLengthAt : Int -> Colleer -> Float
+getCumulLengthAt i =
+    List.foldl (\b sum -> sum + b.length) 0 << List.take i << getBeads
 
 
 getMinLength : Colleer -> Float
@@ -126,11 +123,6 @@ getMinLength =
 getMaxLength : Colleer -> Float
 getMaxLength =
     List.foldl (\b m -> max m b.length) 0 << getBeads
-
-
-getCumulLengthAt : Int -> Colleer -> Float
-getCumulLengthAt =
-    Content.getCumulLengthAt
 
 
 get : Int -> Colleer -> Beed
@@ -149,14 +141,12 @@ addBeads i bs c =
                 { c
                     | head = head
                     , beads = List.concat [ tail, c.head :: c.beads ]
-                    , matrice = c.matrice + List.length bs
                     , oneSound = Nothing
                 }
 
             else
                 { c
                     | beads = List.concat [ List.take (i - 1) c.beads, bs, List.drop (i - 1) c.beads ]
-                    , matrice = c.matrice + List.length bs
                     , oneSound = Nothing
                 }
 
@@ -177,19 +167,12 @@ rm i c =
                 { c
                     | head = head
                     , beads = beads
-                    , matrice = c.matrice - 1
                     , oneSound = Nothing
                 }
 
             ( j, beads ) ->
                 { c
                     | beads = List.concat [ List.take (j - 1) beads, List.drop j beads ]
-                    , matrice =
-                        if c.matrice > j then
-                            c.matrice - 1
-
-                        else
-                            c.matrice
                     , oneSound = Nothing
                 }
 

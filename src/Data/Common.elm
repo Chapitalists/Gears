@@ -191,4 +191,4 @@ getContentLength c =
             Harmo.getLengthId getWheeledContentLength m.motor m.gears
 
         Content.C col ->
-            Content.getMatriceLength col
+            Content.getCollarLength col
