@@ -1858,7 +1858,32 @@ viewEditDetails channels model mobile =
                             (\rId ->
                                 CommonData.getName ( rId, [] ) mobile
                             )
-                , text <| "( " ++ (Round.round 2 <| Mobile.getLengthId id mobile.gears) ++ " )"
+                , row [ spacing 16 ]
+                    [ text <| "( " ++ (Round.round 2 <| Mobile.getLengthId id mobile.gears) ++ " )"
+                    , Input.checkbox []
+                        { icon = Input.defaultCheckbox
+                        , label = Input.labelLeft [] <| text "Stretch"
+                        , checked =
+                            case g.wheel.timeMode of
+                                Wheel.Rate ->
+                                    False
+
+                                Wheel.TimeStretch ->
+                                    True
+                        , onChange =
+                            \b ->
+                                WheelMsgs
+                                    [ ( wId
+                                      , Wheel.ChangeTimeMode <|
+                                            if b then
+                                                Wheel.TimeStretch
+
+                                            else
+                                                Wheel.Rate
+                                      )
+                                    ]
+                        }
+                    ]
                 , text <|
                     "Contenu : "
                         ++ (Round.round 2 <| CommonData.getWheeledContentLength g)

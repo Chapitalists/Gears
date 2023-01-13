@@ -26,9 +26,15 @@ type alias Wheel =
     , content : WheelContent
     , viewContent : Bool
     , mute : Bool
+    , timeMode : TimeMode
     , channel : Int
     , color : Float
     }
+
+
+type TimeMode
+    = Rate
+    | TimeStretch
 
 
 type alias Conteet =
@@ -90,6 +96,7 @@ default =
     , mute = False
     , channel = 0
     , color = 0
+    , timeMode = Rate
     }
 
 
@@ -138,6 +145,7 @@ type Msg
     | Named String
     | ChangeColor Float
     | ToggleContentView
+    | ChangeTimeMode TimeMode
 
 
 update : Msg -> Wheeled g -> Wheeled g
@@ -257,6 +265,9 @@ update msg g =
 
         ToggleContentView ->
             { g | wheel = { wheel | viewContent = not wheel.viewContent } }
+
+        ChangeTimeMode tm ->
+            { g | wheel = { wheel | timeMode = tm } }
 
 
 view :
@@ -564,6 +575,7 @@ encoder w =
     , case w.content of
         C c ->
             Content.encoder encoder c
+    , ( "timeMode", timeModeEncoder w.timeMode )
     ]
 
 
@@ -588,25 +600,52 @@ decoder getContentLength =
                                                                     \mayColor ->
                                                                         Field.attemptAt [ "color", "hue" ] D.float <|
                                                                             \mayHue ->
-                                                                                D.succeed
-                                                                                    { name = Maybe.withDefault "" name
-                                                                                    , startPercent = startPercent
-                                                                                    , volume = volume
-                                                                                    , content = C content
-                                                                                    , viewContent = Maybe.withDefault True viewContent
-                                                                                    , mute = mute
-                                                                                    , channel = Maybe.withDefault 0 mayChannel
-                                                                                    , color =
-                                                                                        case mayColor of
-                                                                                            Just c ->
-                                                                                                c
-
-                                                                                            Nothing ->
-                                                                                                case mayHue of
-                                                                                                    Just h ->
-                                                                                                        h
+                                                                                Field.attempt "timeMode" timeModeDecoder <|
+                                                                                    \mayTimeMode ->
+                                                                                        D.succeed
+                                                                                            { name = Maybe.withDefault "" name
+                                                                                            , startPercent = startPercent
+                                                                                            , volume = volume
+                                                                                            , content = C content
+                                                                                            , viewContent = Maybe.withDefault True viewContent
+                                                                                            , mute = mute
+                                                                                            , channel = Maybe.withDefault 0 mayChannel
+                                                                                            , color =
+                                                                                                case mayColor of
+                                                                                                    Just c ->
+                                                                                                        c
 
                                                                                                     Nothing ->
-                                                                                                        0
-                                                                                    }
+                                                                                                        case mayHue of
+                                                                                                            Just h ->
+                                                                                                                h
+
+                                                                                                            Nothing ->
+                                                                                                                0
+                                                                                            , timeMode = Maybe.withDefault Rate mayTimeMode
+                                                                                            }
+            )
+
+
+timeModeEncoder : TimeMode -> E.Value
+timeModeEncoder tm =
+    case tm of
+        Rate ->
+            E.int 1
+
+        TimeStretch ->
+            E.int 2
+
+
+timeModeDecoder : D.Decoder TimeMode
+timeModeDecoder =
+    D.int
+        |> D.map
+            (\i ->
+                case i of
+                    2 ->
+                        TimeStretch
+
+                    _ ->
+                        Rate
             )
