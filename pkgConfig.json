@@ -12,6 +12,7 @@
     , "lib/audiobuffer-to-wav.js"
     , "lib/FileSaver.js"
     , "lib/jszip.js"
+    , "lib/phase-vocoder.js"
     , "LICENSE.md"
     ]
   }
