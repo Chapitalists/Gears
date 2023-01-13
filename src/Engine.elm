@@ -107,6 +107,15 @@ encodeWheel w hasView parentUid =
     , ( "channel", E.int w.channel )
     , ( "startPercent", E.float w.startPercent )
     , ( "view", E.bool hasView )
+    , ( "stretch"
+      , E.bool <|
+            case w.timeMode of
+                Wheel.Rate ->
+                    False
+
+                Wheel.TimeStretch ->
+                    True
+      )
     ]
         ++ (case Wheel.getWheelContent w of
                 Content.S s ->

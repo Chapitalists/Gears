@@ -8,6 +8,8 @@ let auxGains = []
 ctx.suspend()
 masterGain.connect(ctx.destination)
 
+ctx.audioWorklet.addModule("./lib/phaze/www/phase-vocoder.js")
+
 let scheduler = {
     interval : playPauseLatency * 250
   , lookAhead : 2000
@@ -75,7 +77,7 @@ let scheduler = {
 
 
   , playingTopModels : {}
-  , prepare(t, model, destination, parentRate, parentAuxed) {
+  , prepare(t, model, destination, parentRate, parentPitch, parentAuxed) {
     // TODO this is creating a new func instance for each method for each model
     // It’s bad!! Should be in proto ?
     model.lastScheduledTime = t
@@ -123,6 +125,13 @@ let scheduler = {
       model.loopEndDur = model.loopPercents[1] * model.bufferDuration
       model.duration = model.loopEndDur - model.loopStartDur
       model.rate = parentRate * model.duration / model.length
+      model.pitch = parentPitch * (model.stretch ? (model.length / model.duration) : 1)
+      if (model.pitch != 1) {
+        let pitcher = new AudioWorkletNode(ctx, 'phase-vocoder-processor')
+        pitcher.parameters.get('pitchFactor').value = model.pitch
+        pitcher.connect(model.gainNode)
+        model.gainNode = pitcher
+      }
     }
 
     if (model.collar) {
@@ -138,7 +147,8 @@ let scheduler = {
         model.beadsCumulDurs.push(cumul)
       }
       model.rate = parentRate * model.duration / model.length
-      model.subWheels = model.collar.beads.map(v => this.prepare(t, v, model.gainNode, model.rate, auxed))
+      model.pitch = parentPitch * (model.stretch ? (model.length / model.duration) : 1)
+      model.subWheels = model.collar.beads.map(v => this.prepare(t, v, model.gainNode, model.rate, model.pitch, auxed))
     }
 
     if (model.mobile) {
@@ -147,7 +157,8 @@ let scheduler = {
 
       model.duration = model.mobile.duration
       model.rate = parentRate * model.duration / model.length
-      model.subWheels = model.mobile.gears.map(v => this.prepare(t, v, model.gainNode, model.rate, auxed))
+      model.pitch = parentPitch * (model.stretch ? (model.length / model.duration) : 1)
+      model.subWheels = model.mobile.gears.map(v => this.prepare(t, v, model.gainNode, model.rate, model.pitch, auxed))
     }
 
     model.realLength = model.length / parentRate
@@ -176,7 +187,7 @@ let scheduler = {
     let t = this.getTime() + playPauseLatency
     for (let model of topGears) {
       if (!this.playingTopModels[model.id])
-        this.playingTopModels[model.id] = this.prepare(t, model, masterGain, 1)
+        this.playingTopModels[model.id] = this.prepare(t, model, masterGain, 1, 1)
       model = this.playingTopModels[model.id]
 
       let running = model.playPauseTimes[model.playPauseTimes.length - 1].play
