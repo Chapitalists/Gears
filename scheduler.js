@@ -8,7 +8,7 @@ let auxGains = []
 ctx.suspend()
 masterGain.connect(ctx.destination)
 
-ctx.audioWorklet.addModule("./lib/phaze/www/phase-vocoder.js")
+ctx.audioWorklet.addModule("./lib/phase-vocoder.js")
 
 let scheduler = {
     interval : playPauseLatency * 250
