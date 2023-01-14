@@ -127,10 +127,9 @@ let scheduler = {
       model.rate = parentRate * model.duration / model.length
       model.pitch = parentPitch * (model.stretch ? (model.length / model.duration) : 1)
       if (model.pitch != 1) {
-        let pitcher = new AudioWorkletNode(ctx, 'phase-vocoder-processor')
-        pitcher.parameters.get('pitchFactor').value = model.pitch
-        pitcher.connect(model.gainNode)
-        model.gainNode = pitcher
+        model.pitcher = new AudioWorkletNode(ctx, 'phase-vocoder-processor')
+        model.pitcher.parameters.get('pitchFactor').value = model.pitch
+        model.pitcher.connect(model.gainNode)
       }
     }
 
@@ -443,7 +442,7 @@ let scheduler = {
       , ctxStopTime = ctxStartTime + length
     player.buffer = model.buffer
     player.playbackRate.value = model.rate // TODO to go realTime rate, maybe use setValueAtTime
-    player.connect(model.gainNode)
+    player.connect(model.pitcher || model.gainNode)
     player.onended = () => model.freePlayer(t)
     player.start(ctxStartTime, startOffset, duration)
     player.stop(ctxStopTime) // TODO stop and duration in schedulePlayer do the same thing, is it good ? Does it compensate for inexact buffer.duration ? See upward in prepare sound
