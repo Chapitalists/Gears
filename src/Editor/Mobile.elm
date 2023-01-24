@@ -1019,7 +1019,7 @@ update chanName msg ( model, mobile ) =
                                         Interact.Dragged info dragZone k ->
                                             let
                                                 startZone =
-                                                    Tuple.second info.start
+                                                    Tuple.second info.startPosZone
                                             in
                                             if
                                                 startZone
@@ -1038,10 +1038,10 @@ update chanName msg ( model, mobile ) =
                                                     | action =
                                                         Interact.Dragged
                                                             { info
-                                                                | start = Tuple.mapFirst (toInPos startZone) info.start
+                                                                | startPosZone = Tuple.mapFirst (toInPos startZone) info.startPosZone
                                                                 , oldPos = toInPos dragZone info.oldPos
                                                                 , newPos = toInPos dragZone info.newPos
-                                                                , startD = Vec.scale (PanSvg.getScale <| svgFromZone startZone) info.startD
+                                                                , diff = Vec.scale (PanSvg.getScale <| svgFromZone startZone) info.diff
                                                             }
                                                             dragZone
                                                             k
@@ -2325,8 +2325,8 @@ manageInteractEvent chanName event model mobile =
 
                 _ ->
                     case ( event.item, event.action ) of
-                        ( ISurface, Interact.Dragged { startD } _ _ ) ->
-                            { return | model = { model | svg = PanSvg.update (PanSvg.Move startD) model.svg } }
+                        ( ISurface, Interact.Dragged { diff } _ _ ) ->
+                            { return | model = { model | svg = PanSvg.update (PanSvg.Move diff) model.svg } }
 
                         _ ->
                             return
@@ -2527,11 +2527,11 @@ manageInteractEvent chanName event model mobile =
                     }
 
                 -- Pack Surface
-                ( IPack, Interact.Dragged { startD } _ _, _ ) ->
+                ( IPack, Interact.Dragged { diff } _ _, _ ) ->
                     { return
                         | model =
                             { model
-                                | pack = Pack.update (Pack.SvgMsg <| PanSvg.Move startD) model.pack
+                                | pack = Pack.update (Pack.SvgMsg <| PanSvg.Move diff) model.pack
                             }
                     }
 
@@ -2645,10 +2645,10 @@ interactPlay on event model mobile =
             }
 
         -- VOLUME
-        ( IWheel id, Interact.Dragged { absD } _ ( True, _, _ ), NoDrag ) ->
+        ( IWheel id, Interact.Dragged { pixDiff } _ ( True, _, _ ), NoDrag ) ->
             let
                 res =
-                    doVolumeChange id absD mobile model.engine
+                    doVolumeChange id pixDiff mobile model.engine
             in
             { return
                 | model = { model | dragging = VolumeChange }
@@ -2657,10 +2657,10 @@ interactPlay on event model mobile =
                 , toEngine = res.toEngine
             }
 
-        ( IWheel id, Interact.Dragged { absD } _ _, VolumeChange ) ->
+        ( IWheel id, Interact.Dragged { pixDiff } _ _, VolumeChange ) ->
             let
                 res =
-                    doVolumeChange id absD mobile model.engine
+                    doVolumeChange id pixDiff mobile model.engine
             in
             { return | mobile = res.mobile, toUndo = res.toUndo, toEngine = res.toEngine }
 
@@ -2726,15 +2726,15 @@ interactHarmonize chanName event model mobile =
             update chanName (CopyGear True id) ( model, mobile )
 
         -- RESIZE
-        ( IResizeHandle id add, Interact.Dragged { startD } _ _, NoDrag ) ->
+        ( IResizeHandle id add, Interact.Dragged { diff } _ _, NoDrag ) ->
             { return
                 | model = { model | dragging = SizeChange }
-                , mobile = doResize id startD add mobile
+                , mobile = doResize id diff add mobile
                 , toUndo = Group
             }
 
-        ( IResizeHandle id add, Interact.Dragged { startD } _ _, SizeChange ) ->
-            { return | mobile = doResize id startD add mobile, toUndo = Group }
+        ( IResizeHandle id add, Interact.Dragged { diff } _ _, SizeChange ) ->
+            { return | mobile = doResize id diff add mobile, toUndo = Group }
 
         ( _, Interact.DragEnded _, SizeChange ) ->
             { return | model = { model | dragging = NoDrag }, toUndo = Do }
@@ -2987,10 +2987,10 @@ interactMove event model mobile =
                 }
 
         -- START WAVING
-        ( IWheel _, Interact.Dragged { absD } ZWave _, Waving ) ->
+        ( IWheel _, Interact.Dragged { pixDiff } ZWave _, Waving ) ->
             let
                 ( wave, cmd ) =
-                    Waveform.update (Waveform.MoveSel <| Vec.getX absD) model.wave
+                    Waveform.update (Waveform.MoveSel <| Vec.getX pixDiff) model.wave
             in
             Just
                 { return
@@ -3128,26 +3128,26 @@ interactWave g event model =
             val + (Waveform.mapPxToSoundPercent model.wave <| round <| Vec.getX d)
     in
     case ( event.item, event.action ) of
-        ( IWaveCursor cur, Interact.Dragged { absD } _ _ ) ->
+        ( IWaveCursor cur, Interact.Dragged { pixDiff } _ _ ) ->
             case cur of
                 LoopEnd part ->
                     Just <|
                         ReturnWheel <|
                             Wheel.ChangeLoop
                                 ( Nothing
-                                , Just <| move part absD <| Tuple.second <| Wheel.getLoopPercents g
+                                , Just <| move part pixDiff <| Tuple.second <| Wheel.getLoopPercents g
                                 )
 
                 LoopStart part ->
                     Just <|
                         ReturnWheel <|
                             Wheel.ChangeLoop
-                                ( Just <| move part absD <| Tuple.first <| Wheel.getLoopPercents g
+                                ( Just <| move part pixDiff <| Tuple.first <| Wheel.getLoopPercents g
                                 , Nothing
                                 )
 
                 StartOffset part ->
-                    Just <| ReturnWheel <| Wheel.ChangeStart <| move part absD <| g.wheel.startPercent
+                    Just <| ReturnWheel <| Wheel.ChangeStart <| move part pixDiff <| g.wheel.startPercent
 
                 Divide i part ->
                     let
@@ -3170,24 +3170,24 @@ interactWave g event model =
                             (\percent ->
                                 ReturnWheel <|
                                     Wheel.ChangeDiv i <|
-                                        move part absD percent
+                                        move part pixDiff percent
                             )
 
                 ViewStart ->
-                    Just <| ReturnWave <| Waveform.MoveStartPercent <| round <| Vec.getX absD
+                    Just <| ReturnWave <| Waveform.MoveStartPercent <| round <| Vec.getX pixDiff
 
                 ViewEnd ->
-                    Just <| ReturnWave <| Waveform.MoveEndPercent <| round <| Vec.getX absD
+                    Just <| ReturnWave <| Waveform.MoveEndPercent <| round <| Vec.getX pixDiff
 
-        ( IWaveSel, Interact.Dragged { absD } _ _ ) ->
+        ( IWaveSel, Interact.Dragged { pixDiff } _ _ ) ->
             let
                 mv =
-                    Just << mainMove absD
+                    Just << mainMove pixDiff
             in
             Just <| ReturnWheel <| Wheel.ChangeLoop <| Tuple.mapBoth mv mv <| Wheel.getLoopPercents g
 
-        ( IWaveMapSel, Interact.Dragged { absD } _ _ ) ->
-            Just <| ReturnWave <| Waveform.MoveView <| round <| Vec.getX absD
+        ( IWaveMapSel, Interact.Dragged { pixDiff } _ _ ) ->
+            Just <| ReturnWave <| Waveform.MoveView <| round <| Vec.getX pixDiff
 
         _ ->
             Nothing

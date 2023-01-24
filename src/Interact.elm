@@ -131,11 +131,11 @@ type Action zone
 
 
 type alias DragInfo zone =
-    { start : ( Vec2, zone )
+    { startPosZone : ( Vec2, zone )
     , oldPos : Vec2
     , newPos : Vec2
-    , startD : Vec2
-    , absD : Vec2
+    , diff : Vec2
+    , pixDiff : Vec2
     }
 
 
@@ -180,11 +180,11 @@ update msg (S state) =
                     , Just <|
                         Event
                             (Dragged
-                                { start = dragInit
+                                { startPosZone = dragInit
                                 , oldPos = click.pos
                                 , newPos = pos
-                                , startD = Vec.sub abs click.abs
-                                , absD = Vec.sub abs click.abs
+                                , diff = Vec.sub abs click.abs
+                                , pixDiff = Vec.sub abs click.abs
                                 }
                                 zone
                              <|
