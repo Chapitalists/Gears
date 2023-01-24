@@ -761,7 +761,9 @@ update chanName msg ( model, mobile ) =
                     { m
                         | motor = Motor.default
                         , harmony =
-                            Harmo.newRate (Mobile.getLength m mobile.gears / CommonData.getWheeledContentLength m)
+                            Harmo.newHarmony
+                                (Mobile.getLength m mobile.gears)
+                                (Just <| CommonData.getWheeledContentLength m)
                     }
 
                 subMobile =
@@ -775,8 +777,9 @@ update chanName msg ( model, mobile ) =
                                     { g
                                         | motor = Motor.default
                                         , harmony =
-                                            Harmo.newRate
-                                                (Mobile.getLength g mobile.gears / CommonData.getWheeledContentLength g)
+                                            Harmo.newHarmony
+                                                (Mobile.getLength g mobile.gears)
+                                                (Just <| CommonData.getWheeledContentLength g)
                                     }
                             in
                             { acc | gears = Coll.insert newG acc.gears }
@@ -2233,7 +2236,10 @@ uncollar id m =
                                             |> Coll.insert
                                                 { motor = Motor.default
                                                 , wheel = wheel
-                                                , harmony = Harmo.newRate <| realLength / CommonData.getWheeledContentLength { wheel = wheel }
+                                                , harmony =
+                                                    Harmo.newHarmony
+                                                        realLength
+                                                        (Just <| CommonData.getWheeledContentLength { wheel = wheel })
                                                 , pos = Vec.setX (x + realLength / 2) gearPos
                                                 }
                                         , x + realLength

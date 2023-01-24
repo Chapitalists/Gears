@@ -152,8 +152,21 @@ toRate getContentLength id coll =
     let
         g =
             Coll.get id coll
+
+        contentLength =
+            getContentLength g
+
+        duration =
+            getLength getContentLength g coll
     in
-    changeSelfUnit id (Rate (getLength getContentLength g coll / getContentLength g)) coll
+    changeSelfUnit id
+        (if contentLength == 0 then
+            Duration duration
+
+         else
+            Rate (duration / contentLength)
+        )
+        coll
 
 
 changeDuration : Id (Harmonized g) -> Float -> Coll (Harmonized g) -> Coll (Harmonized g)
@@ -259,14 +272,33 @@ newHarmoWithSelfUnit su =
     { fract = Fract.integer 1, ref = Self { unit = su, group = [], links = [] } }
 
 
-newDuration : Float -> Harmony
-newDuration d =
-    newHarmoWithSelfUnit <| Duration d
+
+--newDuration : Float -> Harmony
+--newDuration d =
+--    newHarmoWithSelfUnit <| Duration d
+--
+--
+--newRate : Float -> Harmony
+--newRate r =
+--    newHarmoWithSelfUnit <| Rate r
 
 
-newRate : Float -> Harmony
-newRate r =
-    newHarmoWithSelfUnit <| Rate r
+newHarmony : Float -> Maybe Float -> Harmony
+newHarmony duration mayContentLength =
+    let
+        harmoDur =
+            newHarmoWithSelfUnit <| Duration duration
+    in
+    case mayContentLength of
+        Nothing ->
+            harmoDur
+
+        Just length ->
+            if length == 0 then
+                harmoDur
+
+            else
+                newHarmoWithSelfUnit <| Rate <| duration / length
 
 
 hasHarmonics : Harmony -> Bool
