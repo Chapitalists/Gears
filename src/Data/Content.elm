@@ -112,6 +112,9 @@ type alias Collar item =
 
     -- WARNING second source of truth, just a shortcut to sounds internals
     , oneSound : Maybe { path : String, start : Float, end : Float, divs : List Float }
+
+    -- Internal value used while a bead is moved
+    , mvShift : Bool
     }
 
 
@@ -432,6 +435,7 @@ collarDecoder wheelDecoder =
                                                                 oneSoundStart
                                                                 oneSoundEnd
                                                                 oneSoundDivs
+                                                        , mvShift = False
                                                         }
 
                                                 _ ->
