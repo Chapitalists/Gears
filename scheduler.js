@@ -159,6 +159,12 @@ let scheduler = {
       model.pitch = parentPitch * (model.stretch ? (model.length / model.duration) : 1)
       model.subWheels = model.mobile.gears.map(v => this.prepare(t, v, model.gainNode, model.rate, model.pitch, auxed))
     }
+    
+    if (!model.duration) {
+      model.duration = model.length
+      model.rate = parentRate
+      model.empty = true
+    }
 
     model.realLength = model.length / parentRate
     model.lengthBeforeParentRate = model.length
@@ -241,7 +247,10 @@ let scheduler = {
 
         if (nextState && nextState.date < max) { // And should pause
 
-          if ((nextState.date < t || nextState.date < model.lastScheduledTime) && !model.mobile) { // If we sheduled ahead of next
+          if (
+            (nextState.date < t || nextState.date < model.lastScheduledTime)
+            && !model.mobile && !model.empty
+          ) { // If we sheduled ahead of next
             t = nextState.date // Bring back the time and undo
             if (t <= now) console.error("undoing the past, now : " + now + " scheduler : " + t)
 
@@ -335,8 +344,9 @@ let scheduler = {
               nextState.percent = clampPercent((cumul + length) / model.length)
             }
 
-            if (model.mobile) {
-              model.subWheels.forEach(v => v.playPauseTimes.push({date : nextState.date, play : false}))
+            if (model.mobile || model.empty) {
+              if (model.mobile) 
+                model.subWheels.forEach(v => v.playPauseTimes.push({date : nextState.date, play : false}))
               nextState.percent = clampPercent(
                 lastState.percent
                 + (nextState.date - model.lastStartTime) / model.length
@@ -365,7 +375,7 @@ let scheduler = {
             }
           }
 
-          if (model.mobile) {
+          if (model.mobile || model.empty) {
             t = max
           }
 
@@ -394,9 +404,10 @@ let scheduler = {
             t += length
           }
 
-          if (model.mobile) {
+          if (model.mobile || model.empty) {
             model.lastStartTime = t
-            model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
+            if (model.mobile)
+              model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
           }
 
           nextState.percent = lastState.percent
