@@ -49,7 +49,14 @@ simplify { num, den } =
 
 pgcd : Int -> Int -> Int
 pgcd x y =
-    if x >= y then
+    if x == 0 || y == 0 then
+        let
+            _ =
+                Debug.log "ESCAPED PGCD WITH 0 !!!" ( x, y )
+        in
+        0
+
+    else if x >= y then
         let
             rest =
                 modBy y x

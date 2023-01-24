@@ -270,10 +270,10 @@ type DocMsg
 
 
 type ToUndo
-    = Do
-    | Group
-    | Cancel
-    | NOOP
+    = Do -- Validate action
+    | Group -- Group actions
+    | Cancel -- Forget ongoing group
+    | NOOP -- Don’t care
 
 
 type Collaring
@@ -2223,7 +2223,8 @@ uncollar id m =
                             Vec.getX gearPos - gearLength / 2
 
                         ratio =
-                            gearLength / contentLength
+                            gearLength
+                                / contentLength
 
                         newGears =
                             Tuple.first <|
@@ -3054,7 +3055,7 @@ interactMove event model mobile =
                     | model = { model | dragging = NoDrag, pack = Pack.update Pack.PackIt model.pack }
                 }
 
-        -- START WAVING
+        -- MOVE WAVE SEL
         ( IWheel _, Interact.Dragged { pixDiff } ZWave _, Waving ) ->
             let
                 ( wave, cmd ) =
@@ -3067,7 +3068,7 @@ interactMove event model mobile =
                     , cmd = Cmd.map WaveMsg cmd
                 }
 
-        -- MOVE WAVE SEL
+        -- START WAVING
         ( IWheel ( id, [] ), Interact.Dragged { oldPos } ZWave _, _ ) ->
             case model.edit of
                 [ waveId ] ->
@@ -3178,6 +3179,10 @@ type InteractWaveReturn
     | ReturnWave Waveform.Msg
 
 
+
+--TODO manage undoing and grouping (mini is NOOP, cursors is Group)
+
+
 interactWave : Geer -> Interact.Event Interactable Zone -> Model -> Maybe InteractWaveReturn
 interactWave g event model =
     let
@@ -3233,6 +3238,7 @@ interactWave g event model =
                         mayPercent =
                             Maybe.andThen (List.head << List.drop i) mayDivs
                     in
+                    --TODO If a bead disappears, IWaveCursor should invalidate and drag end
                     mayPercent
                         |> Maybe.map
                             (\percent ->

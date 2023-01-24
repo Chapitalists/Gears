@@ -199,8 +199,8 @@ update msg g =
         ChangeStart percent ->
             let
                 ( min, max ) =
-                    case wheel.content of
-                        C (Content.S s) ->
+                    case getWheelContent wheel of
+                        Content.S s ->
                             Sound.getLoopPercents s
 
                         _ ->
@@ -209,8 +209,8 @@ update msg g =
             { g | wheel = { wheel | startPercent = clamp min max percent } }
 
         ChangeLoop mayPoints ->
-            case wheel.content of
-                C (Content.S s) ->
+            case getWheelContent wheel of
+                Content.S s ->
                     let
                         newSound =
                             Sound.setLoop mayPoints s
@@ -226,14 +226,17 @@ update msg g =
                             }
                     }
 
-                C (Content.C c) ->
+                Content.C c ->
                     { g
                         | wheel =
                             { wheel
                                 | content =
                                     C <|
                                         Content.C <|
-                                            Content.setCollarLoop chgLoopWithSoundLength mayPoints c
+                                            Content.setCollarLoop
+                                                chgLoopWithSoundLength
+                                                mayPoints
+                                                c
                             }
                     }
 
@@ -241,12 +244,19 @@ update msg g =
                     g
 
         ChangeDiv i percent ->
-            case wheel.content of
-                C (Content.C c) ->
+            case getWheelContent wheel of
+                Content.C c ->
                     { g
                         | wheel =
                             { wheel
-                                | content = C <| Content.C <| Content.setCollarDiv chgLoopWithSoundLength i percent c
+                                | content =
+                                    C <|
+                                        Content.C <|
+                                            Content.setCollarDiv
+                                                chgLoopWithSoundLength
+                                                i
+                                                percent
+                                                c
                             }
                     }
 
@@ -282,8 +292,8 @@ view :
 view w pos lengthTmp style mayWheelInter mayHandleInter uid =
     let
         ( viewContent, bigger ) =
-            case w.content of
-                C (Content.C col) ->
+            case getWheelContent w of
+                Content.C col ->
                     ( w.viewContent, w.viewContent && List.length col.beads == 0 )
 
                 _ ->
@@ -309,8 +319,8 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
             getLoopPercents { wheel = w }
 
         tickPercent =
-            case w.content of
-                C (Content.S _) ->
+            case getWheelContent w of
+                Content.S _ ->
                     (w.startPercent - loopStart) / (loopEnd - loopStart)
 
                 _ ->
@@ -423,8 +433,8 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                      ]
                         -- No drag events part
                         ++ (if viewContent then
-                                case w.content of
-                                    C (Content.C collar) ->
+                                case getWheelContent w of
+                                    Content.C collar ->
                                         let
                                             scale =
                                                 lengthTmp / Content.getCollarLength collar
@@ -441,8 +451,8 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                     symSize =
                                         length / 4
                                 in
-                                case w.content of
-                                    C (Content.M _) ->
+                                case getWheelContent w of
+                                    Content.M _ ->
                                         [ S.line
                                             [ SA.x1 <| Num -symSize
                                             , SA.y1 <| Num -symSize
@@ -463,7 +473,7 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                             []
                                         ]
 
-                                    C (Content.C _) ->
+                                    Content.C _ ->
                                         [ S.line
                                             [ SA.x1 <| Num -symSize
                                             , SA.y1 <| Num 0
