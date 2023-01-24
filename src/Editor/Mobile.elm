@@ -2,7 +2,7 @@ port module Editor.Mobile exposing (..)
 
 import Coll exposing (Coll, Id)
 import Color
-import Data.Collar as Collar exposing (Beed)
+import Data.Collar as Collar exposing (Beed, Colleer)
 import Data.Common as CommonData exposing (Identifier)
 import Data.Content as Content exposing (Content)
 import Data.Gear as Gear
@@ -163,6 +163,7 @@ type Dragging
     | Moving
     | Packing
     | Waving
+    | Abacus Identifier Colleer
     | Packed Vec2 (Id Packed)
     | Content ( Vec2, Float )
     | ChgContent (Id Geer) Dragging
@@ -2965,7 +2966,65 @@ interactMove event model mobile =
 
         -- END MOVE
         ( _, Interact.DragEnded _, Moving ) ->
-            Just { return | model = { model | dragging = NoDrag }, mobile = mobile, toUndo = Do }
+            Just { return | model = { model | dragging = NoDrag }, toUndo = Do }
+
+        -- START BEAD MOVE
+        ( IWheel ( id, beads ), Interact.Dragged { diff } ZSurface _, _ ) ->
+            let
+                lengthBeads =
+                    List.length beads
+
+                beadUp =
+                    List.take (lengthBeads - 1) beads
+
+                mayIndex =
+                    List.head <| List.drop (lengthBeads - 1) beads
+
+                fullId =
+                    ( id, beadUp )
+
+                w =
+                    CommonData.getWheel fullId mobile
+
+                content =
+                    Wheel.getWheelContent w
+            in
+            case content of
+                Content.C c ->
+                    Maybe.map
+                        (\i ->
+                            let
+                                newCollar =
+                                    Collar.mv i (Vec.getX diff) c
+                            in
+                            { return
+                                | toUndo = Group
+                                , model = { model | dragging = Abacus fullId newCollar }
+                                , mobile =
+                                    CommonData.updateWheel fullId
+                                        (Wheel.ChangeContent <| Content.C newCollar)
+                                        mobile
+                            }
+                        )
+                        mayIndex
+
+                _ ->
+                    Nothing
+
+        -- END BEAD MOVE
+        ( _, Interact.DragEnded _, Abacus id c ) ->
+            Just
+                { return
+                    | model = { model | dragging = NoDrag }
+                    , toUndo = Do
+                    , mobile =
+                        CommonData.updateWheel id
+                            (Wheel.ChangeContent <|
+                                Content.C <|
+                                    Collar.clean c
+                            )
+                            mobile
+                }
 
         -- START PACKING
         ( IWheel ( id, [] ), Interact.Dragged { newPos } ZPack _, _ ) ->
