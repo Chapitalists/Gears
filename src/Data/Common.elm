@@ -192,3 +192,6 @@ getContentLength c =
 
         Content.C col ->
             Content.getCollarLength col
+
+        Content.None ->
+            0

@@ -293,6 +293,9 @@ update msg model =
                         -- else RequestSoundLoad and update with new soundLib (model)
                         checkLoad content soundLib cmds =
                             case content of
+                                Content.None ->
+                                    Just ( content, soundLib, cmds )
+
                                 Content.S s ->
                                     if List.member s model.loadedSoundList then
                                         Just ( content, soundLib, cmds )

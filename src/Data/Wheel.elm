@@ -91,7 +91,7 @@ default =
     { name = ""
     , startPercent = 0
     , volume = 1
-    , content = C <| Content.S Sound.noSound
+    , content = C Content.None
     , viewContent = True
     , mute = False
     , channel = 0
@@ -384,7 +384,7 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                 else
                                     ""
                              ]
-                                ++ (if w.mute then
+                                ++ (if w.mute || w.content == C Content.None then
                                         [ SA.fill <| Fill Color.white ]
 
                                     else

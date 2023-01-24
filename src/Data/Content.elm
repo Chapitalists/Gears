@@ -13,6 +13,7 @@ type Content item
     = M (Mobile item)
     | C (Collar item)
     | S Sound
+    | None
 
 
 encoder : (item -> List ( String, E.Value )) -> Content item -> ( String, E.Value )
@@ -27,13 +28,17 @@ encoder wheelEncoder content =
         C c ->
             ( "collar", collarEncoder wheelEncoder c )
 
+        None ->
+            ( "noContent", E.null )
+
 
 decoder : D.Decoder item -> (item -> Float) -> item -> D.Decoder (Content item)
 decoder wheelDecoder wheelToCententLength defaultWheel =
     D.oneOf
-        [ Field.require "sound" Sound.decoder <| \sound -> D.succeed <| S sound
-        , Field.require "mobile" (mobileDecoder wheelDecoder wheelToCententLength defaultWheel) <| \mobile -> D.succeed <| M mobile
-        , Field.require "collar" (collarDecoder wheelDecoder) <| \collar -> D.succeed <| C collar
+        [ D.field "sound" <| D.map S Sound.decoder
+        , D.field "mobile" <| D.map M <| mobileDecoder wheelDecoder wheelToCententLength defaultWheel
+        , D.field "collar" <| D.map C <| collarDecoder wheelDecoder
+        , D.field "noContent" <| D.null None
         ]
 
 

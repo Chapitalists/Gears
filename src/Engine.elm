@@ -128,6 +128,9 @@ encodeWheel w hasView parentUid =
 
                 Content.C c ->
                     [ ( "collar", encodeCollar c hasView parentUid ) ]
+
+                Content.None ->
+                    []
            )
 
 

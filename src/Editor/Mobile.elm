@@ -1673,6 +1673,9 @@ viewEditDetails channels model mobile =
                                         "Déplier Collier"
                             , onPress = Just <| WheelMsgs [ ( wId, Wheel.ToggleContentView ) ]
                             }
+
+                    Content.None ->
+                        none
                 , column [ width fill, scrollbarY, spacing 20, padding 10 ] <|
                     [ Input.slider
                         [ behindContent <|
