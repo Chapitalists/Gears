@@ -108,20 +108,30 @@ update msg ( doc, maxChan ) =
                 ( doc, Cmd.none )
 
         EnteredChannels str ->
-            let
-                oldData =
-                    Data.current doc.data
-            in
-            ( { doc
-                | data =
-                    Data.do
-                        { oldData
-                            | channels = Maybe.withDefault 0 <| String.toInt str
-                        }
-                        doc.data
-              }
-            , Cmd.none
-            )
+            case maxChan of
+                Just _ ->
+                    let
+                        _ =
+                            Debug.log "Should’nt be able to enter Channels" str
+                    in
+                    ( doc, Cmd.none )
+
+                Nothing ->
+                    let
+                        oldData =
+                            Data.current doc.data
+                    in
+                    ( { doc
+                        | data =
+                            Data.do
+                                { oldData
+                                    | channels =
+                                        Maybe.withDefault 0 <| String.toInt str
+                                }
+                                doc.data
+                      }
+                    , Cmd.none
+                    )
 
         ChangedComment str ->
             let
@@ -496,16 +506,31 @@ viewComment { data } =
 
 viewChannels : ( Model, Maybe Int ) -> Element Msg
 viewChannels ( { data }, maxChan ) =
+    let
+        doc =
+            Data.current data
+
+        ( channels, real ) =
+            getChannels doc maxChan
+
+        fontColor =
+            if real then
+                rgb 0.8 0.5 0.2
+
+            else
+                rgb 0 0 0
+    in
     Input.text
         [ centerX
         , paddingXY 4 0
         , width <| minimum 60 <| maximum 100 <| fill
-        , Font.color <| rgb 0 0 0
+        , Font.color fontColor
         , htmlAttribute <| Html.Attributes.type_ "number"
         , htmlAttribute <| Html.Attributes.min "0"
+        , htmlAttribute <| Html.Attributes.disabled real
         ]
         { onChange = EnteredChannels
-        , text = String.fromInt (Data.current data).channels
+        , text = String.fromInt channels
         , placeholder = Nothing
         , label = Input.labelLeft [] <| text "Canaux :"
         }
