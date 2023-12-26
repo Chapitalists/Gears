@@ -191,7 +191,7 @@ let scheduler = {
       model.pitch = parentPitch * (model.stretch ? (model.length / model.duration) : 1)
       model.subWheels = model.mobile.gears.map(v => this.prepare(t, v, model.gainNode, model.rate, model.pitch, auxed))
     }
-    
+
     if (!model.duration) {
       model.duration = model.length
       model.rate = parentRate
@@ -383,7 +383,7 @@ let scheduler = {
             }
 
             if (model.mobile || model.empty) {
-              if (model.mobile) 
+              if (model.mobile)
                 model.subWheels.forEach(v => v.playPauseTimes.push({date : nextState.date, play : false}))
               nextState.percent = clampPercent(
                 lastState.percent

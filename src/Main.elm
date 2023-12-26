@@ -1078,39 +1078,44 @@ viewSounds model =
         [ row [ width fill, spacing 40 ]
             [ column [ spacing 20 ] <|
                 viewOpenRefreshButtons ClickedUploadSound RequestSoundList model.connected
-            , column [ width fill, spacing 20 ] <|
-                case model.micState of
-                    Just ( False, name ) ->
-                        [ row []
-                            [ Input.button []
-                                { onPress =
-                                    if String.isEmpty name then
-                                        Nothing
-
-                                    else
-                                        Just StartMicRec
-                                , label = text "Rec Mic"
-                                }
-                            ]
-                        , Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
-                            { text = name
-                            , placeholder = Just <| Input.placeholder [] <| text "Nom du fichier"
-                            , label = Input.labelHidden "New File Name"
-                            , onChange = EnteredNewRecName
-                            }
-                        ]
-
-                    Just ( True, name ) ->
-                        [ Input.button [] { onPress = Just <| EndMicRec name, label = text "Stop Mic" }
-                        , text name
-                        ]
-
-                    Nothing ->
-                        [ Input.button [] { onPress = Just RequestOpenMic, label = text "Activer Micro" } ]
+            , viewMicRec model
             ]
         ]
             ++ [ viewLibColumn <| viewLib model [] model.soundList ]
     ]
+
+
+viewMicRec : Model -> Element Msg
+viewMicRec model =
+    column [ width fill, spacing 20 ] <|
+        case model.micState of
+            Just ( False, name ) ->
+                [ row []
+                    [ Input.button []
+                        { onPress =
+                            if String.isEmpty name then
+                                Nothing
+
+                            else
+                                Just StartMicRec
+                        , label = text "Rec Mic"
+                        }
+                    ]
+                , Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
+                    { text = name
+                    , placeholder = Just <| Input.placeholder [] <| text "Nom du fichier"
+                    , label = Input.labelHidden "New File Name"
+                    , onChange = EnteredNewRecName
+                    }
+                ]
+
+            Just ( True, name ) ->
+                [ Input.button [] { onPress = Just <| EndMicRec name, label = text "Stop Mic" }
+                , text name
+                ]
+
+            Nothing ->
+                [ Input.button [] { onPress = Just RequestOpenMic, label = text "Activer Micro" } ]
 
 
 viewLibColumn : List (Element Msg) -> Element Msg
