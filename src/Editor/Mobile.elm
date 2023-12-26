@@ -1297,252 +1297,270 @@ viewContent ( model, mobile ) =
                        )
                 )
             <|
-                List.map (Svg.map InteractMsg) <|
-                    (List.map
-                        (\( id, g ) ->
-                            let
-                                -- TODO should blink also if bead
-                                wheel =
-                                    g.wheel
-
-                                -- BLINK
-                                w =
-                                    case model.dragging of
-                                        Alterning ( idd, [] ) mayId ( b, _ ) ->
-                                            if not b && id == idd then
-                                                { wheel | mute = not wheel.mute }
-
-                                            else
-                                                case mayId of
-                                                    Just ( iid, [] ) ->
-                                                        if not b && id == iid then
-                                                            { wheel | mute = not wheel.mute }
-
-                                                        else
-                                                            wheel
-
-                                                    _ ->
-                                                        wheel
-
-                                        _ ->
-                                            wheel
-                            in
-                            -- VIEW WHEEL
-                            Wheel.view w
-                                g.pos
-                                (Mobile.getLength g mobile.gears)
-                                { mod = getMod id
-                                , motor = id == mobile.motor
-                                , dashed = Harmo.hasHarmonics g.harmony
-                                , weaving = isWeaving id
-                                , baseColor =
-                                    Maybe.map (\bId -> (Coll.get bId mobile.gears).wheel.color) <|
-                                        Harmo.getBaseId g.harmony
-                                , named =
-                                    case Interact.getInteract model.interact of
-                                        Just ( IWheel idd, _ ) ->
-                                            if id == Tuple.first idd then
-                                                Just <| CommonData.getName ( id, [] ) mobile
-
-                                            else
-                                                Nothing
-
-                                        _ ->
-                                            Nothing
-                                }
-                                (Just ( IWheel << Tuple.pair id, [] ))
-                                (Just <| IResizeHandle id)
-                                (model.parentUid ++ Gear.toUID id)
-                        )
-                     <|
-                        Coll.toList mobile.gears
-                    )
-                        -- VIEW DRAGGING
-                        ++ (case model.dragging of
-                                HalfLink ( id, pos ) ->
-                                    case model.tool of
-                                        Play _ _ ->
-                                            let
-                                                circle =
-                                                    Mobile.toCircle mobile.gears id
-                                            in
-                                            [ Link.drawMotorLink ( circle, { circle | c = pos } ) ]
-
-                                        Harmonize ->
-                                            let
-                                                g =
-                                                    Coll.get id mobile.gears
-                                            in
-                                            [ Link.drawRawLink
-                                                ( g.pos, pos )
-                                                (Mobile.getLength g mobile.gears)
-                                                Link.baseColor
-                                            ]
-                                                ++ [ S.g [ SA.opacity <| Opacity 0 ] <|
-                                                        List.map
-                                                            (\( idd, gg ) ->
-                                                                Wheel.view gg.wheel
-                                                                    gg.pos
-                                                                    (Mobile.getLength gg mobile.gears)
-                                                                    Wheel.defaultStyle
-                                                                    (Just ( IWheel << Tuple.pair idd, [] ))
-                                                                    Nothing
-                                                                    ("hoverArtefact-" ++ Gear.toUID idd)
-                                                            )
-                                                        <|
-                                                            Coll.toList mobile.gears
-                                                   ]
-
-                                        _ ->
-                                            []
-
-                                CompleteLink l ->
-                                    case model.tool of
-                                        Play _ _ ->
-                                            Link.viewMotorLink False <| toDrawLink mobile.gears l
-
-                                        Harmonize ->
-                                            Link.viewFractLink (toDrawLink mobile.gears l) <| ILink l
-
-                                        _ ->
-                                            []
-
-                                Cut seg _ ->
-                                    [ Link.drawCut seg <| PanSvg.getScale model.svg ]
-
-                                WeaveBeads seg _ ->
-                                    [ Link.drawCut seg <| PanSvg.getScale model.svg ]
-
-                                Content ( p, l ) ->
-                                    [ S.circle
-                                        [ SA.cx <| Num <| Vec.getX p
-                                        , SA.cy <| Num <| Vec.getY p
-                                        , SA.r <| Num (l / 2)
-                                        , SA.strokeWidth <| Num <| l / 30
-                                        , SA.stroke Color.black
-                                        , SA.strokeOpacity <| Opacity 0.5
-                                        , SA.fillOpacity <| Opacity 0
-                                        ]
-                                        []
-                                    ]
-
-                                Packed pos id ->
+                (S.defs [] <|
+                    [ S.radialGradient [ Html.Attributes.id "anim" ]
+                        [ S.stop
+                            [ SA.offset "10%"
+                            , SA.stopOpacity <| Opacity 1
+                            , SA.stopColor "white"
+                            ]
+                            []
+                        , S.stop
+                            [ SA.offset "100%"
+                            , SA.stopOpacity <| Opacity 0
+                            , SA.stopColor "white"
+                            ]
+                            []
+                        ]
+                    ]
+                )
+                    :: (List.map (Svg.map InteractMsg) <|
+                            (List.map
+                                (\( id, g ) ->
                                     let
-                                        p =
-                                            Coll.get id model.pack.wheels
-                                    in
-                                    [ Wheel.view p.wheel pos p.length Wheel.defaultStyle Nothing Nothing "" ]
+                                        -- TODO should blink also if bead
+                                        wheel =
+                                            g.wheel
 
-                                _ ->
-                                    []
-                           )
-                        ++ (case model.tool of
-                                -- VIEW MOTOR LINKS
-                                Play _ _ ->
-                                    let
-                                        cuts =
+                                        -- BLINK
+                                        w =
                                             case model.dragging of
-                                                Cut _ c ->
-                                                    c
+                                                Alterning ( idd, [] ) mayId ( b, _ ) ->
+                                                    if not b && id == idd then
+                                                        { wheel | mute = not wheel.mute }
+
+                                                    else
+                                                        case mayId of
+                                                            Just ( iid, [] ) ->
+                                                                if not b && id == iid then
+                                                                    { wheel | mute = not wheel.mute }
+
+                                                                else
+                                                                    wheel
+
+                                                            _ ->
+                                                                wheel
 
                                                 _ ->
-                                                    []
+                                                    wheel
                                     in
-                                    List.concatMap
-                                        (\l ->
-                                            Link.viewMotorLink (List.any (Link.equal l) cuts) <|
-                                                toDrawLink mobile.gears l
-                                        )
-                                    <|
-                                        Motor.getAllLinks mobile.gears
+                                    -- VIEW WHEEL
+                                    Wheel.view w
+                                        g.pos
+                                        (Mobile.getLength g mobile.gears)
+                                        { mod = getMod id
+                                        , motor = id == mobile.motor
+                                        , dashed = Harmo.hasHarmonics g.harmony
+                                        , weaving = isWeaving id
+                                        , baseColor =
+                                            Maybe.map (\bId -> (Coll.get bId mobile.gears).wheel.color) <|
+                                                Harmo.getBaseId g.harmony
+                                        , named =
+                                            case Interact.getInteract model.interact of
+                                                Just ( IWheel idd, _ ) ->
+                                                    if id == Tuple.first idd then
+                                                        Just <| CommonData.getName ( id, [] ) mobile
 
-                                -- VIEW HARMO LINKS
-                                Harmonize ->
-                                    -- HOVERED FRACTION
-                                    (case Interact.getInteract model.interact of
-                                        Just ( ILink l, _ ) ->
-                                            Link.viewFractOnLink (toDrawLink mobile.gears l) <|
-                                                Fract.simplify <|
-                                                    Fract.division
-                                                        (Coll.get (Tuple.second l) mobile.gears).harmony.fract
-                                                        (Coll.get (Tuple.first l) mobile.gears).harmony.fract
-
-                                        _ ->
-                                            []
-                                    )
-                                        -- ALL HARMO LINKS
-                                        ++ (List.concatMap (\l -> Link.viewFractLink (toDrawLink mobile.gears l) (ILink l)) <|
-                                                List.concatMap (.harmony >> Harmo.getLinks) <|
-                                                    Coll.values mobile.gears
-                                           )
-                                        -- SELECTED LINK
-                                        ++ (case model.link of
-                                                Just { link, fractInput } ->
-                                                    Link.viewSelectedLink (toDrawLink mobile.gears link) <|
-                                                        case fractInput of
-                                                            FractionInput _ _ _ ->
-                                                                Just <|
-                                                                    Fract.simplify <|
-                                                                        Fract.division
-                                                                            (Coll.get (Tuple.second link) mobile.gears).harmony.fract
-                                                                            (Coll.get (Tuple.first link) mobile.gears).harmony.fract
-
-                                                            TextInput _ ->
-                                                                Nothing
+                                                    else
+                                                        Nothing
 
                                                 _ ->
-                                                    []
-                                           )
-
-                                -- COLLAR CURSOR
-                                Edit _ ->
-                                    case model.edit of
-                                        [ id ] ->
-                                            let
-                                                g =
-                                                    Coll.get id mobile.gears
-
-                                                length =
-                                                    Mobile.getLength g mobile.gears
-
-                                                pos =
-                                                    g.pos
-
-                                                w =
-                                                    g.wheel
-                                            in
-                                            case Wheel.getWheelContent w of
-                                                Content.C col ->
+                                                    Nothing
+                                        }
+                                        (Just ( IWheel << Tuple.pair id, [] ))
+                                        (Just <| IResizeHandle id)
+                                        (model.parentUid ++ Gear.toUID id)
+                                )
+                             <|
+                                Coll.toList mobile.gears
+                            )
+                                -- VIEW DRAGGING
+                                ++ (case model.dragging of
+                                        HalfLink ( id, pos ) ->
+                                            case model.tool of
+                                                Play _ _ ->
                                                     let
-                                                        medLength =
-                                                            Collar.getMinLength col + Collar.getMaxLength col / 2
-
-                                                        cursorW =
-                                                            medLength / 15
-
-                                                        cursorH =
-                                                            medLength * 2
-
-                                                        scale =
-                                                            length / Collar.getTotalLength col
+                                                        circle =
+                                                            Mobile.toCircle mobile.gears id
                                                     in
-                                                    [ S.rect
-                                                        [ SA.transform [ Translate (getX pos) (getY pos), Translate (-length / 2) 0, Scale scale scale ]
-                                                        , SA.x <| Num <| Collar.getCumulLengthAt model.beadCursor col - cursorW / 2
-                                                        , SA.y <| Num <| -cursorH / 2
-                                                        , SA.width <| Num cursorW
-                                                        , SA.height <| Num cursorH
-                                                        , SA.fill <| Fill Color.lightBlue
-                                                        ]
-                                                        []
+                                                    [ Link.drawMotorLink ( circle, { circle | c = pos } ) ]
+
+                                                Harmonize ->
+                                                    let
+                                                        g =
+                                                            Coll.get id mobile.gears
+                                                    in
+                                                    [ Link.drawRawLink
+                                                        ( g.pos, pos )
+                                                        (Mobile.getLength g mobile.gears)
+                                                        Link.baseColor
                                                     ]
+                                                        ++ [ S.g [ SA.opacity <| Opacity 0 ] <|
+                                                                List.map
+                                                                    (\( idd, gg ) ->
+                                                                        Wheel.view gg.wheel
+                                                                            gg.pos
+                                                                            (Mobile.getLength gg mobile.gears)
+                                                                            Wheel.defaultStyle
+                                                                            (Just ( IWheel << Tuple.pair idd, [] ))
+                                                                            Nothing
+                                                                            ("hoverArtefact-" ++ Gear.toUID idd)
+                                                                    )
+                                                                <|
+                                                                    Coll.toList mobile.gears
+                                                           ]
 
                                                 _ ->
                                                     []
 
+                                        CompleteLink l ->
+                                            case model.tool of
+                                                Play _ _ ->
+                                                    Link.viewMotorLink False <| toDrawLink mobile.gears l
+
+                                                Harmonize ->
+                                                    Link.viewFractLink (toDrawLink mobile.gears l) <| ILink l
+
+                                                _ ->
+                                                    []
+
+                                        Cut seg _ ->
+                                            [ Link.drawCut seg <| PanSvg.getScale model.svg ]
+
+                                        WeaveBeads seg _ ->
+                                            [ Link.drawCut seg <| PanSvg.getScale model.svg ]
+
+                                        Content ( p, l ) ->
+                                            [ S.circle
+                                                [ SA.cx <| Num <| Vec.getX p
+                                                , SA.cy <| Num <| Vec.getY p
+                                                , SA.r <| Num (l / 2)
+                                                , SA.strokeWidth <| Num <| l / 30
+                                                , SA.stroke Color.black
+                                                , SA.strokeOpacity <| Opacity 0.5
+                                                , SA.fillOpacity <| Opacity 0
+                                                ]
+                                                []
+                                            ]
+
+                                        Packed pos id ->
+                                            let
+                                                p =
+                                                    Coll.get id model.pack.wheels
+                                            in
+                                            [ Wheel.view p.wheel pos p.length Wheel.defaultStyle Nothing Nothing "" ]
+
                                         _ ->
                                             []
-                           )
+                                   )
+                                ++ (case model.tool of
+                                        -- VIEW MOTOR LINKS
+                                        Play _ _ ->
+                                            let
+                                                cuts =
+                                                    case model.dragging of
+                                                        Cut _ c ->
+                                                            c
+
+                                                        _ ->
+                                                            []
+                                            in
+                                            List.concatMap
+                                                (\l ->
+                                                    Link.viewMotorLink (List.any (Link.equal l) cuts) <|
+                                                        toDrawLink mobile.gears l
+                                                )
+                                            <|
+                                                Motor.getAllLinks mobile.gears
+
+                                        -- VIEW HARMO LINKS
+                                        Harmonize ->
+                                            -- HOVERED FRACTION
+                                            (case Interact.getInteract model.interact of
+                                                Just ( ILink l, _ ) ->
+                                                    Link.viewFractOnLink (toDrawLink mobile.gears l) <|
+                                                        Fract.simplify <|
+                                                            Fract.division
+                                                                (Coll.get (Tuple.second l) mobile.gears).harmony.fract
+                                                                (Coll.get (Tuple.first l) mobile.gears).harmony.fract
+
+                                                _ ->
+                                                    []
+                                            )
+                                                -- ALL HARMO LINKS
+                                                ++ (List.concatMap (\l -> Link.viewFractLink (toDrawLink mobile.gears l) (ILink l)) <|
+                                                        List.concatMap (.harmony >> Harmo.getLinks) <|
+                                                            Coll.values mobile.gears
+                                                   )
+                                                -- SELECTED LINK
+                                                ++ (case model.link of
+                                                        Just { link, fractInput } ->
+                                                            Link.viewSelectedLink (toDrawLink mobile.gears link) <|
+                                                                case fractInput of
+                                                                    FractionInput _ _ _ ->
+                                                                        Just <|
+                                                                            Fract.simplify <|
+                                                                                Fract.division
+                                                                                    (Coll.get (Tuple.second link) mobile.gears).harmony.fract
+                                                                                    (Coll.get (Tuple.first link) mobile.gears).harmony.fract
+
+                                                                    TextInput _ ->
+                                                                        Nothing
+
+                                                        _ ->
+                                                            []
+                                                   )
+
+                                        -- COLLAR CURSOR
+                                        Edit _ ->
+                                            case model.edit of
+                                                [ id ] ->
+                                                    let
+                                                        g =
+                                                            Coll.get id mobile.gears
+
+                                                        length =
+                                                            Mobile.getLength g mobile.gears
+
+                                                        pos =
+                                                            g.pos
+
+                                                        w =
+                                                            g.wheel
+                                                    in
+                                                    case Wheel.getWheelContent w of
+                                                        Content.C col ->
+                                                            let
+                                                                medLength =
+                                                                    Collar.getMinLength col + Collar.getMaxLength col / 2
+
+                                                                cursorW =
+                                                                    medLength / 15
+
+                                                                cursorH =
+                                                                    medLength * 2
+
+                                                                scale =
+                                                                    length / Collar.getTotalLength col
+                                                            in
+                                                            [ S.rect
+                                                                [ SA.transform [ Translate (getX pos) (getY pos), Translate (-length / 2) 0, Scale scale scale ]
+                                                                , SA.x <| Num <| Collar.getCumulLengthAt model.beadCursor col - cursorW / 2
+                                                                , SA.y <| Num <| -cursorH / 2
+                                                                , SA.width <| Num cursorW
+                                                                , SA.height <| Num cursorH
+                                                                , SA.fill <| Fill Color.lightBlue
+                                                                ]
+                                                                []
+                                                            ]
+
+                                                        _ ->
+                                                            []
+
+                                                _ ->
+                                                    []
+                                   )
+                       )
 
 
 

@@ -402,6 +402,15 @@ view w pos lengthTmp style mayWheelInter mayHandleInter uid =
                                    )
                             )
                             []
+                         , S.circle
+                            [ SA.class [ "anim" ]
+                            , SA.cx <| Num 0
+                            , SA.cy <| Num 0
+                            , SA.r <| Num (length / 2)
+                            , SA.transform [ Scale 0 0 ]
+                            , Html.Attributes.attribute "fill" "url(#anim)"
+                            ]
+                            []
                          , S.rect
                             [ SA.width <| Num tickW
                             , SA.height <| Num tickH

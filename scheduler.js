@@ -172,14 +172,20 @@ let scheduler = {
 
     if (model.view && model.id) {
       let el = document.getElementById(model.id)
+        , anim = el.getElementsByClassName('anim')[0]
         , tr = svg.createSVGTransform()
+        , sc = svg.createSVGTransform()
       tr.setRotate(0,0,0)
+      sc.setScale(0,0)
       el.transform.baseVal.initialize(tr)
+      anim.transform.baseVal.initialize(sc)
 
       model.view = {
           tr : tr
+        , sc : sc
         , moveTo : function (percent) {
           this.tr.setRotate(percent * 360, 0, 0)
+          this.sc.setScale(percent, percent)
         }
       }
 
