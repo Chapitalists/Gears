@@ -1,10 +1,19 @@
-const app = Elm.Main.init({flags : {width : window.innerWidth, height : window.innerHeight}})
+const app = Elm.Main.init(
+    {
+    flags :
+      { hasSinkId : AudioContext.prototype.hasOwnProperty('setSinkId')
+      , screen : {width : window.innerWidth, height : window.innerHeight}
+      }
+    }
+)
 
 if (app.ports.loadSound) app.ports.loadSound.subscribe(loadSound)
 if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 if (app.ports.toggleRecord) app.ports.toggleRecord.subscribe(toggleRecord)
 if (app.ports.requestSoundDraw) app.ports.requestSoundDraw.subscribe(drawSound)
 if (app.ports.requestCutSample) app.ports.requestCutSample.subscribe(cutSample)
+if (app.ports.requestDeviceList) app.ports.requestDeviceList.subscribe(getDeviceList)
+if (app.ports.changeSink) app.ports.changeSink.subscribe(setCtxSink)
 if (app.ports.openMic) app.ports.openMic.subscribe(openMic)
 if (app.ports.inputRec) app.ports.inputRec.subscribe(inputRec)
 
@@ -96,6 +105,27 @@ function toggleRecord(args) {
     }
     recorders.forEach(el => el.record())
   }
+}
+
+let tmpStream = null
+function getDeviceList() {
+  tmpStream = navigator.mediaDevices.getUserMedia({audio:true}) // ensure users permission (trick from https://set-sink-id.glitch.me/)
+  navigator.mediaDevices.enumerateDevices().then(dl => {
+    ctx.onsinkchange = () => {
+      app.ports.gotMaxChannel.send(ctx.destination.maxChannelCount)
+    }
+    app.ports.gotMaxChannel.send(ctx.destination.maxChannelCount)
+    app.ports.gotDeviceList.send(
+      dl.filter(d => d.kind === 'audiooutput')// && d.deviceId !== 'default')
+    )
+    // Stop audio tracks, as we don't need them running now the permission has been granted
+    tmpStream.getAudioTracks().forEach((track) => track.stop());
+    tmpStream = null
+  })
+}
+
+function setCtxSink(id) {console.log(id)
+  ctx.setSinkId(id)
 }
 
 let mic

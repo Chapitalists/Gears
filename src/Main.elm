@@ -41,6 +41,18 @@ port loadSound : String -> Cmd msg
 port soundLoaded : (D.Value -> msg) -> Sub msg
 
 
+port requestDeviceList : () -> Cmd msg
+
+
+port gotDeviceList : (D.Value -> msg) -> Sub msg
+
+
+port changeSink : String -> Cmd msg
+
+
+port gotMaxChannel : (Int -> msg) -> Sub msg
+
+
 port openMic : () -> Cmd msg
 
 
@@ -80,12 +92,14 @@ main =
 type alias Model =
     { connected : Bool
     , currentUrl : Url.Url
+    , hasSinkId : Bool
+    , deviceList : Maybe (List SoundDevice)
     , micState : Maybe ( Bool, String ) -- Recording, FileName
     , soundList : Dict String SoundListType
     , loadedSoundList : List Sound
     , showDirLoad : Bool
     , savesList : Set String
-    , doc : Doc.Model
+    , doc : ( Doc.Model, Maybe Int ) -- maxChannelCount if real channels
     , screenSize : ScreenSize
     , fileExplorerTab : ExTab
     , fileFilter : String
@@ -101,6 +115,27 @@ type SoundListType
     | Directory Bool (Dict String SoundListType)
 
 
+type alias SoundDevice =
+    { label : String, deviceId : String }
+
+
+soundDeviceDecoder : D.Decoder SoundDevice
+soundDeviceDecoder =
+    D.map2 SoundDevice
+        (D.field "label" D.string)
+        (D.field "deviceId" D.string)
+
+
+setMaxChannel : Int -> Model -> Model
+setMaxChannel i m =
+    { m | doc = ( Tuple.first m.doc, Just i ) }
+
+
+rmMaxChannel : Model -> Model
+rmMaxChannel m =
+    { m | doc = ( Tuple.first m.doc, Nothing ) }
+
+
 type alias ScreenSize =
     { width : Int, height : Int }
 
@@ -111,17 +146,23 @@ type ExTab
     | Saves
 
 
-init : ScreenSize -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
-init screen url _ =
+type alias Flags =
+    { hasSinkId : Bool, screen : ScreenSize }
+
+
+init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
+init { hasSinkId, screen } url _ =
     ( Model
         False
         url
+        hasSinkId
+        Nothing
         Nothing
         Dict.empty
         []
         True
         Set.empty
-        (Doc.init <| Just url)
+        ( Doc.init <| Just url, Nothing )
         screen
         Sounds
         ""
@@ -157,6 +198,11 @@ type Msg
     | GotSavesList (Result Http.Error String)
     | GotLoadedFile String (Result Http.Error Doc)
     | SoundLoaded (Result D.Error Sound)
+    | RequestDeviceList
+    | GotDeviceList (Result D.Error (List SoundDevice))
+    | ChangeSink String
+    | VirtualChannels
+    | GotMaxChannel Int
     | RequestOpenMic
     | MicOpened
     | StartMicRec
@@ -514,6 +560,30 @@ update msg model =
                 Ok s ->
                     ( { model | loadedSoundList = s :: model.loadedSoundList }, Cmd.none )
 
+        RequestDeviceList ->
+            ( model, requestDeviceList () )
+
+        GotDeviceList res ->
+            case res of
+                Ok dl ->
+                    ( { model | deviceList = Just dl }, Cmd.none )
+
+                Err error ->
+                    let
+                        _ =
+                            Debug.log (D.errorToString error) res
+                    in
+                    ( model, Cmd.none )
+
+        ChangeSink int ->
+            ( model, changeSink int )
+
+        GotMaxChannel c ->
+            ( setMaxChannel c model, Cmd.none )
+
+        VirtualChannels ->
+            ( rmMaxChannel { model | deviceList = Nothing }, Cmd.none )
+
         RequestOpenMic ->
             ( model, openMic () )
 
@@ -522,7 +592,7 @@ update msg model =
 
         StartMicRec ->
             ( { model | micState = Maybe.map (Tuple.mapFirst <| always True) model.micState }
-            , inputRec ( "", Coll.isEmpty (Doc.getViewing model.doc).gears )
+            , inputRec ( "", Coll.isEmpty (Doc.getViewing <| Tuple.first model.doc).gears )
             )
 
         EndMicRec fileName ->
@@ -694,8 +764,11 @@ update msg model =
 
         DocMsg subMsg ->
             let
+                ( doc, chans ) =
+                    model.doc
+
                 ( newModel, cmd ) =
-                    case ( model.micState, subMsg, model.doc.editor.tool ) of
+                    case ( model.micState, subMsg, doc.editor.tool ) of
                         -- FIXME Absurd... Should be a commonMsg and common ChangedMode
                         ( _, Doc.MobileMsg (Editor.ChangedMode (Editor.ChangeSound _)), _ ) ->
                             ( { model | fileExplorerTab = LoadedSounds }, Cmd.none )
@@ -706,10 +779,10 @@ update msg model =
                         _ ->
                             ( model, Cmd.none )
 
-                ( doc, subCmd ) =
-                    Doc.update subMsg model.doc
+                ( newDoc, subCmd ) =
+                    Doc.update subMsg ( doc, chans )
             in
-            ( { newModel | doc = doc }, Cmd.batch <| cmd :: [ Cmd.map DocMsg subCmd ] )
+            ( { newModel | doc = ( newDoc, chans ) }, Cmd.batch <| cmd :: [ Cmd.map DocMsg subCmd ] )
 
         -- TODO Should dispatch KeysMsg, not specific messages to each part, too big of a dependency
         KeysMsg subMsg ->
@@ -732,18 +805,21 @@ update msg model =
                             case Dict.get code <| keyCodeToShortcut model of
                                 Just press ->
                                     let
+                                        ( doc, chans ) =
+                                            model.doc
+
                                         ( newModel, cmd ) =
-                                            case ( model.micState, press, model.doc.editor.tool ) of
+                                            case ( model.micState, press, doc.editor.tool ) of
                                                 ( Just ( True, name ), Doc.Play, Editor.Play True _ ) ->
                                                     update (EndMicRec name) model
 
                                                 _ ->
                                                     ( m, Cmd.none )
 
-                                        ( doc, docCmd ) =
+                                        ( newDoc, docCmd ) =
                                             Doc.update (Doc.KeyPressed press) newModel.doc
                                     in
-                                    ( { newModel | doc = doc }, Cmd.batch [ c, Cmd.map DocMsg docCmd, cmd ] )
+                                    ( { newModel | doc = ( newDoc, chans ) }, Cmd.batch [ c, Cmd.map DocMsg docCmd, cmd ] )
 
                                 Nothing ->
                                     ( m, c )
@@ -776,10 +852,12 @@ subs { doc } =
     Sub.batch <|
         [ soundLoaded (SoundLoaded << D.decodeValue Sound.decoder)
         , BE.onResize (\w h -> GotScreenSize { width = w, height = h })
+        , gotDeviceList <| GotDeviceList << D.decodeValue (D.list soundDeviceDecoder)
+        , gotMaxChannel GotMaxChannel
         , micOpened <| always MicOpened
         , gotNewSample <| (GotNewSample << D.decodeValue sampleDecoder)
         ]
-            ++ List.map (Sub.map DocMsg) (Doc.subs doc)
+            ++ List.map (Sub.map DocMsg) (Doc.subs <| Tuple.first doc)
             ++ List.map (Sub.map KeysMsg) Keys.subs
 
 
@@ -837,7 +915,8 @@ keyCodeToShortcut model =
             ]
         )
     <|
-        Doc.keyCodeToShortcut model.doc
+        Doc.keyCodeToShortcut <|
+            Tuple.first model.doc
 
 
 keyCodeToDirection : Dict String Msg
@@ -899,6 +978,12 @@ viewFileExplorer model =
             , viewExplorerTab model.fileExplorerTab LoadedSounds "Chargés"
             , viewExplorerTab model.fileExplorerTab Saves "Saves"
             ]
+            :: (if model.hasSinkId then
+                    viewSinkSelect model
+
+                else
+                    none
+               )
             :: Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
                 { label = Input.labelLeft [] <| text "Filtrer\u{202F}:"
                 , text = model.fileFilter
@@ -950,6 +1035,41 @@ viewOpenRefreshButtons openMsg refreshMsg connected =
         , label = text "Actualiser"
         }
     ]
+
+
+viewSinkSelect : Model -> Element Msg
+viewSinkSelect { deviceList } =
+    case deviceList of
+        Nothing ->
+            Input.button []
+                { label = text "Lister Sorties"
+                , onPress = Just RequestDeviceList
+                }
+
+        Just devList ->
+            row [ padding 2, width shrink ]
+                [ html <|
+                    Html.select [ Events.onInput ChangeSink ] <|
+                        List.map
+                            (\{ label, deviceId } ->
+                                Html.option
+                                    ([ Attr.value deviceId ]
+                                        ++ (if deviceId == "default" then
+                                                [ Attr.selected True ]
+                                                --TODO doesnt seem to work
+
+                                            else
+                                                []
+                                           )
+                                    )
+                                    [ Html.text label ]
+                            )
+                            devList
+                , Input.button []
+                    { label = text "X"
+                    , onPress = Just VirtualChannels
+                    }
+                ]
 
 
 viewSounds : Model -> List (Element Msg)

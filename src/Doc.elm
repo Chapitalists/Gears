@@ -41,6 +41,19 @@ type alias Doc =
     }
 
 
+getChannels :
+    Doc
+    -> Maybe Int
+    -> ( Int, Bool ) -- True if real, False if Virtual
+getChannels { channels } maxChan =
+    case maxChan of
+        Nothing ->
+            ( channels, False )
+
+        Just chan ->
+            ( chan, True )
+
+
 init : Maybe Url -> Model
 init url =
     { data = Data.init (Doc Mobile.new "" 0) url
@@ -83,8 +96,8 @@ type Msg
     | InteractMsg (Interact.Msg Interactable Zone)
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg doc =
+update : Msg -> ( Model, Maybe Int ) -> ( Model, Cmd Msg )
+update msg ( doc, maxChan ) =
     -- TODO Maybe clean viewing right here
     case msg of
         EnteredFileName name ->
@@ -198,23 +211,41 @@ update msg doc =
             )
 
         AddContent content ->
-            update (MobileMsg <| Editor.NewGear Editor.defaultAddPos content) doc
+            update
+                (MobileMsg <| Editor.NewGear Editor.defaultAddPos content)
+                ( doc, maxChan )
 
         KeyPressed sh ->
+            let
+                reUp mess =
+                    update mess ( doc, maxChan )
+            in
             case sh of
                 Pack ->
-                    update (MobileMsg <| Editor.PackMsg <| Pack.TogglePack) doc
+                    reUp <|
+                        MobileMsg <|
+                            Editor.PackMsg <|
+                                Pack.TogglePack
 
                 Tool i ->
                     case i of
                         1 ->
-                            update (MobileMsg <| Editor.ChangedTool <| Editor.Play False False) doc
+                            reUp <|
+                                MobileMsg <|
+                                    Editor.ChangedTool <|
+                                        Editor.Play False False
 
                         2 ->
-                            update (MobileMsg <| Editor.ChangedTool <| Editor.Harmonize) doc
+                            reUp <|
+                                MobileMsg <|
+                                    Editor.ChangedTool <|
+                                        Editor.Harmonize
 
                         3 ->
-                            update (MobileMsg <| Editor.ChangedTool <| Editor.Edit False) doc
+                            reUp <|
+                                MobileMsg <|
+                                    Editor.ChangedTool <|
+                                        Editor.Edit False
 
                         _ ->
                             ( doc, Cmd.none )
@@ -222,28 +253,28 @@ update msg doc =
                 Play ->
                     case doc.editor.tool of
                         Editor.Play _ _ ->
-                            update (MobileMsg <| Editor.ToggleEngine) doc
+                            reUp <| MobileMsg <| Editor.ToggleEngine
 
                         Editor.Edit True ->
-                            update (MobileMsg <| Editor.StopGear) doc
+                            reUp <| MobileMsg <| Editor.StopGear
 
                         Editor.Edit False ->
-                            update (MobileMsg <| Editor.PlayGear) doc
+                            reUp <| MobileMsg <| Editor.PlayGear
 
                         _ ->
                             ( doc, Cmd.none )
 
                 Left ->
-                    update (MobileMsg <| Editor.CursorLeft) doc
+                    reUp <| MobileMsg <| Editor.CursorLeft
 
                 Right ->
-                    update (MobileMsg <| Editor.CursorRight) doc
+                    reUp <| MobileMsg <| Editor.CursorRight
 
                 Editor subMsg ->
-                    update (MobileMsg subMsg) doc
+                    reUp <| MobileMsg <| subMsg
 
         DirectionRepeat dir ->
-            update (MobileMsg <| Editor.SvgMsg <| PanSvg.Pan dir) doc
+            update (MobileMsg <| Editor.SvgMsg <| PanSvg.Pan dir) ( doc, maxChan )
 
         MobileMsg subMsg ->
             let
@@ -252,7 +283,7 @@ update msg doc =
 
                 res =
                     Editor.update
-                        ( (Data.current doc.data).channels
+                        ( getChannels (Data.current doc.data) maxChan
                         , Data.getName doc.data
                         )
                         subMsg
@@ -279,7 +310,7 @@ update msg doc =
                                                     doc.viewing
                                                         ++ [ ( Common.getName id mobile, id ) ]
                                                 )
-                                                newDoc
+                                                ( newDoc, maxChan )
 
                                         Editor.UnSolo ->
                                             ( newDoc
@@ -300,7 +331,7 @@ update msg doc =
             )
 
         InteractMsg subMsg ->
-            update (MobileMsg <| Editor.InteractMsg subMsg) doc
+            update (MobileMsg <| Editor.InteractMsg subMsg) ( doc, maxChan )
 
 
 subs : Model -> List (Sub Msg)
@@ -323,8 +354,8 @@ keyCodeToDirection =
     Dict.map (always MobileMsg) Editor.keyCodeToDirection
 
 
-view : Model -> Element Msg
-view doc =
+view : ( Model, Maybe Int ) -> Element Msg
+view ( doc, maxChan ) =
     row [ height fill, width fill ] <|
         (column [ width fill, height fill ]
             ([ viewTop doc
@@ -340,9 +371,9 @@ view doc =
                <|
                 viewContent doc
              ]
-                ++ viewBottom doc
+                ++ viewBottom ( doc, maxChan )
             )
-            :: viewSide doc
+            :: viewSide ( doc, maxChan )
         )
 
 
@@ -431,15 +462,19 @@ viewNav doc =
         )
 
 
-viewBottom : Model -> List (Element Msg)
-viewBottom doc =
-    [ Editor.viewExtraTools MobileMsg doc.editor <| viewChannels doc ]
+viewBottom : ( Model, Maybe Int ) -> List (Element Msg)
+viewBottom ( doc, maxChan ) =
+    [ Editor.viewExtraTools MobileMsg doc.editor <| viewChannels ( doc, maxChan ) ]
 
 
-viewSide : Model -> List (Element Msg)
-viewSide doc =
+viewSide : ( Model, Maybe Int ) -> List (Element Msg)
+viewSide ( doc, maxChan ) =
+    let
+        channels =
+            Tuple.first <| getChannels (Data.current doc.data) maxChan
+    in
     List.map (Element.map MobileMsg) <|
-        Editor.viewDetails (Data.current doc.data).channels doc.editor <|
+        Editor.viewDetails channels doc.editor <|
             getViewing doc
 
 
@@ -459,8 +494,8 @@ viewComment { data } =
         }
 
 
-viewChannels : Model -> Element Msg
-viewChannels { data } =
+viewChannels : ( Model, Maybe Int ) -> Element Msg
+viewChannels ( { data }, maxChan ) =
     Input.text
         [ centerX
         , paddingXY 4 0
