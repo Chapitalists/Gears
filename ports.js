@@ -194,7 +194,7 @@ function engine(o) {
         scheduler.stop()
         break;
     case "playPause" :
-        scheduler.startThenPlay(o.gears)
+        scheduler.startThenPlay(o.gears, o.mixRealChannels)
         break;
     case "mute" :
         model = o.beadIndexes.reduce(

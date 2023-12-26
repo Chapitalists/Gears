@@ -43,32 +43,33 @@ playingIds (E { playing }) =
     playing
 
 
-setPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
-setPlaying l coll (E e) =
+setPlaying : Bool -> List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
+setPlaying b l coll (E e) =
     ( E { e | playing = l }
     , if List.isEmpty l then
         []
 
       else
-        [ playPause e.parentUid coll <| List.filter (\el -> not <| List.member el l) e.playing ]
+        [ playPause b e.parentUid coll <| List.filter (\el -> not <| List.member el l) e.playing ]
     )
 
 
-addPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
-addPlaying l coll (E e) =
+addPlaying : Bool -> List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
+addPlaying b l coll (E e) =
     ( E { e | playing = e.playing ++ l }
     , if List.isEmpty l then
         []
 
       else
-        [ playPause e.parentUid coll l ]
+        [ playPause b e.parentUid coll l ]
     )
 
 
-playPause : String -> Coll Geer -> List (Id Geer) -> E.Value
-playPause parentUid coll els =
+playPause : Bool -> String -> Coll Geer -> List (Id Geer) -> E.Value
+playPause realMix parentUid coll els =
     E.object
         [ ( "action", E.string "playPause" )
+        , ( "mixRealChannels", E.bool realMix )
         , ( "gears", E.list (encodeGear True parentUid coll) els )
         ]
 

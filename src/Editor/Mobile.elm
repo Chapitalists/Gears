@@ -282,7 +282,7 @@ type Collaring
     | Div Sound Int
 
 
-update : ( Int, String ) -> Msg -> ( Model, Mobeel ) -> Return
+update : ( ( Int, Bool ), String ) -> Msg -> ( Model, Mobeel ) -> Return
 update chanName msg ( model, mobile ) =
     let
         return =
@@ -343,6 +343,7 @@ update chanName msg ( model, mobile ) =
                         let
                             ( engine, v ) =
                                 Engine.addPlaying
+                                    (Tuple.second <| Tuple.first chanName)
                                     (Motor.getMotored mobile.motor mobile.gears)
                                     mobile.gears
                                     model.engine
@@ -361,7 +362,7 @@ update chanName msg ( model, mobile ) =
                             toggleRecord <|
                                 Tuple.pair
                                     (if rec then
-                                        Tuple.first chanName
+                                        Tuple.first <| Tuple.first chanName
 
                                      else
                                         -1
@@ -389,12 +390,15 @@ update chanName msg ( model, mobile ) =
             case model.tool of
                 Edit _ ->
                     let
+                        ( ( _, realChan ), _ ) =
+                            chanName
+
                         demutedMobile =
                             model.edit
                                 |> List.foldl (\id mob -> CommonData.updateWheel ( id, [] ) (Wheel.Mute False) mob) mobile
 
                         ( engine, v ) =
-                            Engine.addPlaying model.edit demutedMobile.gears model.engine
+                            Engine.addPlaying realChan model.edit demutedMobile.gears model.engine
                     in
                     { return | model = { model | engine = engine, tool = Edit True }, toEngine = v }
 
@@ -2317,7 +2321,7 @@ computeTouch weave gears =
 -- TODO Maybe forward straight away to Pack if event.item is IPack ?
 
 
-manageInteractEvent : ( Int, String ) -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
+manageInteractEvent : ( ( Int, Bool ), String ) -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
 manageInteractEvent chanName event model mobile =
     let
         return =
@@ -2664,7 +2668,7 @@ interactPlay on event model mobile =
                     Motor.remove cuts mobile.motor mobile.gears on
 
                 ( engine, v ) =
-                    Engine.setPlaying motored mobile.gears model.engine
+                    Engine.setPlaying False motored mobile.gears model.engine
             in
             { return
                 | model = { model | dragging = NoDrag, engine = engine }
@@ -2720,7 +2724,7 @@ interactPlay on event model mobile =
                     Motor.add l mobile.gears <| Engine.playingIds model.engine
 
                 ( engine, v ) =
-                    Engine.addPlaying toPlay mobile.gears model.engine
+                    Engine.addPlaying False toPlay mobile.gears model.engine
             in
             { return
                 | model = { model | dragging = NoDrag, engine = engine }
@@ -2737,7 +2741,7 @@ interactPlay on event model mobile =
             return
 
 
-interactHarmonize : ( Int, String ) -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
+interactHarmonize : ( ( Int, Bool ), String ) -> Interact.Event Interactable Zone -> Model -> Mobeel -> Return
 interactHarmonize chanName event model mobile =
     let
         return =

@@ -14,6 +14,7 @@ let scheduler = {
     interval : playPauseLatency * 250
   , lookAhead : 2000
   , running : false
+  , initialized : false
   , intervalId : -1
   , startTime : -1
 
@@ -26,15 +27,29 @@ let scheduler = {
     return t + this.startTime
   }
 
-  , startThenPlay(topGears) {
+  , startThenPlay(topGears, isMix) {
     if (this.running) this.playPause(topGears)
 
     else {
       this.running = true
 
+      if (!this.initialized) { // mix initialization
+        this.isMix = isMix
+        if (isMix) auxGains = []
+      }
+
       ctx.resume().then(() => {
         this.startTime = ctx.currentTime
-        this.playPause(topGears)
+        this.playPause(topGears) // prepare all, creates auxGains
+
+        if (this.isMix && !this.initialized) { // has to prepare merger
+          ctx.destination.channelCount = auxGains.length
+          this.merger = ctx.createChannelMerger(auxGains.length)
+          this.merger.connect(masterGain)
+          auxGains.map((v,i) => v.connect(this.merger, 0, i))
+          this.initialized = true
+        }
+
         this.intervalId = setInterval(() => this.work(), this.interval)
         this.work()
         this.nextRequestId = requestAnimationFrame(() => this.draw())
@@ -49,6 +64,12 @@ let scheduler = {
     cancelAnimationFrame(this.nextRequestId)
 
     this.running = false
+    if (this.isMix) {
+      auxGains = []
+      this.merger = null
+      this.isMix = false
+      this.initialized = false
+    }
 
     let stopWheel = model => {
       if (model.soundPath) {
@@ -93,11 +114,22 @@ let scheduler = {
     }
 
     let gain = ctx.createGain()
-      , auxed = false
-    gain.connect(destination)
-    if (!parentAuxed && model.channel && auxGains[model.channel]) {
-      gain.connect(auxGains[model.channel])
+      , auxed = parentAuxed
+
+    if (destination === null) { // topGear mixing
+      gain.channelCountMode = 'explicit'
+      gain.channelCount = 1 // downMix to mono
+      let channel = (model.channel || 1) - 1 // channel 0 defaults to 1, indexes are from 0
+        , aux = auxGains[channel] || ctx.createGain()
+      gain.connect(aux)
+      auxGains[channel] = aux
       auxed = true
+    } else {
+      gain.connect(destination)
+      if (!parentAuxed && model.channel && auxGains[model.channel]) {
+        gain.connect(auxGains[model.channel])
+        auxed = true
+      }
     }
     model.gainNode = gain
     model.updateVolume = function() {
@@ -198,7 +230,7 @@ let scheduler = {
     let t = this.getTime() + playPauseLatency
     for (let model of topGears) {
       if (!this.playingTopModels[model.id])
-        this.playingTopModels[model.id] = this.prepare(t, model, masterGain, 1, 1)
+        this.playingTopModels[model.id] = this.prepare(t, model, this.isMix ? null : masterGain, 1, 1)
       model = this.playingTopModels[model.id]
 
       let running = model.playPauseTimes[model.playPauseTimes.length - 1].play
