@@ -1,5 +1,6 @@
 // TODO to prevent rounding, all calculations making time progress should be in scheduler timespace
 // presently, scheduling values get sometimes incremented by values coming from durations
+// Or do everything in percentage ?
 
 const playPauseLatency = .1
     , ctx = new AudioContext()
@@ -103,7 +104,7 @@ let scheduler = {
     // It’s bad!! Should be in proto ?
     model.lastScheduledTime = t
     model.playPauseTimes = [
-        {date : 0, play : false, percent : 0, done : true} // used by draw
+        {date : 0, play : false, percent : 0, done : true} // used by draw, percent of animation loop
       , {date : t, play : false, percent : 0, done : true} // and one at t to prevent past scheduling warn
     ]
     model.lastPlayPauseIndexAt = function(now) {
@@ -296,7 +297,7 @@ let scheduler = {
               for (let pl of model.players) {
                 if (pl.startTime <= t && t <= pl.stopTime) {
                   pl.node.stop(this.toCtxTime(t))
-                  nextState.percent = clampPercent((t - pl.startTime) / model.length + pl.startOffsetDur / model.duration - model.startPercent)
+                  nextState.percent = clampPercent((t - pl.startTime) / model.length + pl.startContentPercent - model.startPercent)
                 }
                 if (pl.startTime > t) pl.node.stop()
               }
@@ -341,9 +342,9 @@ let scheduler = {
           } else { // Normal pause
 
             if (model.soundPath) {
-              if (nextState.date <= t) { // No need to play more, even partially
-
-                nextState.percent = clampPercent(0 - model.startPercent)
+              if (nextState.date == t) { // No need to play more, even partially
+// Impossible unless bead scheduling ? Then it’s 0 animation loop percent
+                nextState.percent = 0
 
               } else {
                 let newPlayers = []
@@ -358,7 +359,7 @@ let scheduler = {
                 let length = nextState.date - startTime
                   , duration = length * model.rate
 
-                newPlayers.push(this.schedulePlayer(startTime, model, model.loopStartDur, duration, length))
+                newPlayers.push(this.schedulePlayer(startTime, model, 0, duration, length))
 
                 model.players = model.players.concat(newPlayers)
 
@@ -428,8 +429,7 @@ let scheduler = {
           let contentPercent = clampPercent(lastState.percent + model.startPercent)
 
           if (model.soundPath) {
-            let offsetDur = contentPercent * model.duration + model.loopStartDur
-              , newPlayer = this.scheduleStart(t, model, offsetDur)
+            let newPlayer = this.scheduleStart(t, model, contentPercent)
             model.players.push(newPlayer)
             t = newPlayer.stopTime
           }
@@ -477,15 +477,15 @@ let scheduler = {
   }
   , scheduleLoop(t, maxT, model) {
     return [
-      this.schedulePlayer(t, model, model.loopStartDur, model.duration, model.length)
+      this.schedulePlayer(t, model, 0, model.duration, model.length)
     ].concat(t + model.length >= maxT ? [] : this.scheduleLoop(t + model.length, maxT, model))
   }
-  , scheduleStart(t, model, offsetDur) {
-    let dur = model.loopEndDur - offsetDur
+  , scheduleStart(t, model, contentPercent) {
+    let dur = (1 - contentPercent) * model.duration
       , len = dur / model.rate
-    return this.schedulePlayer(t, model, offsetDur, dur, len)
+    return this.schedulePlayer(t, model, contentPercent, dur, len)
   }
-  , schedulePlayer(t, model, startOffset, duration, length) {
+  , schedulePlayer(t, model, contentPercent, duration, length) {
     let player = ctx.createBufferSource()
       , ctxStartTime = t + this.startTime
       , ctxStopTime = ctxStartTime + length
@@ -493,13 +493,13 @@ let scheduler = {
     player.playbackRate.value = model.rate // TODO to go realTime rate, maybe use setValueAtTime
     player.connect(model.pitcher || model.gainNode)
     player.onended = () => model.freePlayer(t)
-    player.start(ctxStartTime, startOffset, duration)
+    player.start(ctxStartTime, contentPercent * model.duration + model.loopStartDur, duration)
     player.stop(ctxStopTime) // TODO stop and duration in schedulePlayer do the same thing, is it good ? Does it compensate for inexact buffer.duration ? See upward in prepare sound
     return {
         node : player
       , startTime : t
       , stopTime : t + length
-      , startOffsetDur : startOffset
+      , startContentPercent : contentPercent
     }
   }
 
