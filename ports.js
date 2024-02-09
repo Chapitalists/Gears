@@ -11,7 +11,7 @@ if (app.ports.loadSound) app.ports.loadSound.subscribe(loadSound)
 if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
 if (app.ports.toggleRecord) app.ports.toggleRecord.subscribe(toggleRecord)
 if (app.ports.requestSoundDraw) app.ports.requestSoundDraw.subscribe(drawSound)
-if (app.ports.requestCutSample) app.ports.requestCutSample.subscribe(cutSample)
+if (app.ports.requestBounce) app.ports.requestBounce.subscribe(bounce)
 if (app.ports.requestDeviceList) app.ports.requestDeviceList.subscribe(getDeviceList)
 if (app.ports.changeSink) app.ports.changeSink.subscribe(setCtxSink)
 if (app.ports.openMic) app.ports.openMic.subscribe(openMic)
@@ -162,29 +162,49 @@ function inputRec(args) {
   }
 }
 
-function cutSample(infos) {
-    if (!buffers[infos.fromSoundPath]) {console.error(infos.fromFileName + " ain’t loaded, cannot cut");return;}
+async function bounce(infos) {
+  if (!buffers[infos.fromSoundPath]) {
+    console.error(infos.fromFileName + " ain’t loaded, cannot cut")
+    return;
+  }
 
-    let buf = buffers[infos.fromSoundPath]
-      // TODO maybe round ?
-      , start = infos.percents[0] * buf.length - 1
-      , end = infos.percents[1] * buf.length + 1
-      , newBuf = new AudioBuffer(
-        { length : end - start
-        , numberOfChannels : buf.numberOfChannels
-        , sampleRate : buf.sampleRate
-        })
-
-    for (let i = 0 ; i < buf.numberOfChannels ; i++) {
-        let chan = buf.getChannelData(i).slice(start, end)
-        newBuf.copyToChannel(chan, i)
-    }
-
+  let buf = buffers[infos.fromSoundPath]
+    , pitcher = null
+    // TODO maybe round ?
+    , start = infos.percents[0] * buf.length - 1
+    , end = infos.percents[1] * buf.length + 1
+    , samplesFrom = end - start
+    , samplesTo = infos.length * buf.sampleRate
+    , rate = samplesFrom / samplesTo
+    , ctx = new OfflineAudioContext(
+      { length : samplesTo
+      , numberOfChannels : buf.numberOfChannels
+      , sampleRate : buf.sampleRate
+      })
+    , player = ctx.createBufferSource()
+  player.buffer = buf
+  player.loopStart = buf.duration * infos.percents[0]
+  player.loopEnd = buf.duration * infos.percents[1]
+  player.loop = true
+  player.playbackRate.value = rate
+  
+  if (infos.stretch) {
+    await ctx.audioWorklet.addModule("./lib/phase-vocoder.js")
+    pitcher = new AudioWorkletNode(ctx, 'phase-vocoder-processor')
+    pitcher.parameters.get('pitchFactor').value = 1 / rate
+    pitcher.connect(ctx.destination)
+  }
+  player.connect(pitcher || ctx.destination)
+  player.start(0, buf.duration * infos.startPercent)
+  
+  ctx.startRendering().then(newBuf => {
     app.ports.gotNewSample.send(
-        { type : "cut"
-        , from : infos.fromSoundPath
-        , file : new File([audioBufferToWav(newBuf)], infos.newFileName + ".wav", {type: "audio/wav"})
-        })
+      { type : "cut"
+      , from : infos.fromSoundPath
+      , file : new File([audioBufferToWav(newBuf)], infos.newFileName + ".wav", {type: "audio/wav"})
+      }
+    )
+  })
 }
 
 function engine(o) {

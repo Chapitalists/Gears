@@ -47,7 +47,15 @@ port toggleRecord : ( Int, String ) -> Cmd msg
 port gotRecord : (D.Value -> msg) -> Sub msg
 
 
-port requestCutSample : { fromSoundPath : String, newFileName : String, percents : ( Float, Float ) } -> Cmd msg
+port requestBounce :
+    { fromSoundPath : String
+    , newFileName : String
+    , percents : ( Float, Float )
+    , startPercent : Float
+    , length : Float
+    , stretch : Bool
+    }
+    -> Cmd msg
 
 
 
@@ -898,7 +906,23 @@ update chanName msg ( model, mobile ) =
                     in
                     case Wheel.getContent g of
                         Content.S s ->
-                            { return | cmd = requestCutSample { fromSoundPath = Sound.getPath s, newFileName = model.newSampleName, percents = Wheel.getLoopPercents g } }
+                            { return
+                                | cmd =
+                                    requestBounce
+                                        { fromSoundPath = Sound.getPath s
+                                        , newFileName = model.newSampleName
+                                        , percents = Wheel.getLoopPercents g
+                                        , startPercent = g.wheel.startPercent
+                                        , length = Mobile.getLength g mobile.gears
+                                        , stretch =
+                                            case g.wheel.timeMode of
+                                                Wheel.Rate ->
+                                                    False
+
+                                                Wheel.TimeStretch ->
+                                                    True
+                                        }
+                            }
 
                         _ ->
                             return
@@ -1933,7 +1957,7 @@ viewEditDetails channels model mobile =
                                         else
                                             rgb 0 0 0
                                     ]
-                                    { label = text "Couper en tant que"
+                                    { label = text "Bounce"
                                     , onPress =
                                         if ok then
                                             Just <| CutNewSample
