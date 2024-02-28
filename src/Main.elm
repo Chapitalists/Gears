@@ -4,6 +4,7 @@ import Browser
 import Browser.Events as BE
 import Browser.Navigation as Nav
 import Coll exposing (Coll, Id)
+import Color
 import Data.Collar as Collar
 import Data.Content as Content
 import Data.Wheel as Wheel
@@ -13,6 +14,7 @@ import Editor.Interacting as Interacting
 import Editor.Mobile as Editor
 import Element exposing (..)
 import Element.Background as Bg
+import Element.Border as Border
 import Element.Events exposing (..)
 import Element.Font as Font
 import Element.Input as Input
@@ -107,6 +109,7 @@ type alias Model =
     , libPanel : Panel
     , mode : Mode
     , keys : Keys.State
+    , creditsOpened : Bool
     }
 
 
@@ -171,6 +174,7 @@ init { hasSinkId, screen } url _ =
         (Panel Panel.Shown Panel.Left 200)
         NoMode
         Keys.init
+        False
     , Cmd.batch [ fetchSoundList url, fetchSavesList url ]
     )
 
@@ -224,6 +228,7 @@ type Msg
     | PanelMsg Panel.Msg
     | DocMsg Doc.Msg
     | KeysMsg Keys.Msg
+    | Credits Bool
     | NOOP
 
 
@@ -846,6 +851,9 @@ update msg model =
                 ( { model | keys = state }, Cmd.none )
                 events
 
+        Credits open ->
+            ( { model | creditsOpened = open }, Cmd.none )
+
         NOOP ->
             ( model, Cmd.none )
 
@@ -947,6 +955,23 @@ keyCodeToDirection =
 
 view : Model -> Browser.Document Msg
 view model =
+    let
+        creditsView =
+            if model.creditsOpened then
+                viewCredits
+
+            else
+                Input.button
+                    [ alignBottom
+                    , alignRight
+                    , Font.size 12
+                    , Font.underline
+                    , padding 6
+                    ]
+                    { onPress = Just <| Credits True
+                    , label = text "Credits"
+                    }
+    in
     { title =
         "Gears !"
             ++ (if model.connected then
@@ -956,7 +981,8 @@ view model =
                     " - DISCONNECTED"
                )
     , body =
-        [ layout [] <|
+        [ layout [ inFront creditsView ] <|
+            -- Don’t know why but it doesn’t work like I want when using el
             row
                 [ height <| px model.screenSize.height
                 , width <| px model.screenSize.width
@@ -982,12 +1008,38 @@ viewFileExplorer model =
                 _ ->
                     rgb 0.5 0.5 0.5
     in
-    column [ height fill, Bg.color bgColor, Font.color (rgb 1 1 1), Font.size 16, spacing 20, padding 10 ] <|
-        (row [ Font.size 14, spacing 20 ]
-            [ viewExplorerTab model.fileExplorerTab Sounds "Sons"
-            , viewExplorerTab model.fileExplorerTab LoadedSounds "Chargés"
-            , viewExplorerTab model.fileExplorerTab Saves "Saves"
-            ]
+    column
+        [ height fill
+        , Bg.color bgColor
+        , Font.color (rgb 1 1 1)
+        , Font.size 16
+        , spacing 20
+        , padding 10
+        ]
+    <|
+        (roundButton 40 False Color.lightPurple (tabImage Sounds 40 40 "")
+            :: roundButton 100 True Color.lightOrange (tabImage Saves 100 100 "")
+            :: Input.radioRow
+                [ moveUp 1
+                , spacing 10
+                , Border.widthEach
+                    { bottom = 3
+                    , top = 0
+                    , left = 0
+                    , right = 0
+                    }
+                , Border.color
+                    (rgb 0.8 0.5 0.2)
+                ]
+                { onChange = ChangedExplorerTab
+                , selected = Just model.fileExplorerTab
+                , label = Input.labelHidden "Explorer Tabs"
+                , options =
+                    [ viewExplorerOption Sounds
+                    , viewExplorerOption LoadedSounds
+                    , viewExplorerOption Saves
+                    ]
+                }
             :: (if model.hasSinkId then
                     viewSinkSelect model
 
@@ -1013,18 +1065,25 @@ viewFileExplorer model =
         )
 
 
-viewExplorerTab : ExTab -> ExTab -> String -> Element Msg
-viewExplorerTab seled tab name =
-    Input.button
-        (if seled == tab then
-            [ padding 5, Bg.color (rgb 0.2 0.2 0.2) ]
+viewExplorerOption : ExTab -> Input.Option ExTab Msg
+viewExplorerOption tab =
+    let
+        size =
+            40
+    in
+    Input.optionWith tab <|
+        \state ->
+            roundButton size (state == Input.Selected) Color.lightBlue <|
+                tabImage tab size size <|
+                    case tab of
+                        Sounds ->
+                            "Sons LOCALIZE"
 
-         else
-            [ padding 5 ]
-        )
-        { label = text name
-        , onPress = Just <| ChangedExplorerTab tab
-        }
+                        LoadedSounds ->
+                            "Chargés LOCALIZE"
+
+                        Saves ->
+                            "Saves LOCALIZE"
 
 
 viewOpenRefreshButtons : Msg -> Msg -> Bool -> List (Element Msg)
@@ -1399,3 +1458,144 @@ cutExtension fullName =
             String.split "." fullName
     in
     String.join "." <| List.take (List.length l - 1) l
+
+
+viewCredits : Element Msg
+viewCredits =
+    el [ padding 40, width fill, height fill ] <|
+        el
+            [ width fill
+            , height fill
+            , Bg.color (rgba 0.6 0.6 0.6 0.9)
+            , Border.width 2
+            , Border.rounded 10
+            , inFront <|
+                el
+                    [ alignTop
+                    , alignRight
+                    , moveDown 20
+                    , moveLeft 20
+                    ]
+                <|
+                    roundButton 40 False Color.lightRed <|
+                        Input.button
+                            [ Font.size 40
+                            , moveUp 4
+                            , moveLeft 1
+                            , Font.center
+                            ]
+                            { onPress = Just <| Credits False
+                            , label = text "🗙"
+                            }
+            ]
+        <|
+            row [ centerX, centerY ]
+                (credits
+                    |> List.map
+                        (\( str, url ) ->
+                            newTabLink
+                                [ Font.underline ]
+                                { url = url, label = text str }
+                        )
+                )
+
+
+credits : List ( String, String )
+credits =
+    [ ( "Book by Made by Made from Noun Project (CC BY 3.0)"
+      , "https://thenounproject.com/browse/icons/term/book/"
+      )
+    ]
+
+
+tabImage : ExTab -> Int -> Int -> String -> Element msg
+tabImage tab x y desc =
+    el
+        [ width <| px x
+        , height <| px y
+        , clip
+        ]
+    <|
+        image []
+            { description = desc -- TODO localize
+            , src =
+                case tab of
+                    Sounds ->
+                        "./icons/bookshelf-noun-books-1336202.svg"
+
+                    LoadedSounds ->
+                        "./icons/bookopened-noun-book-1360734.svg"
+
+                    Saves ->
+                        "./icons/bookfav-noun-books-1368335.svg"
+            }
+
+
+roundButton : Int -> Bool -> Color.Color -> Element msg -> Element msg
+roundButton sizeEl seled bg =
+    let
+        sizeIn =
+            ceiling <| toFloat sizeEl * sqrt 2.0
+
+        stroke =
+            ceiling <|
+                toFloat sizeIn
+                    / 30
+
+        size =
+            sizeIn + stroke * 2
+
+        sizeOut =
+            size + stroke * 2
+
+        selFactor =
+            if seled then
+                1
+
+            else
+                0
+    in
+    el
+        [ Border.width 1
+        , Border.color (rgba 0 0 0 0)
+        , mouseDown [ Border.color (rgb 0 0 0) ]
+        , Border.rounded sizeOut
+        ]
+        << el
+            [ Border.color (rgba 0.8 0.5 0.2 selFactor)
+            , paddingEach
+                { bottom = stroke * selFactor
+                , left = 0
+                , right = 0
+                , top = 0
+                }
+            , Border.widthEach
+                { bottom = stroke * (1 - selFactor)
+                , left = stroke
+                , right = stroke
+                , top = stroke
+                }
+            , Border.roundEach
+                { topLeft = size
+                , topRight = size
+                , bottomLeft = size * (1 - selFactor)
+                , bottomRight = size * (1 - selFactor)
+                }
+            , mouseDown [ Border.color (rgba 0.8 0.5 0.2 selFactor) ]
+            , mouseOver [ Border.color (rgb (0.8 * selFactor) (0.5 * selFactor) (0.2 * selFactor)) ]
+            ]
+        << el
+            [ Bg.color <| colToEl bg
+            , width <| px sizeIn
+            , height <| px sizeIn
+            , Border.color (rgb 0 0 0)
+            , Border.width stroke
+            , Border.rounded sizeIn
+            , clip
+            , padding <| (sizeIn - sizeEl) // 2
+            ]
+
+
+colToEl : Color.Color -> Color
+colToEl =
+    fromRgb << Color.toRgba
