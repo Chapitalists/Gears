@@ -524,7 +524,11 @@ update chanName msg ( model, mobile ) =
                     Coll.insertTellId (Mobile.gearFromContent content p) mobile.gears
 
                 svg =
-                    PanSvg.centerZoom (Mobile.gearPosSize id gears) model.svg
+                    if Coll.isEmpty mobile.gears then
+                        PanSvg.centerZoom (Mobile.gearPosSize id gears) model.svg
+
+                    else
+                        model.svg
             in
             { return
                 | mobile = { mobile | gears = gears }
