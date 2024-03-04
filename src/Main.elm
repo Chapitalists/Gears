@@ -110,6 +110,7 @@ type alias Model =
     , mode : Mode
     , keys : Keys.State
     , creditsOpened : Bool
+    , soundLoadHack : Maybe (List String)
     }
 
 
@@ -175,6 +176,7 @@ init { hasSinkId, screen } url _ =
         NoMode
         Keys.init
         False
+        Nothing
     , Cmd.batch [ fetchSoundList url, fetchSavesList url ]
     )
 
@@ -567,7 +569,25 @@ update msg model =
                     ( model, Cmd.none )
 
                 Ok s ->
-                    ( { model | loadedSoundList = s :: model.loadedSoundList }, Cmd.none )
+                    let
+                        newList =
+                            if List.any ((==) s) model.loadedSoundList then
+                                model.loadedSoundList
+
+                            else
+                                s :: model.loadedSoundList
+
+                        ( doc, cmd ) =
+                            Doc.update
+                                (Doc.MobileMsg <| Editor.GotDraggedSound s)
+                                model.doc
+                    in
+                    ( { model
+                        | loadedSoundList = newList
+                        , doc = ( doc, Tuple.second model.doc )
+                      }
+                    , Cmd.map DocMsg cmd
+                    )
 
         RequestDeviceList ->
             ( model, requestDeviceList () )
@@ -787,6 +807,20 @@ update msg model =
 
                         ( Just ( True, name ), Doc.MobileMsg Editor.ToggleEngine, Editor.Play True _ ) ->
                             update (EndMicRec name) model
+
+                        -- FIXME Hack sound lib drag detection
+                        ( _, Doc.InteractMsg (Interact.StartClick (Interacting.ISoundLib id) _ _ _), _ ) ->
+                            ( { model | soundLoadHack = Just id }, Cmd.none )
+
+                        ( _, Doc.MobileMsg (Editor.InteractMsg (Interact.ClickMove _ _ _)), _ ) ->
+                            case model.soundLoadHack of
+                                Just id ->
+                                    ( { model | soundLoadHack = Nothing }
+                                    , loadSound <| String.join "/" id
+                                    )
+
+                                Nothing ->
+                                    ( model, Cmd.none )
 
                         _ ->
                             ( model, Cmd.none )
@@ -1237,7 +1271,7 @@ viewSoundInLib : Model -> String -> List String -> Bool -> Bool -> Element Msg
 viewSoundInLib model s id playing loading =
     row [ spacing 5 ]
         ([ Input.button
-            [ Font.color <|
+            ((Font.color <|
                 if List.any ((==) <| String.join "/" id) <| List.map Sound.getPath model.loadedSoundList then
                     rgb 0.2 0.8 0.2
 
@@ -1246,7 +1280,11 @@ viewSoundInLib model s id playing loading =
 
                 else
                     rgb 1 1 1
-            ]
+             )
+                :: (List.map (Element.htmlAttribute >> (Element.mapAttribute <| DocMsg << Doc.InteractMsg)) <|
+                        Interact.draggableEvents (Interacting.ISoundLib id)
+                   )
+            )
             { label = text <| cutExtension s
             , onPress =
                 Just <|
