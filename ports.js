@@ -44,7 +44,7 @@ function drawSound(sv) {
 
 function loadSound(soundPath) {
   if (buffers[soundPath]) {
-    app.ports.soundLoaded.send(soundPath + ' already Loaded')
+    loadOk(soundPath)
   } else {
     createBuffer(soundPath).then(b => {
       buffers[soundPath] = b
