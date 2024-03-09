@@ -92,7 +92,7 @@ type Msg
     | AddContent Conteet
     | KeyPressed Shortcut
     | DirectionRepeat PanSvg.Direction
-    | MobileMsg Editor.Msg
+    | MobileMsg Editor.Msg -- FIXME Same as Mobile.InteractMsg ? Or What For ?
     | InteractMsg (Interact.Msg Interactable Zone)
 
 

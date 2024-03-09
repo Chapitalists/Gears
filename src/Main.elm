@@ -1001,7 +1001,7 @@ view model =
                     , alignRight
                     , Font.size 12
                     , Font.underline
-                    , padding (marginBase * 2)
+                    , padding marginBase
                     ]
                     { onPress = Just <| Credits True
                     , label = text "Credits"
@@ -1016,7 +1016,18 @@ view model =
                     " - DISCONNECTED"
                )
     , body =
-        [ layout [ inFront creditsView ] <|
+        [ layoutWith
+            { options =
+                [ focusStyle
+                    { borderColor = Nothing
+                    , backgroundColor = Nothing
+                    , shadow = Nothing
+                    }
+                ]
+            }
+            [ inFront creditsView ]
+          <|
+            -- Don’t know why but it doesn’t work like I want when using el
             row
                 [ height <| px model.screenSize.height
                 , width <| px model.screenSize.width
