@@ -467,23 +467,31 @@ viewTop doc =
 
 viewNav : Model -> Element Msg
 viewNav doc =
-    row
-        [ width fill, padding 10, spacing 5 ]
-    <|
-        (List.intersperse (text ">") <|
-            Input.button []
-                { label = text "Racine"
-                , onPress = Just <| View []
-                }
-                :: List.indexedMap
-                    (\i ( name, _ ) ->
-                        Input.button []
-                            { label = text name
-                            , onPress = Just <| View <| List.take (i + 1) doc.viewing
-                            }
-                    )
-                    doc.viewing
-        )
+    case doc.viewing of
+        [] ->
+            none
+
+        _ ->
+            row
+                [ width fill, spacing 5 ]
+            <|
+                (List.intersperse (text ">") <|
+                    Input.button [ centerX ]
+                        { label = text "⦾"
+                        , onPress = Just <| View []
+                        }
+                        :: List.indexedMap
+                            (\i ( name, _ ) ->
+                                Input.button []
+                                    { label = text name
+                                    , onPress =
+                                        Just <|
+                                            View <|
+                                                List.take (i + 1) doc.viewing
+                                    }
+                            )
+                            doc.viewing
+                )
 
 
 viewBottom : ( Model, Maybe Int ) -> List (Element Msg)
