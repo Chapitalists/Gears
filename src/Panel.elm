@@ -56,9 +56,23 @@ view panelMsg size p subView =
                     , center = centerX
                     , arrowOut = arrowDown
                     , arrowIn = arrowUp
-                    , attr = width <| px size.width
+                    , attr = [ width <| px (size.width - marginBase * 2) ]
                     , layout = column
                     , arrowFirst = False
+                    , border =
+                        [ B.roundEach
+                            { topRight = 0
+                            , bottomRight = roundBase
+                            , topLeft = 0
+                            , bottomLeft = roundBase
+                            }
+                        , B.widthEach
+                            { top = 0
+                            , bottom = strokeBase
+                            , right = strokeBase
+                            , left = strokeBase
+                            }
+                        ]
                     }
 
                 Bottom ->
@@ -67,9 +81,23 @@ view panelMsg size p subView =
                     , center = centerX
                     , arrowOut = arrowUp
                     , arrowIn = arrowDown
-                    , attr = width <| px size.width
+                    , attr = [ width <| px (size.width - marginBase * 2) ]
                     , layout = column
                     , arrowFirst = True
+                    , border =
+                        [ B.roundEach
+                            { topRight = roundBase
+                            , bottomRight = 0
+                            , topLeft = roundBase
+                            , bottomLeft = 0
+                            }
+                        , B.widthEach
+                            { top = strokeBase
+                            , bottom = 0
+                            , right = strokeBase
+                            , left = strokeBase
+                            }
+                        ]
                     }
 
                 Right ->
@@ -78,9 +106,23 @@ view panelMsg size p subView =
                     , center = centerY
                     , arrowOut = arrowLeft
                     , arrowIn = arrowRight
-                    , attr = height <| px size.height
+                    , attr = [ height <| px (size.height - marginBase * 2) ]
                     , layout = row
                     , arrowFirst = True
+                    , border =
+                        [ B.roundEach
+                            { topRight = 0
+                            , bottomRight = 0
+                            , topLeft = roundBase
+                            , bottomLeft = roundBase
+                            }
+                        , B.widthEach
+                            { top = strokeBase
+                            , bottom = strokeBase
+                            , right = 0
+                            , left = strokeBase
+                            }
+                        ]
                     }
 
                 Left ->
@@ -89,9 +131,23 @@ view panelMsg size p subView =
                     , center = centerY
                     , arrowOut = arrowRight
                     , arrowIn = arrowLeft
-                    , attr = height <| px (size.height - marginBase * 2)
+                    , attr = [ height <| px (size.height - marginBase * 2) ]
                     , layout = row
                     , arrowFirst = False
+                    , border =
+                        [ B.roundEach
+                            { topRight = roundBase
+                            , bottomRight = roundBase
+                            , topLeft = 0
+                            , bottomLeft = 0
+                            }
+                        , B.widthEach
+                            { top = strokeBase
+                            , bottom = strokeBase
+                            , right = strokeBase
+                            , left = 0
+                            }
+                        ]
                     }
     in
     case p.state of
@@ -114,24 +170,14 @@ view panelMsg size p subView =
             in
             inFront <|
                 kit.layout
-                    [ kit.alignSide
-                    , kit.attr
-                    , kit.center
-                    , B.roundEach
-                        { topRight = roundBase
-                        , bottomRight = roundBase
-                        , topLeft = 0
-                        , bottomLeft = 0
-                        }
-                    , B.widthEach
-                        { top = strokeBase
-                        , bottom = strokeBase
-                        , right = strokeBase
-                        , left = 0
-                        }
-                    , B.color <| toEl borderBase
-                    , Bg.color <| toEl bgBase
-                    ]
+                    ([ kit.alignSide
+                     , kit.center
+                     , B.color <| toEl borderBase
+                     , Bg.color <| toEl bgBase
+                     ]
+                        ++ kit.attr
+                        ++ kit.border
+                    )
                 <|
                     if kit.arrowFirst then
                         [ arrow, subView ]
