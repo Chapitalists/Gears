@@ -482,9 +482,9 @@ viewTop doc =
             [ width (fill |> maximum inputSize)
             , padding 2
             ]
-            { label = Input.labelHidden "Nom du fichier"
+            { label = Input.labelHidden "Savename"
             , text = Data.getName doc.data
-            , placeholder = Just <| Input.placeholder [] <| text "nom-a-sauvegarder"
+            , placeholder = Just <| Input.placeholder [] <| text "savename"
             , onChange = EnteredFileName
             }
         ]
@@ -553,7 +553,7 @@ viewComment : Model -> Element Msg
 viewComment { data } =
     Input.multiline [ Events.onLoseFocus UnFocusComment ]
         { text = (Data.current data).comment
-        , placeholder = Just <| Input.placeholder [] <| text "Laissez ici vos notes ou commentaires"
+        , placeholder = Just <| Input.placeholder [] <| text "Put notes and comments here"
         , onChange = ChangedComment
         , label = Input.labelHidden "Notes"
         , spellcheck = False

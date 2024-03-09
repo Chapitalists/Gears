@@ -1140,7 +1140,7 @@ viewTools model =
             , viewToolOption size (Edit False)
             ]
         , selected = Just model.tool
-        , label = Input.labelHidden "Outils"
+        , label = Input.labelHidden "Tools"
         }
 
 
@@ -1791,7 +1791,7 @@ viewChannelSel wId cur max =
                         ]
             , text = String.fromInt cur
             , placeholder = Nothing
-            , label = Input.labelLeft [] <| text "Canal :"
+            , label = Input.labelLeft [] <| text "Channel :"
             }
         ]
 
@@ -1805,18 +1805,18 @@ viewDetails channels model mobile =
         ChangeSound id ->
             viewDetailsColumn <|
                 [ text <| CommonData.getName ( id, [] ) mobile
-                , text "Choisir un son chargé"
+                , text "Chose a loaded sound"
                 , Input.button []
-                    { label = text "Annuler"
+                    { label = text "Abort"
                     , onPress = Just <| ChangedMode Normal
                     }
                 ]
 
         SelectMotor ->
             viewDetailsColumn <|
-                [ text "Choisir nouvelle Motrice"
+                [ text "Chose a new motor"
                 , Input.button []
-                    { label = text "Annuler"
+                    { label = text "Abort"
                     , onPress = Just <| ChangedMode Normal
                     }
                 ]
@@ -1846,7 +1846,7 @@ viewEditDetails channels model mobile =
             in
             viewDetailsColumn <|
                 [ Input.text [ Font.color (rgb 0 0 0) ]
-                    { label = Input.labelAbove [] <| text "Roue :"
+                    { label = Input.labelAbove [] <| text "Wheel :"
                     , text = g.wheel.name
                     , placeholder = Just <| Input.placeholder [] <| text <| CommonData.getName ( id, [] ) mobile
                     , onChange = \str -> WheelMsgs [ ( wId, Wheel.Named str ) ]
@@ -1857,16 +1857,16 @@ viewEditDetails channels model mobile =
                             { label =
                                 text <|
                                     if g.wheel.viewContent then
-                                        "Ranger " ++ Sound.getPath s
+                                        "Hide " ++ Sound.getPath s
 
                                     else
-                                        "Voir " ++ Sound.getPath s
+                                        "Show " ++ Sound.getPath s
                             , onPress = Just <| WheelMsgs [ ( wId, Wheel.ToggleContentView ) ]
                             }
 
                     Content.M _ ->
                         Input.button []
-                            { label = text "Voir Mobile"
+                            { label = text "Show Mobile"
                             , onPress = Just <| OutMsg <| Inside wId
                             }
 
@@ -1875,10 +1875,10 @@ viewEditDetails channels model mobile =
                             { label =
                                 text <|
                                     if g.wheel.viewContent then
-                                        "Replier Collier"
+                                        "Hide Collar"
 
                                     else
-                                        "Déplier Collier"
+                                        "Show Collar"
                             , onPress = Just <| WheelMsgs [ ( wId, Wheel.ToggleContentView ) ]
                             }
 
@@ -1930,15 +1930,15 @@ viewEditDetails channels model mobile =
                                 )
                                 [ 2, 3, 5, 7 ]
                     , Input.button []
-                        { label = text "Taille Originale"
+                        { label = text "Initial length"
                         , onPress = Just <| ResizeToContent id
                         }
                     , Input.button []
-                        { label = text "Changer son"
+                        { label = text "Change sound"
                         , onPress = Just <| ChangedMode <| ChangeSound id
                         }
                     , Input.button []
-                        { label = text "Encapsuler"
+                        { label = text "Encapsulate"
                         , onPress = Just <| Capsuled [ id ]
                         }
                     , let
@@ -1979,7 +1979,7 @@ viewEditDetails channels model mobile =
 
                         simpleBtn =
                             Input.button []
-                                { label = text "Collier"
+                                { label = text "Collar"
                                 , onPress = Just <| Collared id Simple
                                 }
                       in
@@ -1995,24 +1995,24 @@ viewEditDetails channels model mobile =
                                 simpleBtn
                                     :: multBtns
                     , Input.button []
-                        { label = text "Décollier"
+                        { label = text "Uncollar"
                         , onPress = Just <| UnCollar id
                         }
                     , if id == mobile.motor then
                         Input.button []
                             { onPress = Just <| ChangedMode SelectMotor
-                            , label = text "Changer Motrice"
+                            , label = text "Change Motor"
                             }
 
                       else
                         Input.button []
                             { onPress = Just <| DeleteWheel ( id, [] )
-                            , label = text "Supprimer"
+                            , label = text "Delete"
                             }
                     ]
                         ++ (List.map (Element.map PackMsg) <| Pack.viewPackButtons model.pack)
                         ++ [ Input.button []
-                                { label = text "Copier Contenu"
+                                { label = text "Copy content"
                                 , onPress =
                                     Maybe.map (\i -> PackMsg <| Pack.Packontent <| (Coll.get i mobile.gears).wheel) <|
                                         case model.edit of
@@ -2026,7 +2026,7 @@ viewEditDetails channels model mobile =
                         ++ (case model.pack.content of
                                 Just w ->
                                     [ Input.button []
-                                        { label = text <| "Coller Contenu"
+                                        { label = text <| "Paste Content"
                                         , onPress = Just <| CopyContent w
                                         }
                                     ]
@@ -2035,7 +2035,7 @@ viewEditDetails channels model mobile =
                                     []
                            )
                         ++ [ row []
-                                [ text "Couleur : "
+                                [ text "Color : "
                                 , html <|
                                     Html.input
                                         [ Html.Attributes.type_ "color"
@@ -2063,7 +2063,7 @@ viewEditDetails channels model mobile =
                                 ]
                            ]
                 , text <|
-                    "Durée : "
+                    "Length : "
                         ++ Harmo.view id
                             mobile.gears
                             (\rId ->
@@ -2096,7 +2096,7 @@ viewEditDetails channels model mobile =
                         }
                     ]
                 , text <|
-                    "Contenu : "
+                    "Content : "
                         ++ (Round.round 2 <| CommonData.getWheeledContentLength g)
                 ]
                     ++ (case Wheel.getContent g of
@@ -2124,9 +2124,9 @@ viewEditDetails channels model mobile =
                                             Nothing
                                     }
                                 , Input.text [ Font.color <| rgb 0 0 0 ]
-                                    { label = Input.labelHidden "Nouveau nom"
+                                    { label = Input.labelHidden "New name"
                                     , text = model.newSampleName
-                                    , placeholder = Just <| Input.placeholder [] <| text "Nouveau nom"
+                                    , placeholder = Just <| Input.placeholder [] <| text "New name"
                                     , onChange = EnteredNewSampleName
                                     }
                                 ]
@@ -2139,7 +2139,7 @@ viewEditDetails channels model mobile =
             viewDetailsColumn <|
                 (List.map (\id -> text <| CommonData.getName ( id, [] ) mobile) <| List.reverse model.edit)
                     ++ [ Input.button []
-                            { label = text "Encapsuler"
+                            { label = text "Encapsulate"
                             , onPress = Just <| Capsuled <| List.reverse model.edit
                             }
                        ]
@@ -2184,7 +2184,7 @@ viewHarmonizeDetails model mobile =
                                     , onPress = Just <| AppliedFract link fract
                                     }
                                 , Input.button []
-                                    { label = text "Simplifier"
+                                    { label = text "Simplify"
                                     , onPress = Just SimplifyFractView
                                     }
                                 ]
@@ -2226,7 +2226,7 @@ viewHarmonizeDetails model mobile =
                                         Nothing ->
                                             [ Font.color <| rgb 1 0 0 ]
                                     )
-                                    { label = text "Forcer"
+                                    { label = text "Force"
                                     , onPress = Maybe.map (ForcedFract link) mayFract
                                     }
                                 ]

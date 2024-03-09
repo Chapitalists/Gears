@@ -22,7 +22,7 @@ init data url =
         { undoList = Undo.fresh data
         , grouping = Nothing
         , saved = False
-        , name = "non-titre"
+        , name = "untitled"
         , serverUrl = url
         }
 
@@ -34,7 +34,7 @@ new data (D d) =
             | undoList = Undo.new data <| Undo.fresh (current <| D d)
             , grouping = Nothing
             , saved = False
-            , name = "non-titre"
+            , name = "untitled"
         }
 
 

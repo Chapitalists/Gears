@@ -70,10 +70,10 @@ view id coll getName =
                 Self { unit } ->
                     case unit of
                         Duration d ->
-                            " de " ++ Round.round 2 d
+                            " of " ++ Round.round 2 d
 
                         Rate r ->
-                            " du contenu x" ++ Round.round 2 (1 / r)
+                            " of content x" ++ Round.round 2 (1 / r)
 
                 Other rId ->
                     let
@@ -84,10 +84,10 @@ view id coll getName =
                         Self { unit } ->
                             case unit of
                                 Duration d ->
-                                    " de " ++ Round.round 2 d ++ " ( " ++ name ++ " )"
+                                    " of " ++ Round.round 2 d ++ " ( " ++ name ++ " )"
 
                                 Rate r ->
-                                    " du contenu de " ++ name ++ " x" ++ Round.round 2 (1 / r)
+                                    " of " ++ name ++ "'s content x" ++ Round.round 2 (1 / r)
 
                         Other _ ->
                             Debug.log "IMPOSSIBLE Other refer to another Other" "BUG Harmo.view"

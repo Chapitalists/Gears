@@ -147,14 +147,14 @@ viewPackButtons pack =
         { label =
             text <|
                 if pack.visible then
-                    "Fermer le sac"
+                    "Open bag"
 
                 else
-                    "Ouvrir le sac"
+                    "Close bag"
         , onPress = Just TogglePack
         }
     , Input.button []
-        { label = text "Vider son sac"
+        { label = text "Empty bag"
         , onPress = Just EmptyPack
         }
     ]

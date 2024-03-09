@@ -1066,7 +1066,7 @@ viewFileExplorer model =
                     none
                )
             :: Input.text [ width <| minimum 200 shrink, paddingXY 5 0 ]
-                { label = Input.labelLeft [] <| text "Filtrer\u{202F}:"
+                { label = Input.labelLeft [] <| text "Filter\u{202F}:"
                 , text = model.fileFilter
                 , placeholder = Nothing
                 , onChange = ChgFilter
@@ -1096,19 +1096,19 @@ viewExplorerOption tab =
                 tabImage tab size <|
                     case tab of
                         Sounds ->
-                            "Sons LOCALIZE"
+                            "Sounds"
 
                         LoadedSounds ->
-                            "Chargés LOCALIZE"
+                            "Loaded"
 
                         Saves ->
-                            "Saves LOCALIZE"
+                            "Saves"
 
 
 viewOpenRefreshButtons : Msg -> Msg -> Bool -> List (Element Msg)
 viewOpenRefreshButtons openMsg refreshMsg connected =
     [ Input.button []
-        { label = text "Ouvrir"
+        { label = text "Add Sound"
         , onPress = Just openMsg
         }
     , Input.button
@@ -1120,7 +1120,7 @@ viewOpenRefreshButtons openMsg refreshMsg connected =
                 rgb 1 0 0
         ]
         { onPress = Just refreshMsg
-        , label = text "Actualiser"
+        , label = text "Refresh"
         }
     ]
 
@@ -1130,7 +1130,7 @@ viewSinkSelect { deviceList } =
     case deviceList of
         Nothing ->
             Input.button []
-                { label = text "Lister Sorties"
+                { label = text "List Devices"
                 , onPress = Just RequestDeviceList
                 }
 
@@ -1191,7 +1191,7 @@ viewMicRec model =
                     ]
                 , Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
                     { text = name
-                    , placeholder = Just <| Input.placeholder [] <| text "Nom du fichier"
+                    , placeholder = Just <| Input.placeholder [] <| text "FileName"
                     , label = Input.labelHidden "New File Name"
                     , onChange = EnteredNewRecName
                     }
@@ -1203,7 +1203,7 @@ viewMicRec model =
                 ]
 
             Nothing ->
-                [ Input.button [] { onPress = Just RequestOpenMic, label = text "Activer Micro" } ]
+                [ Input.button [] { onPress = Just RequestOpenMic, label = text "Open Mic" } ]
 
 
 viewLibColumn : List (Element Msg) -> Element Msg
@@ -1344,7 +1344,7 @@ viewLoaded : Model -> List (Element Msg)
 viewLoaded model =
     [ column [ width fill, height <| fillPortion 3, spacing 10, padding 2, scrollbarY ]
         ([ Input.checkbox []
-            { label = Input.labelLeft [] <| text "Voir dossiers"
+            { label = Input.labelLeft [] <| text "See Folders"
             , checked = model.showDirLoad
             , onChange = ToggleShowDirLoad
             , icon = Input.defaultCheckbox
