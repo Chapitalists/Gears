@@ -29,6 +29,7 @@ import Link exposing (DrawLink, Link, Segment)
 import Math.Vector2 as Vec exposing (Vec2, getX, getY, vec2)
 import Motor
 import Pack exposing (Pack, Packed)
+import Palette exposing (..)
 import PanSvg
 import Random
 import Round
@@ -1127,82 +1128,195 @@ subs { interact, dragging } =
 
 viewTools : Model -> Element Msg
 viewTools model =
-    Input.radioRow [ spacing 30 ]
+    let
+        size =
+            30
+    in
+    Input.radioRow []
         { onChange = ChangedTool
         , options =
-            [ Input.option (Play False False) <| text "Jeu (W)"
-            , Input.option Harmonize <| text "Harmonie (X)"
-            , Input.option (Edit False) <| text "Édition (C)"
+            [ viewToolOption size (Play False False)
+            , viewToolOption size Harmonize
+            , viewToolOption size (Edit False)
             ]
         , selected = Just model.tool
         , label = Input.labelHidden "Outils"
         }
 
 
-viewExtraTools : (Msg -> msg) -> Model -> Element msg -> Element msg
-viewExtraTools mapMsg model chanEl =
-    row [ width fill, padding 20, spacing 20 ]
-        (case model.tool of
-            Play on rec ->
-                (List.map (Element.map mapMsg) <|
-                    [ Input.button [ centerX ]
-                        { label =
-                            if on then
-                                text "Stop"
-
-                            else
-                                text "Jouer"
-                        , onPress = Just ToggleEngine
-                        }
-                    , Input.button
-                        ([ centerX ]
-                            ++ (if rec then
-                                    [ Bg.color (rgb 1 0 0) ]
-
-                                else
-                                    []
-                               )
-                        )
-                        { label =
-                            if rec then
-                                text "Cut"
-
-                            else
-                                text "Rec"
-                        , onPress = Just <| ToggleRecord <| not rec
-                        }
-                    ]
-                )
-                    ++ [ chanEl ]
-
-            Edit play ->
-                if not <| List.isEmpty model.edit then
-                    (List.map (Element.map mapMsg) <|
-                        [ Input.button [ centerX ]
-                            { label =
-                                if play then
-                                    text "Stop"
-
-                                else
-                                    text "Entendre"
-                            , onPress =
-                                Just <|
-                                    if play then
-                                        StopGear
-
-                                    else
-                                        PlayGear
-                            }
+viewToolOption : Int -> Tool -> Input.Option Tool Msg
+viewToolOption size tool =
+    let
+        img =
+            case tool of
+                Play _ _ ->
+                    el
+                        [ moveLeft 3
+                        , moveUp 3
+                        , inFront <|
+                            el [ centerX, centerY ] <|
+                                icon (size // 2)
+                                    "Ear"
+                                    "./icons/noun-ear-466193.svg"
                         ]
+                    <|
+                        icon (size + 2)
+                            "Belt"
+                            "./icons/noun-oval-6023315.svg"
+
+                Harmonize ->
+                    el
+                        [ Font.size (size * 3 // 4)
+                        , Font.semiBold
+                        , moveUp 5
+                        , inFront <|
+                            el
+                                [ moveRight (toFloat size / 3)
+                                , moveDown (toFloat size / 4)
+                                ]
+                            <|
+                                text "/"
+                        , inFront <|
+                            el
+                                [ moveRight (toFloat size / 2)
+                                , moveDown (toFloat size / 4)
+                                ]
+                            <|
+                                text "y"
+                        ]
+                    <|
+                        text "x"
+
+                Edit _ ->
+                    el [ moveLeft 3, moveUp 2 ] <|
+                        icon size
+                            "Select"
+                            "./icons/noun-touch-6226067.svg"
+    in
+    Input.optionWith tool <|
+        \state ->
+            roundButton size True (state == Input.Selected) Blue img
+
+
+viewExtraTools :
+    (Msg -> msg)
+    -> Model
+    -> (String -> msg)
+    -> ( Int, Bool )
+    -> Element msg
+viewExtraTools mapMsg model chanMsg chanArgs =
+    let
+        buttonSize =
+            20
+
+        ( ( canPlay, canRec ), ( isPlay, playMsg ), isRec ) =
+            case model.tool of
+                Play on rec ->
+                    ( ( True, True ), ( on, ToggleEngine ), rec )
+
+                Edit play ->
+                    ( ( not <| List.isEmpty model.edit, False )
+                    , ( play
+                      , if play then
+                            StopGear
+
+                        else
+                            PlayGear
+                      )
+                    , False
                     )
-                        ++ [ chanEl ]
 
-                else
-                    []
+                _ ->
+                    ( ( False, False ), ( False, ToggleEngine ), False )
+    in
+    row [] <|
+        (List.map (Element.map mapMsg) <|
+            [ roundButton buttonSize canPlay False Purple <|
+                Input.button
+                    [ Font.size (buttonSize - 5)
+                    , moveRight 2
+                    ]
+                    { label =
+                        if isPlay then
+                            text "◼"
+                            --⏹"⏹
 
-            _ ->
-                []
+                        else
+                            text "▶"
+                    , onPress =
+                        if canPlay then
+                            Just playMsg
+
+                        else
+                            Nothing
+                    }
+            , roundButton buttonSize canRec False Purple <|
+                Input.button
+                    ([ Font.size (buttonSize + 5)
+                     , moveUp 6
+                     ]
+                        ++ (if isRec then
+                                [ Font.color (rgb 1 0 0) ]
+
+                            else
+                                []
+                           )
+                    )
+                    { label = text "●" --⏺"
+                    , onPress =
+                        if canRec then
+                            Just <| ToggleRecord <| not isRec
+
+                        else
+                            Nothing
+                    }
+            ]
         )
+            ++ [ viewChannels chanMsg chanArgs ]
+
+
+viewChannels : (String -> msg) -> ( Int, Bool ) -> Element msg
+viewChannels chanMsg ( channels, real ) =
+    let
+        fontColor =
+            if real then
+                rgb 0.8 0.5 0.2
+
+            else
+                rgb 0 0 0
+    in
+    Input.text
+        [ padding 2
+        , width <| minimum 50 <| shrink
+        , height shrink
+        , Font.color fontColor
+        , htmlAttribute <| Html.Attributes.type_ "number"
+        , htmlAttribute <| Html.Attributes.min "0"
+        , htmlAttribute <| Html.Attributes.disabled real
+        ]
+        { onChange = chanMsg
+        , text = String.fromInt channels
+        , placeholder = Nothing
+        , label =
+            Input.labelLeft [] <|
+                roundButton 20 False False Purple <|
+                    el
+                        [ Font.size 30
+                        , moveUp 8
+                        , moveRight 1
+                        ]
+                    <|
+                        text <|
+                            --icon 40 "Channels" <|
+                            if real then
+                                "〰"
+                                --"./icons/noun-wavy-line-2600745.svg"
+
+                            else
+                                "⇣"
+
+        --"./icons/noun-wavy-dotted-line-2897248.svg"
+        }
 
 
 getWavePoints : Model -> Mobeel -> Maybe Waveform.Cursors
@@ -1246,6 +1360,15 @@ getWavePoints model mobile =
 
         _ ->
             Nothing
+
+
+viewWave ( model, mobile ) =
+    Waveform.view
+        model.wave
+        (getWavePoints model mobile)
+        model.interact
+        InteractMsg
+        WaveMsg
 
 
 
@@ -1331,13 +1454,6 @@ viewContent ( model, mobile ) =
                 IPacked
                 IPack
                 InteractMsg
-        , Element.inFront <|
-            Waveform.view
-                model.wave
-                mayWavePoints
-                model.interact
-                InteractMsg
-                WaveMsg
         ]
     <|
         Element.html <|
@@ -1629,15 +1745,27 @@ viewContent ( model, mobile ) =
 -- TODO split in functions for each component, and maybe move to another file, like Interacting, or good old common
 
 
-viewDetailsColumn : Color -> List (Element msg) -> Element msg
-viewDetailsColumn bg =
+viewDetailsColumn : List (Element msg) -> Element msg
+viewDetailsColumn =
     column
         [ height fill
-        , Bg.color bg
-        , Font.color (rgb 1 1 1)
+        , Bg.color <| toEl bgBase
         , Font.size 16
         , spacing 20
         , padding 10
+        , Border.color <| toEl borderBase
+        , Border.roundEach
+            { topLeft = roundBase
+            , bottomLeft = roundBase
+            , bottomRight = 0
+            , topRight = 0
+            }
+        , Border.widthEach
+            { top = strokeBase
+            , left = strokeBase
+            , bottom = strokeBase
+            , right = 0
+            }
         ]
 
 
@@ -1673,11 +1801,11 @@ viewChannelSel wId cur max =
         []
 
 
-viewDetails : Int -> Model -> Mobeel -> List (Element Msg)
+viewDetails : Int -> Model -> Mobeel -> Element Msg
 viewDetails channels model mobile =
     case model.mode of
         ChangeSound id ->
-            [ viewDetailsColumn (rgb 0.5 0.2 0) <|
+            viewDetailsColumn <|
                 [ text <| CommonData.getName ( id, [] ) mobile
                 , text "Choisir un son chargé"
                 , Input.button []
@@ -1685,17 +1813,15 @@ viewDetails channels model mobile =
                     , onPress = Just <| ChangedMode Normal
                     }
                 ]
-            ]
 
         SelectMotor ->
-            [ viewDetailsColumn (rgb 0.5 0.2 0) <|
+            viewDetailsColumn <|
                 [ text "Choisir nouvelle Motrice"
                 , Input.button []
                     { label = text "Annuler"
                     , onPress = Just <| ChangedMode Normal
                     }
                 ]
-            ]
 
         _ ->
             case model.tool of
@@ -1706,10 +1832,13 @@ viewDetails channels model mobile =
                     viewHarmonizeDetails model mobile
 
                 _ ->
-                    []
+                    --viewEditDetails channels { model | edit = [ Coll.startId ] } <|
+                    --    Mobile.fromGear <|
+                    --        Gear.default Wheel.default
+                    none
 
 
-viewEditDetails : Int -> Model -> Mobeel -> List (Element Msg)
+viewEditDetails : Int -> Model -> Mobeel -> Element Msg
 viewEditDetails channels model mobile =
     case model.edit of
         [ id ] ->
@@ -1720,7 +1849,7 @@ viewEditDetails channels model mobile =
                 wId =
                     ( id, [] )
             in
-            [ viewDetailsColumn (rgb 0.5 0.5 0.5) <|
+            viewDetailsColumn <|
                 [ Input.text [ Font.color (rgb 0 0 0) ]
                     { label = Input.labelAbove [] <| text "Roue :"
                     , text = g.wheel.name
@@ -2010,27 +2139,25 @@ viewEditDetails channels model mobile =
                             _ ->
                                 []
                        )
-            ]
 
         _ :: _ ->
-            [ viewDetailsColumn (rgb 0.5 0.5 0.5) <|
+            viewDetailsColumn <|
                 (List.map (\id -> text <| CommonData.getName ( id, [] ) mobile) <| List.reverse model.edit)
                     ++ [ Input.button []
                             { label = text "Encapsuler"
                             , onPress = Just <| Capsuled <| List.reverse model.edit
                             }
                        ]
-            ]
 
         _ ->
-            []
+            none
 
 
-viewHarmonizeDetails : Model -> Mobeel -> List (Element Msg)
+viewHarmonizeDetails : Model -> Mobeel -> Element Msg
 viewHarmonizeDetails model mobile =
     case model.link of
         Just { link, fractInput } ->
-            [ viewDetailsColumn (rgb 0.5 0.5 0.5)
+            viewDetailsColumn
                 ([ text <| (Gear.toUID <| Tuple.first link) ++ (Gear.toUID <| Tuple.second link) ]
                     ++ (case fractInput of
                             FractionInput fract numB denB ->
@@ -2111,10 +2238,9 @@ viewHarmonizeDetails model mobile =
                        )
                     ++ [ row [] [] ]
                 )
-            ]
 
         Nothing ->
-            []
+            none
 
 
 doLinked : Link Geer -> Coll Geer -> ( Coll Geer, Maybe Fraction )

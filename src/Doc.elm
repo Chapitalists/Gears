@@ -9,6 +9,8 @@ import Dict exposing (Dict)
 import Editor.Interacting exposing (Interactable, Zone(..))
 import Editor.Mobile as Editor
 import Element exposing (..)
+import Element.Background as Bg
+import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
@@ -19,7 +21,9 @@ import Json.Decode as D
 import Json.Decode.Field as Field
 import Json.Encode as E
 import Pack exposing (Pack)
+import Palette exposing (..)
 import PanSvg
+import Panel exposing (Panel)
 import Url exposing (Url)
 
 
@@ -366,10 +370,18 @@ keyCodeToDirection =
 
 view : ( Model, Maybe Int ) -> Element Msg
 view ( doc, maxChan ) =
-    row [ height fill, width fill ] <|
-        (column [ width fill, height fill ]
-            ([ viewTop doc
-             , el
+    let
+        ( waveView, waveHeight ) =
+            Editor.viewWave ( doc.editor, getViewing doc )
+    in
+    row
+        [ height fill
+        , width fill
+        , floatingToolbar 0 Panel.Top <| viewTop doc
+        ]
+    <|
+        [ column [ width fill, height fill ]
+            [ el
                 [ width fill
                 , height fill
                 , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
@@ -377,14 +389,19 @@ view ( doc, maxChan ) =
                 -- THX to https://discourse.elm-lang.org/t/elm-ui-parent-element-grows-to-encompass-children-instead-of-scrolling/5032
                 , clip
                 , htmlAttribute <| Html.Attributes.style "flex-shrink" "1"
+                , inFront <|
+                    el
+                        [ alignBottom
+                        , floatingToolbar waveHeight Panel.Bottom <| viewBottom ( doc, maxChan )
+                        ]
+                    <|
+                        map MobileMsg waveView
                 ]
-               <|
+              <|
                 viewContent doc
-             ]
-                ++ viewBottom ( doc, maxChan )
-            )
-            :: viewSide ( doc, maxChan )
-        )
+            ]
+        , viewSide ( doc, maxChan )
+        ]
 
 
 viewTop : Model -> Element Msg
@@ -494,20 +511,29 @@ viewNav doc =
                 )
 
 
-viewBottom : ( Model, Maybe Int ) -> List (Element Msg)
-viewBottom ( doc, maxChan ) =
-    [ Editor.viewExtraTools MobileMsg doc.editor <| viewChannels ( doc, maxChan ) ]
+viewBottom : ( Model, Maybe Int ) -> Element Msg
+viewBottom ( model, maxChan ) =
+    column
+        [ inFront <|
+            el [ alignRight, moveUp (marginBase / 2) ] <|
+                map MobileMsg <|
+                    Editor.viewTools model.editor
+        ]
+        [ viewNav model
+        , Editor.viewExtraTools MobileMsg model.editor EnteredChannels <|
+            getChannels (Data.current model.data) maxChan
+        ]
 
 
-viewSide : ( Model, Maybe Int ) -> List (Element Msg)
-viewSide ( doc, maxChan ) =
+viewSide : ( Model, Maybe Int ) -> Element Msg
+viewSide ( model, maxChan ) =
     let
         channels =
-            Tuple.first <| getChannels (Data.current doc.data) maxChan
+            Tuple.first <| getChannels (Data.current model.data) maxChan
     in
-    List.map (Element.map MobileMsg) <|
-        Editor.viewDetails channels doc.editor <|
-            getViewing doc
+    Element.map MobileMsg <|
+        Editor.viewDetails channels model.editor <|
+            getViewing model
 
 
 viewContent : Model -> Element Msg
@@ -523,38 +549,6 @@ viewComment { data } =
         , onChange = ChangedComment
         , label = Input.labelHidden "Notes"
         , spellcheck = False
-        }
-
-
-viewChannels : ( Model, Maybe Int ) -> Element Msg
-viewChannels ( { data }, maxChan ) =
-    let
-        doc =
-            Data.current data
-
-        ( channels, real ) =
-            getChannels doc maxChan
-
-        fontColor =
-            if real then
-                rgb 0.8 0.5 0.2
-
-            else
-                rgb 0 0 0
-    in
-    Input.text
-        [ centerX
-        , paddingXY 4 0
-        , width <| minimum 60 <| maximum 100 <| fill
-        , Font.color fontColor
-        , htmlAttribute <| Html.Attributes.type_ "number"
-        , htmlAttribute <| Html.Attributes.min "0"
-        , htmlAttribute <| Html.Attributes.disabled real
-        ]
-        { onChange = EnteredChannels
-        , text = String.fromInt channels
-        , placeholder = Nothing
-        , label = Input.labelLeft [] <| text "Canaux :"
         }
 
 
@@ -669,3 +663,36 @@ updateMobileData to newMobile { data } =
 
         Editor.NOOP ->
             data
+
+
+floatingToolbar : Int -> Panel.Side -> Element msg -> Attribute msg
+floatingToolbar marginSup s =
+    let
+        align =
+            case s of
+                Panel.Top ->
+                    [ centerX, alignTop, moveDown marginBase ]
+
+                Panel.Bottom ->
+                    [ centerX
+                    , alignBottom
+                    , moveUp <| toFloat (marginBase + marginSup)
+                    ]
+
+                _ ->
+                    [ alignBottom
+                    , alignRight
+                    , moveUp marginBase
+                    , moveLeft marginBase
+                    ]
+    in
+    inFront
+        << el
+            ([ Border.width strokeBase
+             , Border.color <| toEl borderBase
+             , Border.rounded roundBase
+             , padding marginBase
+             , Bg.color <| toEl bgBase
+             ]
+                ++ align
+            )

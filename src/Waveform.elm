@@ -408,7 +408,7 @@ view :
     -> Interact.State Interactable Zone
     -> (Interact.Msg Interactable Zone -> msg)
     -> (Msg -> msg)
-    -> Element msg
+    -> ( Element msg, Int )
 view wave mayCursors interState wrapInter wrapMsg =
     let
         showMini =
@@ -457,8 +457,8 @@ view wave mayCursors interState wrapInter wrapMsg =
         darkGreySel =
             rgba 0.3 0.3 0.3 0.3
     in
-    column
-        [ Bg.color <| rgb 1 1 1
+    ( column
+        [ Bg.color <| rgba 1 1 1 0.9
         , alignBottom
         ]
         [ el
@@ -566,6 +566,14 @@ view wave mayCursors interState wrapInter wrapMsg =
                     ]
                     []
         ]
+    , waveHeight
+        + (if showMini then
+            mapHeight
+
+           else
+            0
+          )
+    )
 
 
 requestHelper : Bool -> Bool -> { a | zoomFactor : Float, startPercent : Float, drawn : Drawing } -> Cmd msg
