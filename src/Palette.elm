@@ -63,28 +63,48 @@ roundButton sizeEl active seled bg =
                 Dark
     in
     el
-        [ Border.width 1
-        , Border.color (E.rgba 0 0 0 selFactor)
-        , mouseDown [ Border.color (E.rgb 0 0 0) ]
-        , Border.rounded sizeOut
-        ]
+        ([ Border.width 1
+         , Border.color (E.rgba 0 0 0 selFactor)
+         , Border.rounded sizeOut
+         ]
+            ++ (if active then
+                    [ mouseDown [ Border.color (E.rgb 0 0 0) ] ]
+
+                else
+                    []
+               )
+        )
         << el
-            [ Border.width stroke
-            , Border.rounded size
-            , Border.color (E.rgba 0 0 0 0)
-            , mouseDown [ Border.color (E.rgba 0 0 0 0) ]
-            , mouseOver [ Border.color (E.rgb 0 0 0) ]
-            ]
+            ([ Border.width stroke
+             , Border.rounded size
+             , Border.color (E.rgba 0 0 0 0)
+             ]
+                ++ (if active then
+                        [ mouseDown [ Border.color (E.rgba 0 0 0 0) ]
+                        , mouseOver [ Border.color (E.rgb 0 0 0) ]
+                        ]
+
+                    else
+                        []
+                   )
+            )
         << el
-            [ Bg.color <| toEl ( tint, bg )
-            , E.width <| E.px sizeIn
-            , E.height <| E.px sizeIn
-            , Border.color (E.rgb 0 0 0)
-            , Border.width stroke
-            , Border.rounded sizeIn
-            , E.clip
-            , E.padding <| (sizeIn - sizeEl) // 2
-            ]
+            ([ Bg.color <| toEl ( tint, bg )
+             , E.width <| E.px sizeIn
+             , E.height <| E.px sizeIn
+             , Border.color (E.rgb 0 0 0)
+             , Border.width stroke
+             , Border.rounded sizeIn
+             , E.clip
+             , E.padding <| (sizeIn - sizeEl) // 2
+             ]
+                ++ (if active then
+                        []
+
+                    else
+                        [ Border.dashed ]
+                   )
+            )
 
 
 icon : Int -> String -> String -> Element msg
