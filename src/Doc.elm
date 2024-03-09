@@ -389,65 +389,79 @@ view ( doc, maxChan ) =
 
 viewTop : Model -> Element Msg
 viewTop doc =
-    column
-        ([ width fill ]
-            ++ (if doc.viewComment then
-                    [ below <| viewComment doc ]
+    let
+        fontSize =
+            14
 
-                else
-                    []
-               )
-        )
-        [ viewNav doc
-        , row [ width fill, padding 10, spacing 20, Font.size 14 ]
-            ((Element.map MobileMsg <| Editor.viewTools doc.editor)
-                :: [ Input.text [ width (fill |> maximum 500), centerX ]
-                        { label = Input.labelHidden "Nom du fichier"
-                        , text = Data.getName doc.data
-                        , placeholder = Just <| Input.placeholder [] <| text "nom-a-sauvegarder"
-                        , onChange = EnteredFileName
-                        }
-                   , Input.button
-                        [ centerX
-                        , Font.color <|
-                            if Data.isSaved doc.data then
-                                rgb 0 0 0
+        buttonSize =
+            30
 
-                            else
-                                rgb 0 1 1
+        inputSize =
+            500
+    in
+    row [ Font.size fontSize ]
+        [ roundButton buttonSize (Data.canUndo doc.data) False Yellow <|
+            Input.button
+                [ Font.size buttonSize
+                , moveUp 2
+                , moveLeft 4
+                ]
+                { label = text "⟲"
+
+                --⎌"
+                , onPress =
+                    if Data.canUndo doc.data then
+                        Just Undo
+
+                    else
+                        Nothing
+                }
+        , roundButton buttonSize (Data.canRedo doc.data) False Orange <|
+            Input.button
+                [ Font.size buttonSize
+                , moveUp 2
+                ]
+                { label = text "⟳"
+                , onPress =
+                    if Data.canRedo doc.data then
+                        Just Redo
+
+                    else
+                        Nothing
+                }
+        , roundButton buttonSize True False Green <|
+            Input.button []
+                { label =
+                    el
+                        [ Font.size buttonSize
+                        , moveUp 4
+                        , moveLeft 2
                         ]
-                        { label = text "Sauvegarder"
-                        , onPress = Just Save
-                        }
-                   , Input.button [ centerX ]
-                        { label = text "Nouveau"
-                        , onPress = Just New
-                        }
-                   , Input.button [ centerX ]
-                        { label = text "Undo"
-                        , onPress =
-                            if Data.canUndo doc.data then
-                                Just Undo
+                    <|
+                        text "⍟"
 
-                            else
-                                Nothing
-                        }
-                   , Input.button [ centerX ]
-                        { label = text "Redo"
-                        , onPress =
-                            if Data.canRedo doc.data then
-                                Just Redo
-
-                            else
-                                Nothing
-                        }
-                   ]
-             --++ [ Input.button [ alignRight ]
-             --        { label = text "Notes"
-             --        , onPress = Just ToggleCommentView
-             --        }
-             --   ]
-            )
+                --"./icons/noun-wipe-2032492.svg"
+                , onPress = Just New
+                }
+        , roundButton buttonSize (not <| Data.isSaved doc.data) False Red <|
+            Input.button
+                [ Font.size buttonSize
+                , Font.semiBold
+                , moveUp 1
+                , moveLeft 1
+                ]
+                { label = text "🖫"
+                , onPress = Just Save
+                }
+        , Input.text
+            [ width (fill |> maximum inputSize)
+            , padding 2
+            ]
+            { label = Input.labelHidden "Nom du fichier"
+            , text = Data.getName doc.data
+            , placeholder = Just <| Input.placeholder [] <| text "nom-a-sauvegarder"
+            , onChange = EnteredFileName
+            }
         ]
 
 
