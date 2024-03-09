@@ -29,6 +29,7 @@ import Interact
 import Json.Decode as D
 import Keys
 import NaturalOrdering as Natural
+import Palette exposing (..)
 import PanSvg
 import Panel exposing (Panel)
 import Result exposing (Result)
@@ -1000,7 +1001,7 @@ view model =
                     , alignRight
                     , Font.size 12
                     , Font.underline
-                    , padding 6
+                    , padding (marginBase * 2)
                     ]
                     { onPress = Just <| Credits True
                     , label = text "Credits"
@@ -1016,7 +1017,6 @@ view model =
                )
     , body =
         [ layout [ inFront creditsView ] <|
-            -- Don’t know why but it doesn’t work like I want when using el
             row
                 [ height <| px model.screenSize.height
                 , width <| px model.screenSize.width
@@ -1500,22 +1500,22 @@ cutExtension fullName =
 
 viewCredits : Element Msg
 viewCredits =
-    el [ padding 40, width fill, height fill ] <|
+    el [ padding (marginBase * 4), width fill, height fill ] <|
         el
             [ width fill
             , height fill
-            , Bg.color (rgba 0.6 0.6 0.6 0.9)
-            , Border.width 2
-            , Border.rounded 10
+            , Bg.color <| toEl bgBase
+            , Border.width strokeBase
+            , Border.rounded roundBase
             , inFront <|
                 el
                     [ alignTop
                     , alignRight
-                    , moveDown 20
-                    , moveLeft 20
+                    , moveDown (marginBase * 2)
+                    , moveLeft (marginBase * 2)
                     ]
                 <|
-                    roundButton 40 False Color.lightRed <|
+                    roundButton 40 True False Red <|
                         Input.button
                             [ Font.size 40
                             , moveUp 4
@@ -1543,97 +1543,23 @@ credits =
     [ ( "Book by Made by Made from Noun Project (CC BY 3.0)"
       , "https://thenounproject.com/browse/icons/term/book/"
       )
+    , ( "wipe by Kiran Shastry from Noun Project (CC BY 3.0)"
+      , "https://thenounproject.com/browse/icons/term/wipe/"
+      )
+    , ( "Wavy line by Made by Made from Noun Project (CC BY 3.0)"
+      , "https://thenounproject.com/browse/icons/term/wavy-line/"
+      )
+    , ( "wavy dotted line by Made by Made from Noun Project (CC BY 3.0)"
+      , "https://thenounproject.com/browse/icons/term/wavy-dotted-line/"
+      )
+    , ( "touch by Made by Made from Noun Project (CC BY 3.0)"
+      , "https://thenounproject.com/browse/icons/term/touch/"
+      )
+    , ( "Oval by Made by Made from Noun Project(CC BY 3.0)"
+      , "https://thenounproject.com/browse/icons/term/oval/"
+      )
+    , ( "Ear by Mrfa Studio from Noun Project (CC BY 3.0)"
+      , "https://thenounproject.com/browse/icons/term/ear/"
+      )
     ]
 
-
-tabImage : ExTab -> Int -> Int -> String -> Element msg
-tabImage tab x y desc =
-    el
-        [ width <| px x
-        , height <| px y
-        , clip
-        ]
-    <|
-        image []
-            { description = desc -- TODO localize
-            , src =
-                case tab of
-                    Sounds ->
-                        "./icons/bookshelf-noun-books-1336202.svg"
-
-                    LoadedSounds ->
-                        "./icons/bookopened-noun-book-1360734.svg"
-
-                    Saves ->
-                        "./icons/bookfav-noun-books-1368335.svg"
-            }
-
-
-roundButton : Int -> Bool -> Color.Color -> Element msg -> Element msg
-roundButton sizeEl seled bg =
-    let
-        sizeIn =
-            ceiling <| toFloat sizeEl * sqrt 2.0
-
-        stroke =
-            ceiling <|
-                toFloat sizeIn
-                    / 30
-
-        size =
-            sizeIn + stroke * 2
-
-        sizeOut =
-            size + stroke * 2
-
-        selFactor =
-            if seled then
-                1
-
-            else
-                0
-    in
-    el
-        [ Border.width 1
-        , Border.color (rgba 0 0 0 0)
-        , mouseDown [ Border.color (rgb 0 0 0) ]
-        , Border.rounded sizeOut
-        ]
-        << el
-            [ Border.color (rgba 0.8 0.5 0.2 selFactor)
-            , paddingEach
-                { bottom = stroke * selFactor
-                , left = 0
-                , right = 0
-                , top = 0
-                }
-            , Border.widthEach
-                { bottom = stroke * (1 - selFactor)
-                , left = stroke
-                , right = stroke
-                , top = stroke
-                }
-            , Border.roundEach
-                { topLeft = size
-                , topRight = size
-                , bottomLeft = size * (1 - selFactor)
-                , bottomRight = size * (1 - selFactor)
-                }
-            , mouseDown [ Border.color (rgba 0.8 0.5 0.2 selFactor) ]
-            , mouseOver [ Border.color (rgb (0.8 * selFactor) (0.5 * selFactor) (0.2 * selFactor)) ]
-            ]
-        << el
-            [ Bg.color <| colToEl bg
-            , width <| px sizeIn
-            , height <| px sizeIn
-            , Border.color (rgb 0 0 0)
-            , Border.width stroke
-            , Border.rounded sizeIn
-            , clip
-            , padding <| (sizeIn - sizeEl) // 2
-            ]
-
-
-colToEl : Color.Color -> Color
-colToEl =
-    fromRgb << Color.toRgba
