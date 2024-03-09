@@ -1528,9 +1528,6 @@ credits =
     [ ( "Book by Made by Made from Noun Project (CC BY 3.0)"
       , "https://thenounproject.com/browse/icons/term/book/"
       )
-    , ( "wipe by Kiran Shastry from Noun Project (CC BY 3.0)"
-      , "https://thenounproject.com/browse/icons/term/wipe/"
-      )
     , ( "Wavy line by Made by Made from Noun Project (CC BY 3.0)"
       , "https://thenounproject.com/browse/icons/term/wavy-line/"
       )

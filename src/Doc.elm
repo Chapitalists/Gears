@@ -456,8 +456,6 @@ viewTop doc =
                         ]
                     <|
                         text "⍟"
-
-                --"./icons/noun-wipe-2032492.svg"
                 , onPress = Just New
                 }
         , roundButton buttonSize (not <| Data.isSaved doc.data) False Red <|

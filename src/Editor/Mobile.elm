@@ -1378,9 +1378,6 @@ viewWave ( model, mobile ) =
 viewContent : ( Model, Mobeel ) -> Element Msg
 viewContent ( model, mobile ) =
     let
-        mayWavePoints =
-            getWavePoints model mobile
-
         getMod : Id Geer -> Wheel.Mod
         getMod id =
             if (model.tool == Edit False || model.tool == Edit True) && List.member id model.edit then
@@ -1832,9 +1829,6 @@ viewDetails channels model mobile =
                     viewHarmonizeDetails model mobile
 
                 _ ->
-                    --viewEditDetails channels { model | edit = [ Coll.startId ] } <|
-                    --    Mobile.fromGear <|
-                    --        Gear.default Wheel.default
                     none
 
 
