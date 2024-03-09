@@ -566,13 +566,17 @@ view wave mayCursors interState wrapInter wrapMsg =
                     ]
                     []
         ]
-    , waveHeight
-        + (if showMini then
-            mapHeight
+    , if mayCursors == Nothing then
+        0
 
-           else
-            0
-          )
+      else
+        waveHeight
+            + (if showMini then
+                mapHeight
+
+               else
+                0
+              )
     )
 
 

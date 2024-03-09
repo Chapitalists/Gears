@@ -373,6 +373,9 @@ view ( doc, maxChan ) =
     let
         ( waveView, waveHeight ) =
             Editor.viewWave ( doc.editor, getViewing doc )
+
+        transport =
+            floatingToolbar waveHeight Panel.Bottom <| viewBottom ( doc, maxChan )
     in
     row
         [ height fill
@@ -382,21 +385,28 @@ view ( doc, maxChan ) =
     <|
         [ column [ width fill, height fill ]
             [ el
-                [ width fill
-                , height fill
-                , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
+                ([ width fill
+                 , height fill
+                 , Element.htmlAttribute <| Html.Attributes.id "svgResizeObserver"
 
-                -- THX to https://discourse.elm-lang.org/t/elm-ui-parent-element-grows-to-encompass-children-instead-of-scrolling/5032
-                , clip
-                , htmlAttribute <| Html.Attributes.style "flex-shrink" "1"
-                , inFront <|
-                    el
-                        [ alignBottom
-                        , floatingToolbar waveHeight Panel.Bottom <| viewBottom ( doc, maxChan )
-                        ]
-                    <|
-                        map MobileMsg waveView
-                ]
+                 -- THX to https://discourse.elm-lang.org/t/elm-ui-parent-element-grows-to-encompass-children-instead-of-scrolling/5032
+                 , clip
+                 , htmlAttribute <| Html.Attributes.style "flex-shrink" "1"
+                 ]
+                    ++ (if waveHeight == 0 then
+                            [ transport, inFront <| map MobileMsg waveView ]
+
+                        else
+                            [ inFront <|
+                                el
+                                    [ alignBottom
+                                    , transport
+                                    ]
+                                <|
+                                    map MobileMsg waveView
+                            ]
+                       )
+                )
               <|
                 viewContent doc
             ]

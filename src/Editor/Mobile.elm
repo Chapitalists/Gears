@@ -1362,6 +1362,7 @@ getWavePoints model mobile =
             Nothing
 
 
+viewWave : ( Model, Mobeel ) -> ( Element Msg, Int )
 viewWave ( model, mobile ) =
     Waveform.view
         model.wave
