@@ -1041,57 +1041,31 @@ view model =
 
 viewFileExplorer : Model -> Element Msg
 viewFileExplorer model =
-    let
-        bgColor =
-            case model.mode of
-                Capsuling ->
-                    rgb 0.2 0.2 0.8
-
-                Downloading ->
-                    rgb 0.8 0.8 0.2
-
-                _ ->
-                    rgb 0.5 0.5 0.5
-    in
     column
         [ height fill
-        , Bg.color bgColor
-        , Font.color (rgb 1 1 1)
         , Font.size 16
         , spacing 20
         , padding 10
         ]
     <|
-        (roundButton 40 False Color.lightPurple (tabImage Sounds 40 40 "")
-            :: roundButton 100 True Color.lightOrange (tabImage Saves 100 100 "")
-            :: Input.radioRow
-                [ moveUp 1
-                , spacing 10
-                , Border.widthEach
-                    { bottom = 3
-                    , top = 0
-                    , left = 0
-                    , right = 0
-                    }
-                , Border.color
-                    (rgb 0.8 0.5 0.2)
+        (Input.radioRow
+            [ spacing 10 ]
+            { onChange = ChangedExplorerTab
+            , selected = Just model.fileExplorerTab
+            , label = Input.labelHidden "Explorer Tabs"
+            , options =
+                [ viewExplorerOption Sounds
+                , viewExplorerOption LoadedSounds
+                , viewExplorerOption Saves
                 ]
-                { onChange = ChangedExplorerTab
-                , selected = Just model.fileExplorerTab
-                , label = Input.labelHidden "Explorer Tabs"
-                , options =
-                    [ viewExplorerOption Sounds
-                    , viewExplorerOption LoadedSounds
-                    , viewExplorerOption Saves
-                    ]
-                }
+            }
             :: (if model.hasSinkId then
                     viewSinkSelect model
 
                 else
                     none
                )
-            :: Input.text [ Font.color (rgb 0 0 0), paddingXY 5 0 ]
+            :: Input.text [ width <| minimum 200 shrink, paddingXY 5 0 ]
                 { label = Input.labelLeft [] <| text "Filtrer\u{202F}:"
                 , text = model.fileFilter
                 , placeholder = Nothing
@@ -1118,8 +1092,8 @@ viewExplorerOption tab =
     in
     Input.optionWith tab <|
         \state ->
-            roundButton size (state == Input.Selected) Color.lightBlue <|
-                tabImage tab size size <|
+            roundButton size True (state == Input.Selected) Brown <|
+                tabImage tab size <|
                     case tab of
                         Sounds ->
                             "Sons LOCALIZE"
@@ -1290,7 +1264,7 @@ viewSoundInLib model s id playing loading =
                     rgb 0.8 0.8 0.2
 
                 else
-                    rgb 1 1 1
+                    rgb 0 0 0
              )
                 :: (List.map (Element.htmlAttribute >> (Element.mapAttribute <| DocMsg << Doc.InteractMsg)) <|
                         Interact.draggableEvents (Interacting.ISoundLib id)
@@ -1341,7 +1315,7 @@ viewDirInLib model str id dict opened =
             viewLib model id dict
     in
     if not <| List.isEmpty subView then
-        Input.button [ Font.color <| rgb 1 1 1 ]
+        Input.button []
             { label =
                 el [ Font.bold ] <|
                     text <|
@@ -1574,3 +1548,16 @@ credits =
       )
     ]
 
+
+tabImage : ExTab -> Int -> String -> Element msg
+tabImage tab size desc =
+    icon size desc <|
+        case tab of
+            Sounds ->
+                "./icons/bookshelf-noun-books-1336202.svg"
+
+            LoadedSounds ->
+                "./icons/bookopened-noun-book-1360734.svg"
+
+            Saves ->
+                "./icons/bookfav-noun-books-1368335.svg"
