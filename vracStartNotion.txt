@@ -1,0 +1,76 @@
+RoadMap
+	MailingList
+	RELANCE MONTRÉAL (Jean-Mi + Guillaume)
+	Bugs
+	Réempaqueter
+	Workflow (+ Notion)
+	Big Refactor !
+		Scratcheur + Les outils + Tactile (+ roue data (séparer durée et contenu))
+			PUIS
+		Soundcard
+		Library
+	Entretenir la page projet ircam forum
+	Contact Documentation
+
+Bugs
+	lecture dans mobile encapsulé
+	page des crédits baisée
+	Ouvrir son cassé ?
+	Hyper lent…
+	Nom des roues gêne les autres interactions
+	Annoncer sur la prochaines release, optimisé pour Chrome et ordinateur (affichage)
+	Check Timestretch => Grosse perte de gain
+	Cartouches centraux seraient mieux à droite sauf en mode édition
+		Ou ranger ?
+	DOC Très accompagnante pour lancer le serveur (windows + mac)
+
+Futur
+	Refactor
+		Interface unifiée tactile
+		spat
+		Modif durée temps réel (+ pitch)
+			GRM Player
+	balance à calcul
+	multipiste windows
+	binaural
+	OSC
+	Control Wheel interne
+	parchemin
+		Inclus export Offline Context
+	i18n (internationalization)
+	Live
+		Queueing
+	Boutons raccourcis clavier
+		Top prio, ça ou bigrefactor
+	Empaqueter une save avec ses sons
+		PRIO !!!
+	Déploiement Serveur Site …
+
+À voir
+	beauty clean (mobile et non chrome)
+		Long terme
+	Switch Notion
+		Import Glo Boards (gdrive)
+	Montréal
+		PRIO
+
+TODO générique
+	Newsletter site et github
+		sendinblue
+		check infomaniak
+			Chatons ?
+		PRIO !
+	Recherches site simple (infomaniak ?)
+		Moyen terme
+	Serveur gears maison
+		Moyen / long terme
+	Doc ++
+		Meuf de Jules
+		Contact Sarah
+	Compta et RBTs
+		Cf Juin
+
+IRCAM
+	Echo
+	3dias
+	vigliensoni
