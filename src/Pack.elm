@@ -11,7 +11,7 @@ import Math.Vector2 exposing (Vec2, vec2)
 import Svg
 import Tools.Coll as Coll exposing (Coll, Id)
 import Tools.Interact as Interact
-import Tools.PanSvg as PanSvg
+import Tools.PanSvg as PanSvg exposing (PanSvg)
 import TypedSvg as S
 
 
@@ -19,7 +19,8 @@ type alias Pack =
     { content : Maybe Wheel
     , wheels : Coll Packed
     , visible : Bool
-    , svg : PanSvg.Model
+
+    --, svg : PanSvg
     , scale : Float
     , dragging : Maybe Packed
     , initPos : Maybe Vec2 -- TODO could be in Dragging type
@@ -61,7 +62,8 @@ init =
     { content = Nothing
     , wheels = Coll.empty typeString defaultPacked
     , visible = False
-    , svg = PanSvg.init svgId
+
+    --, svg = PanSvg.init svgId
     , scale = 0.3
     , dragging = Nothing
     , initPos = Nothing
@@ -77,7 +79,7 @@ type Msg
     | DragTo (Maybe Packed)
     | DragFrom (Id Packed) Vec2
     | InitDrag (Id Packed)
-    | PrepareZoom PanSvg.Model
+    | PrepareZoom PanSvg
     | SvgMsg PanSvg.Msg
 
 
@@ -129,16 +131,20 @@ update msg pack =
                     pack
 
         PrepareZoom parent ->
-            if Coll.isEmpty pack.wheels then
-                update
-                    (SvgMsg <| PanSvg.SetSmallestSize <| parent.viewPos.smallestSize / pack.scale / 4)
-                    pack
-
-            else
-                pack
+            --if Coll.isEmpty pack.wheels then
+            --    update
+            --        (SvgMsg <| PanSvg.SetSmallestSize <| parent.viewPos.smallestSize / pack.scale / 4)
+            --        pack
+            --
+            --else
+            pack
 
         SvgMsg subMsg ->
-            { pack | svg = PanSvg.update subMsg pack.svg }
+            pack
+
+
+
+--{ pack | svg = PanSvg.update subMsg pack.svg }
 
 
 viewPackButtons : Pack -> List (Element Msg)
@@ -186,9 +192,10 @@ view pack events wrap interactable surfaceInter wrapInteract =
         <|
             html <|
                 S.svg
-                    ((List.map (Html.Attributes.map (wrap << SvgMsg)) <| PanSvg.svgAttributes pack.svg)
-                        ++ (List.map (Html.Attributes.map wrapInteract) <| Interact.draggableEvents surfaceInter)
-                    )
+                    --((List.map (Html.Attributes.map (wrap << SvgMsg)) <| PanSvg.svgAttributes pack.svg)
+                    --    ++
+                    (List.map (Html.Attributes.map wrapInteract) <| Interact.draggableEvents surfaceInter)
+                --)
                 <|
                     List.map
                         (\( id, p ) ->

@@ -23,3 +23,8 @@ input {
 #svgResizeObserver {
   touch-action: none;
 }
+
+svg * {
+  transform-box: fill-box;
+  transform-origin: center;
+}

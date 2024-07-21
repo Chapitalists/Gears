@@ -2,10 +2,11 @@ module Tools.Interact exposing (..)
 
 import Browser.Events as BE
 import Html
+import Html.Events
 import Html.Events.Extra.Mouse as Mouse
 import Json.Decode as D
 import Math.Vector2 as Vec exposing (Vec2, vec2)
-import Time
+import Time exposing (Posix)
 
 
 holdTime : Float
@@ -58,6 +59,7 @@ type alias ClickState item zone =
     , abs : Vec2
     , hold : HoldState zone
     , keys : Mouse.Keys
+    , startTime : Int
     }
 
 
@@ -78,10 +80,10 @@ init =
 type Msg item zone
     = HoverIn item
     | HoverOut
-    | StartClick item Vec2 Vec2 Mouse.Keys -- offsetPos clientPos
+    | StartClick item Vec2 Vec2 Mouse.Keys Int -- offsetPos clientPos
     | ClickMove zone Vec2 Vec2
     | ClickHold
-    | EndClick
+    | EndClick Int
     | AbortClick
     | NOOP
 
@@ -92,8 +94,8 @@ map f m =
         HoverIn a ->
             HoverIn (f a)
 
-        StartClick a v c k ->
-            StartClick (f a) v c k
+        StartClick a v c k t ->
+            StartClick (f a) v c k t
 
         HoverOut ->
             HoverOut
@@ -104,8 +106,8 @@ map f m =
         ClickHold ->
             ClickHold
 
-        EndClick ->
-            EndClick
+        EndClick t ->
+            EndClick t
 
         AbortClick ->
             AbortClick
@@ -126,8 +128,9 @@ type Action zone
     | DragIn
     | DragOut
     | DragEnded Bool -- True for Up, False for Abort
+    | Start Vec2
     | Holded
-    | HoldEnded
+    | HoldEnded Int -- milliseconds
 
 
 type alias DragInfo zone =
@@ -139,26 +142,39 @@ type alias DragInfo zone =
     }
 
 
-update : Msg item zone -> State item zone -> ( State item zone, Maybe (Event item zone) )
+update :
+    Msg item zone
+    -> State item zone
+    -> ( State item zone, Maybe (Event item zone) )
 update msg (S state) =
     case msg of
         HoverIn id ->
             ( S { state | hover = Just id }
-            , Maybe.map (always <| Event DragIn id) state.click
+            , Maybe.map (always (Event DragIn id)) state.click
             )
 
         HoverOut ->
-            case state.hover of
-                Just id ->
-                    ( S { state | hover = Nothing }
-                    , Maybe.map (always <| Event DragOut id) state.click
-                    )
+            ( S { state | hover = Nothing }
+            , Maybe.map2 (always (\hover -> Event DragIn hover))
+                state.click
+                state.hover
+            )
 
-                Nothing ->
-                    ( S state, Nothing )
-
-        StartClick id pos abs keys ->
-            ( S { state | click = Just <| ClickState id pos abs Clicking keys }, Nothing )
+        StartClick id pos abs keys time ->
+            ( S
+                { state
+                    | click =
+                        Just
+                            { item = id
+                            , pos = pos
+                            , abs = abs
+                            , hold = Clicking
+                            , keys = keys
+                            , startTime = time
+                            }
+                }
+            , Just { item = id, action = Start pos }
+            )
 
         ClickMove zone pos abs ->
             case state.click of
@@ -175,7 +191,12 @@ update msg (S state) =
                     ( S
                         { state
                             | click =
-                                Just { click | pos = pos, abs = abs, hold = Moving dragInit }
+                                Just
+                                    { click
+                                        | pos = pos
+                                        , abs = abs
+                                        , hold = Moving dragInit
+                                    }
                         }
                     , Just <|
                         Event
@@ -206,16 +227,16 @@ update msg (S state) =
                 _ ->
                     ( S state, Nothing )
 
-        EndClick ->
+        EndClick time ->
             case state.click of
-                Just { item, hold, keys } ->
+                Just { item, hold, keys, startTime } ->
                     ( S { state | click = Nothing }
                     , case hold of
                         Moving _ ->
                             Just <| Event (DragEnded True) item
 
                         Holding ->
-                            Just <| Event HoldEnded item
+                            Just <| Event (HoldEnded (time - startTime)) item
 
                         Clicking ->
                             Just <| Event (Clicked <| tupleFromKeys keys) item
@@ -233,7 +254,7 @@ update msg (S state) =
                             Just <| Event (DragEnded False) item
 
                         Holding ->
-                            Just <| Event HoldEnded item
+                            Just <| Event (HoldEnded 0) item
 
                         Clicking ->
                             Nothing
@@ -253,7 +274,9 @@ sub (S { click }) =
             []
 
         Just { hold } ->
-            [ BE.onMouseUp <| D.succeed <| EndClick
+            [ BE.onMouseUp <|
+                D.map (EndClick << round) <|
+                    D.field "timeStamp" D.float
             , BE.onVisibilityChange
                 (\v ->
                     -- TODO check bug visibility hidden not emitted on window change but on tab change
@@ -296,9 +319,45 @@ hoverEvents id =
 
 draggableEvents : item -> List (Html.Attribute (Msg item zone))
 draggableEvents id =
-    [ Mouse.onWithOptions "mousedown" { stopPropagation = True, preventDefault = False } <|
-        \e -> StartClick id (vecFromTuple e.offsetPos) (vecFromTuple e.clientPos) e.keys
+    [ onMouseDowm <|
+        \{ e, time } ->
+            StartClick id
+                (vecFromTuple e.offsetPos)
+                (vecFromTuple e.clientPos)
+                e.keys
+                time
     ]
+
+
+type alias TimedEvent =
+    { e : Mouse.Event
+    , time : Int
+    }
+
+
+decodeWithTime : D.Decoder TimedEvent
+decodeWithTime =
+    D.map2 TimedEvent
+        Mouse.eventDecoder
+    <|
+        D.map round <|
+            D.field "timeStamp" D.float
+
+
+onMouseDowm : (TimedEvent -> msg) -> Html.Attribute msg
+onMouseDowm msg =
+    let
+        opt m =
+            Debug.log "dec" <|
+                { message = m
+                , stopPropagation = True
+                , preventDefault = True
+                }
+
+        decoder =
+            D.map opt <| D.map msg <| decodeWithTime
+    in
+    Html.Events.custom "mousedown" decoder
 
 
 

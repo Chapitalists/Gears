@@ -16,6 +16,7 @@ type Interactable
     | IPacked (Id Packed)
     | ILink (Link Geer)
     | ISound Sound
+    | ISoundLib (List String)
     | IWaveCursor Cursor
     | IWaveSel
     | IWaveMapSel

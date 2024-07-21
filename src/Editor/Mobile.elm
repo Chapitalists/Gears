@@ -33,7 +33,8 @@ import Time
 import Tools.Coll as Coll exposing (Coll, Id)
 import Tools.Fraction as Fract exposing (Fraction)
 import Tools.Interact as Interact exposing (Interact)
-import Tools.PanSvg as PanSvg
+import Tools.PanSvg as PanSvg exposing (PanSvg)
+import Tools.Utils exposing (Size)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
@@ -89,7 +90,7 @@ type alias Model =
     , interact : Interact.State Interactable Zone
     , pack : Pack
     , wave : Waveform
-    , svg : PanSvg.Model
+    , svg : PanSvg
     }
 
 
@@ -165,6 +166,8 @@ type Dragging
     | Waving
     | Packed Vec2 (Id Packed)
     | Content ( Vec2, Float )
+    | PendingSound ( Vec2, String )
+    | NewSound ( Vec2, Sound )
     | ChgContent (Id Geer) Dragging
 
 
@@ -188,7 +191,7 @@ init =
     , interact = Interact.init
     , pack = Pack.init
     , wave = Waveform.init
-    , svg = PanSvg.init svgId
+    , svg = PanSvg.init svgId (Size 0 0) (vec2 0 0) 1
     }
 
 
@@ -212,6 +215,7 @@ changeView mayMobile parentUid model =
 type Msg
     = ChangedTool Tool
     | ChangedMode Mode
+    | GotDraggedSound Sound
       -- TODO EngineMsg ?
     | ToggleEngine
     | PlayGear
@@ -244,7 +248,7 @@ type Msg
     | Blink
     | InteractMsg (Interact.Msg Interactable Zone)
     | SvgMsg PanSvg.Msg
-    | SVGSize (Result D.Error PanSvg.Size)
+    | SVGSize (Result D.Error PanSvg.FloatSize)
     | WheelMsgs (List ( Identifier, Wheel.Msg ))
     | GearMsg ( Id Geer, Gear.Msg )
     | PackMsg Pack.Msg
@@ -325,6 +329,23 @@ update msg ( model, mobile ) =
 
             else
                 { return | model = { model | mode = mode } }
+
+        GotDraggedSound s ->
+            case model.dragging of
+                PendingSound ( p, path ) ->
+                    if Sound.getPath s == path then
+                        { return
+                            | model =
+                                { model
+                                    | dragging = NewSound ( p, s )
+                                }
+                        }
+
+                    else
+                        return
+
+                _ ->
+                    return
 
         ToggleEngine ->
             if Coll.maybeGet mobile.motor mobile.gears == Nothing then
@@ -992,9 +1013,8 @@ update msg ( model, mobile ) =
                                         ZSurface ->
                                             newModel.svg
 
-                                        ZPack ->
-                                            newModel.pack.svg
-
+                                        --ZPack ->
+                                        --    newModel.pack.svg
                                         _ ->
                                             Debug.todo "No pos map if Zone isn’t SVG"
 
@@ -1336,7 +1356,21 @@ viewContent ( model, mobile ) =
                         Coll.toList mobile.gears
                     )
                         -- VIEW DRAGGING
-                        ++ (case model.dragging of
+                        ++ (let
+                                newContentView p d o =
+                                    [ S.circle
+                                        [ SA.cx <| Num <| Vec.getX p
+                                        , SA.cy <| Num <| Vec.getY p
+                                        , SA.r <| Num (d / 2)
+                                        , SA.strokeWidth <| Num <| d / 30
+                                        , SA.stroke Color.black
+                                        , SA.strokeOpacity <| Opacity 0.5
+                                        , SA.fillOpacity <| Opacity o
+                                        ]
+                                        []
+                                    ]
+                            in
+                            case model.dragging of
                                 HalfLink ( id, pos ) ->
                                     case model.tool of
                                         Play _ _ ->
@@ -1391,18 +1425,14 @@ viewContent ( model, mobile ) =
                                 WeaveBeads seg _ ->
                                     [ Link.drawCut seg <| PanSvg.getScale model.svg ]
 
-                                Content ( p, l ) ->
-                                    [ S.circle
-                                        [ SA.cx <| Num <| Vec.getX p
-                                        , SA.cy <| Num <| Vec.getY p
-                                        , SA.r <| Num (l / 2)
-                                        , SA.strokeWidth <| Num <| l / 30
-                                        , SA.stroke Color.black
-                                        , SA.strokeOpacity <| Opacity 0.5
-                                        , SA.fillOpacity <| Opacity 0
-                                        ]
-                                        []
-                                    ]
+                                Content ( p, len ) ->
+                                    newContentView p len 0.5
+
+                                PendingSound ( p, _ ) ->
+                                    newContentView p (PanSvg.getScale model.svg * 50) 1
+
+                                NewSound ( p, s ) ->
+                                    newContentView p (Sound.length s) 0.5
 
                                 Packed pos id ->
                                     let
@@ -2299,7 +2329,7 @@ manageInteractEvent event model mobile =
                                 , toEngine = updateAllMuteToEngine model newMobile
                             }
 
-                        ( _, Interact.HoldEnded ) ->
+                        ( _, Interact.HoldEnded _ ) ->
                             { return | toUndo = Cancel, outMsg = Just UnSolo }
 
                         ( _, Interact.DragEnded _ ) ->
@@ -2394,6 +2424,34 @@ manageInteractEvent event model mobile =
                     }
 
                 ( ISound s, Interact.DragEnded True, Content ( p, _ ) ) ->
+                    update (NewGear p <| Content.S s) ( { model | dragging = NoDrag }, mobile )
+
+                -- FROM SOUNDLIB
+                --loaded
+                ( ISoundLib _, Interact.Dragged { newPos } ZSurface _, NewSound ( _, s ) ) ->
+                    { return
+                        | model = { model | dragging = NewSound ( newPos, s ) }
+                    }
+
+                --start
+                ( ISoundLib id, Interact.Dragged { newPos } ZSurface _, _ ) ->
+                    { return
+                        | model =
+                            { model
+                                | dragging =
+                                    PendingSound
+                                        ( newPos
+                                        , String.join "/" id
+                                        )
+                            }
+                    }
+
+                --pending end = abort
+                ( ISoundLib _, Interact.DragEnded True, PendingSound _ ) ->
+                    { return | model = { model | dragging = NoDrag } }
+
+                --loaded end, new gear
+                ( ISoundLib _, Interact.DragEnded True, NewSound ( p, s ) ) ->
                     update (NewGear p <| Content.S s) ( { model | dragging = NoDrag }, mobile )
 
                 -- FROM PACK
