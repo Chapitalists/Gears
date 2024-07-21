@@ -11,6 +11,7 @@
     , "lib/recorder.js"
     , "lib/audiobuffer-to-wav.js"
     , "LICENSE.md"
+    , "icons/*"
     ]
   }
 }

@@ -1,5 +1,5 @@
 /*
-Copyright ou © ou Copr. Clément Bossut, (2022)
+Copyright ou © ou Copr. Clément Bossut, (2024)
 <bossut.clement@gmail.com>
 */
 
