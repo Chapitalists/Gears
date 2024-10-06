@@ -54,10 +54,11 @@ const internCallback = staticRoute({dir:__dirname, tryfiles:['ports.html']})
     , dynamicCallbacks = {
 
         soundList : (req, res) => {
-            res.end(readdirRec(soundPath)
+          let tab = readdirRec(soundPath)
                 .filter(hidedFileFilter)
                 .filter(soundExtensionFilter)
-                .join('\0'))
+                .map(decode)
+          Promise.all(tab).then(t => {console.log(t);res.end(t.join('\u0000'))})
         }
 
         , savesList : (req, res) => {
@@ -177,6 +178,94 @@ function backItUp (filePath, fileName, extension) {
         filePath,
         backupPath + fileName + dateStr + extension
     )
+}
+
+/* Inspired by https://github.com/andreasgal/node-wav */
+
+async function decode(path) {
+  let pos = 0, end = 44;
+
+  let buffer = new ArrayBuffer(end)
+  let v = new DataView(buffer);
+  
+  try {
+    fs.readSync(fs.openSync(soundPath + '/' + path), v)
+
+    function u8() {
+      let x = v.getUint8(pos);
+      pos++;
+      return x;
+    }
+
+    function u16() {
+      let x = v.getUint16(pos, true);
+      pos += 2;
+      return x;
+    }
+
+    function u32() {
+      let x = v.getUint32(pos, true);
+      pos += 4;
+      return x;
+    }
+
+    function string(len) {
+      let str = '';
+      for (let i = 0; i < len; ++i)
+        str += String.fromCharCode(u8());
+      return str;
+    }
+
+    if (string(4) !== 'RIFF')
+      throw new TypeError('Invalid WAV file');
+    u32();
+    if (string(4) !== 'WAVE')
+      throw new TypeError('Invalid WAV file');
+
+    let fmt;
+
+    while (pos < end) {
+      let type = string(4);
+      let size = u32();
+      let next = pos + size;
+      switch (type) {
+      case 'fmt ':
+        let formatId = u16();
+        if (formatId !== 0x0001 && formatId !== 0x0003 && formatId !== 0xFFFE)
+          throw new TypeError(`Unsupported format in WAV file: ${formatId.toString(16)}`);
+        fmt = {
+          format: 'lpcm',
+          floatingPoint: formatId === 0x0003,
+          channels: u16(),
+          sampleRate: u32(),
+          byteRate: u32(),
+          blockSize: u16(),
+          bitDepth: u16(),
+        };
+        break;
+      case 'data':
+        if (!fmt)
+          throw new TypeError('Missing "fmt " chunk.');
+        let samples = Math.floor(size / fmt.blockSize);
+        let channels = fmt.channels;
+        let sampleRate = fmt.sampleRate;
+        return path + '\u001e' + samples + '\u001f' + channels + '\u001f' + sampleRate;
+  //      let channelData = [];
+  //      for (let ch = 0; ch < channels; ++ch)
+  //        channelData[ch] = new Float32Array(samples);
+  //      lookup(data_decoders, fmt.bitDepth, fmt.floatingPoint)(buffer, pos, channelData, channels, samples);
+  //      return {
+  //        sampleRate: sampleRate,
+  //        channelData: channelData
+  //      };
+  //      break;
+      }
+      pos = next;
+    }
+  } catch(error) {
+    console.error(error, path, v)
+    return null;
+  }
 }
 
 require('http').createServer(callback).listen(port)

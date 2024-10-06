@@ -1,21 +1,21 @@
 module Tools.Panel exposing
     ( Side(..)
-    , Size
     , ViewType(..)
     , view
     )
 
 import Element exposing (..)
+import Element.Background as Bg
+import Element.Border as B
 import Html.Events as E
-
-
-type alias Size =
-    { width : Int, height : Int }
+import Palette exposing (..)
+import Tools.Utils exposing (Size)
 
 
 type ViewType
     = Hidden
-    | Shown
+    | Border { side : Side, size : Size }
+    | Full
 
 
 type Side
@@ -27,7 +27,7 @@ type Side
 
 view :
     ( ViewType -> msg
-    , Element msg
+    , ViewType -> Element msg
     )
     -> Side
     -> ViewType
@@ -76,7 +76,7 @@ view ( panelMsg, subView ) side viewType size =
                     , center = centerY
                     , arrowOut = arrowRight
                     , arrowIn = arrowLeft
-                    , attr = height <| px size.height
+                    , attr = height <| px (size.height - marginBase * 2)
                     , layout = row
                     , arrowFirst = False
                     }
@@ -85,12 +85,12 @@ view ( panelMsg, subView ) side viewType size =
         Hidden ->
             inFront <|
                 el
-                    ((htmlAttribute <| E.onClick <| panelMsg <| Shown)
+                    ((htmlAttribute <| E.onClick <| panelMsg <| Border)
                         :: [ kit.alignSide, kit.center, padding 5 ]
                     )
                     (text <| String.fromChar kit.arrowOut)
 
-        Shown ->
+        Border ->
             let
                 arrow =
                     el
@@ -100,7 +100,26 @@ view ( panelMsg, subView ) side viewType size =
                         (text <| String.fromChar kit.arrowIn)
             in
             inFront <|
-                kit.layout [ kit.alignSide, kit.attr ] <|
+                kit.layout
+                    [ kit.alignSide
+                    , kit.attr
+                    , kit.center
+                    , B.roundEach
+                        { topRight = roundBase
+                        , bottomRight = roundBase
+                        , topLeft = 0
+                        , bottomLeft = 0
+                        }
+                    , B.widthEach
+                        { top = strokeBase
+                        , bottom = strokeBase
+                        , right = strokeBase
+                        , left = 0
+                        }
+                    , B.color <| toEl borderBase
+                    , Bg.color <| toEl bgBase
+                    ]
+                <|
                     if kit.arrowFirst then
                         [ arrow, subView ]
 

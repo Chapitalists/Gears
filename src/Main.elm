@@ -1,9 +1,7 @@
 module Main exposing (..)
 
---import Tools.Panel as P
---import Pack exposing (Pack)
-
 import Browser
+import Browser.Dom as Dom
 import Browser.Events as BE
 import Browser.Navigation as Nav
 import Color
@@ -12,7 +10,6 @@ import Editor.Interacting exposing (Interactable(..), Zone)
 import Element exposing (..)
 import Html exposing (Html)
 import Html.Attributes as Attr
-import Json.Decode as D
 import Library exposing (Library)
 import Math.Vector2 exposing (Vec2, getX, getY, vec2)
 import Random
@@ -20,6 +17,7 @@ import Simple.Animation as Animation exposing (Animation, Millis)
 import Simple.Animation.Animated as Animated
 import Simple.Animation.Property as P
 import SoundCard exposing (SoundCard)
+import Task exposing (Task)
 import Time exposing (Posix, every)
 import Tools.Interact as Interact exposing (Action(..), Event)
 import Tools.PanSvg as PanSvg exposing (PanSvg)
@@ -58,15 +56,9 @@ main =
 
 type alias Model =
     { screenSize : Size
-
-    --, pixelPerSecond : Float
     , workplane : PanSvg
-
-    --, views : Views
     , doc : Doc.Model
     , lib : Library
-
-    --, pack : Pack
     , soundCard : SoundCard
     , state : State
     , interact : Interact.State Interactable Zone
@@ -268,7 +260,6 @@ sub : Model -> Sub Msg
 sub { doc, state, screenSize, interact } =
     ([ BE.onResize (\w h -> GotScreenSize { width = w, height = h })
      , Sub.map DocMsg <| Doc.sub doc
-     , Sub.map LibMsg Library.sub
      , Sub.map SoundMsg SoundCard.sub
      , Sub.map InteractMsg <| Interact.sub interact
      ]
@@ -292,9 +283,16 @@ sub { doc, state, screenSize, interact } =
 
 view : Model -> Browser.Document Msg
 view model =
+    let
+        ( attrs, content ) =
+            viewState model
+
+        _ =
+            Debug.log "" attrs
+    in
     { title = "Gears !"
     , body =
-        [ layout [] <|
+        [ layout attrs <|
             Element.html <|
                 S.svg
                     (List.map (Attr.map WorkplaneMsg)
@@ -303,19 +301,33 @@ view model =
                             (Interact.draggableEvents ISurface)
                     )
                 <|
-                    case model.state of
-                        Prologue g ->
-                            [ autoGear prologueAnimation g ]
-
-                        Creating g p d ->
-                            [ autoGear prologueAnimation g
-                            , S.circle (gearAttrs p d) []
-                            ]
-
-                        Bubble p d ->
-                            [ S.circle (gearAttrs p d) [] ]
+                    content
         ]
     }
+
+
+viewState model =
+    case model.state of
+        Prologue g ->
+            ( []
+            , [ autoGear prologueAnimation g ]
+            )
+
+        Creating g p d ->
+            ( []
+            , [ autoGear prologueAnimation g
+              , S.circle (gearAttrs p d) []
+              ]
+            )
+
+        Bubble p d ->
+            ( [ inFront <|
+                    map LibMsg <|
+                        Library.view model.lib d <|
+                            PanSvg.getScale model.workplane
+              ]
+            , [ S.circle (gearAttrs p d) [] ]
+            )
 
 
 
@@ -394,6 +406,10 @@ manageInteractEvent model event =
                     in
                     ( { model | state = Bubble p t }, Cmd.none )
 
+                --, Task.attempt (always NOOP) <|
+                --    scrollTo Library.libId <|
+                --        Library.nearestId model.lib t
+                --)
                 ( ISurface, Clicked _ ) ->
                     ( { model | state = Prologue g }, Cmd.none )
 
@@ -481,6 +497,19 @@ randPrologue ratio =
             Random.int 1000 5000 |> Random.map toFloat
     in
     Random.map3 AutoGear (Random.map2 vec2 x y) dur laps
+
+
+scrollTo : String -> String -> Task Dom.Error ()
+scrollTo col el =
+    Task.andThen
+        (\{ element, viewport } ->
+            Dom.setViewportOf col 0 <|
+                element.x
+                    - viewport.height
+                    / 2
+        )
+    <|
+        Dom.getElement el
 
 
 workplaneId : String

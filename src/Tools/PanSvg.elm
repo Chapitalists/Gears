@@ -72,7 +72,7 @@ type alias ViewPos =
 
 getScale : PanSvg -> Float
 getScale (Model { viewPos, svgSize }) =
-    viewPos.smallestSize / min svgSize.height svgSize.width
+    min svgSize.height svgSize.width / viewPos.smallestSize
 
 
 mapIn : Vec2 -> PanSvg -> Vec2
