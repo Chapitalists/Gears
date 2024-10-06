@@ -3,7 +3,6 @@ module Library exposing
     , Msg
     , init
     , libId
-    , nearestId
     , update
     , view
     )
@@ -16,6 +15,7 @@ import Element.Input as Input
 import Html.Attributes as Attr
 import Http
 import Palette exposing (..)
+import Tools.Utils exposing (httpErrorToString)
 import Url exposing (Url)
 
 
@@ -151,49 +151,82 @@ update msg (Model model) =
 
 view : Library -> Float -> Float -> Element Msg
 view (Model model) d scale =
+    case model.files of
+        NotAsked ->
+            text "Get Files"
+
+        Pending ->
+            text "Waiting…"
+
+        NewPending data ->
+            viewList data d scale
+
+        Got data ->
+            viewList data d scale
+
+        Error error ->
+            text ("Error: " ++ httpErrorToString error)
+
+
+viewList : FileList -> Float -> Float -> Element Msg
+viewList dict d scale =
     let
         l =
-            List.sortBy (fileToMillis << Tuple.second) <| Dict.toList model.files
+            List.sortBy (fileToMillis << Tuple.second) <| Dict.toList dict
     in
-    column
-        --[ scrollbarY
-        --, htmlAttribute <| Attr.id libId
-        []
-    <|
-        .l <|
-            List.foldr
-                (\el acc ->
-                    let
-                        curD =
-                            fileToMillis <| Tuple.second el
+    case l of
+        [] ->
+            text "No Files On Server"
 
-                        nearest =
-                            curD <= d && acc.lastD > d
+        _ ->
+            let
+                res =
+                    List.foldr
+                        (\el acc ->
+                            let
+                                curD =
+                                    fileToMillis <| Tuple.second el
 
-                        newLine =
-                            viewFile scale nearest el
-                    in
-                    { lastD = curD, l = newLine :: acc.l }
-                )
-                { lastD = 1 / 0, l = [] }
-                l
+                                nearest =
+                                    curD <= d && acc.lastD > d
+
+                                newLine =
+                                    viewFile scale d nearest el
+                            in
+                            { lastD = curD
+                            , l = newLine :: acc.l
+                            , cumulD = acc.cumulD + curD
+                            }
+                        )
+                        { lastD = 1 / 0
+                        , l = []
+                        , cumulD = 0
+                        }
+                        l
+            in
+            column
+                [ scrollbarY
+                , htmlAttribute <| Attr.id libId
+                , moveUp d
+                ]
+                res.l
 
 
-viewFile : Float -> Bool -> ( String, FileInfo ) -> Element Msg
-viewFile scale nearest ( path, info ) =
+viewFile : Float -> Float -> Bool -> ( String, FileInfo ) -> Element Msg
+viewFile scale d nearest ( path, info ) =
+    let
+        size =
+            round <| scale * d
+    in
     row
-        (if nearest then
-            [ centerY ]
-
-         else
-            []
-        )
-        --htmlAttribute <| Attr.id <| fileToId ( path, info ) ]
+        [ height <| px size
+        , htmlAttribute <| Attr.id <| fileToId ( path, info )
+        ]
         [ text <| pathToFilename path
         , roundButton
-            (round <| scale * fileToMillis info)
+            size
             True
-            False
+            nearest
             Red
             none
         ]
@@ -291,38 +324,36 @@ fetchSoundList url =
 
 
 -- Utils
-
-
-nearestId : Library -> Float -> String
-nearestId (Model model) d =
-    case Dict.toList model.files of
-        [] ->
-            ""
-
-        el :: l ->
-            let
-                accu =
-                    { diff = abs d - fileToMillis (Tuple.second el)
-                    , file = el
-                    }
-
-                nearestEl =
-                    List.foldl
-                        (\( path, info ) acc ->
-                            let
-                                diff =
-                                    abs (d - fileToMillis info)
-                            in
-                            if diff < acc.diff then
-                                { diff = diff, file = ( path, info ) }
-
-                            else
-                                acc
-                        )
-                        accu
-                        l
-            in
-            fileToId nearestEl.file
+--nearestId : Library -> Float -> String
+--nearestId (Model model) d =
+--    case Dict.toList model.files of
+--        [] ->
+--            ""
+--
+--        el :: l ->
+--            let
+--                accu =
+--                    { diff = abs d - fileToMillis (Tuple.second el)
+--                    , file = el
+--                    }
+--
+--                nearestEl =
+--                    List.foldl
+--                        (\( path, info ) acc ->
+--                            let
+--                                diff =
+--                                    abs (d - fileToMillis info)
+--                            in
+--                            if diff < acc.diff then
+--                                { diff = diff, file = ( path, info ) }
+--
+--                            else
+--                                acc
+--                        )
+--                        accu
+--                        l
+--            in
+--            fileToId nearestEl.file
 
 
 fileToMillis : FileInfo -> Float
