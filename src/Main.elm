@@ -13,7 +13,6 @@ import Element exposing (..)
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Json.Decode as D
-import Library exposing (Library)
 import Math.Vector2 exposing (Vec2, getX, getY, vec2)
 import Random
 import Simple.Animation as Animation exposing (Animation, Millis)
@@ -64,7 +63,6 @@ type alias Model =
 
     --, views : Views
     , doc : Doc.Model
-    , lib : Library
 
     --, pack : Pack
     , soundCard : SoundCard
@@ -113,8 +111,6 @@ type alias AutoGear =
 init : Size -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init screen url _ =
     let
-        ( lib, libCmd ) =
-            Library.init url
 
         initDur =
             2000
@@ -130,14 +126,13 @@ init screen url _ =
 
       --, views = initViews
       , doc = Doc.init <| Just url
-      , lib = lib
 
       --, pack = Pack.init
       , soundCard = SoundCard.init
       , state = Prologue <| AutoGear (vec2 0 0) initDur (initDur * 2)
       , interact = Interact.init
       }
-    , Cmd.map LibMsg libCmd
+    , Cmd.none
     )
 
 
@@ -152,7 +147,6 @@ type Msg
       --| ViewSoundChg P.ViewType
     | WorkplaneMsg PanSvg.Msg
     | DocMsg Doc.Msg
-    | LibMsg Library.Msg
     | SoundMsg SoundCard.Msg
     | InteractMsg (Interact.Msg Interactable Zone)
     | RequestAutoGear
@@ -203,13 +197,6 @@ update msg model =
                     Doc.update subMsg model.doc
             in
             ( { model | doc = doc }, Cmd.map DocMsg cmd )
-
-        LibMsg subMsg ->
-            let
-                ( l, cmd, wheel ) =
-                    Library.update subMsg model.lib
-            in
-            ( { model | lib = l }, Cmd.map LibMsg cmd )
 
         SoundMsg subMsg ->
             let
@@ -268,7 +255,6 @@ sub : Model -> Sub Msg
 sub { doc, state, screenSize, interact } =
     ([ BE.onResize (\w h -> GotScreenSize { width = w, height = h })
      , Sub.map DocMsg <| Doc.sub doc
-     , Sub.map LibMsg Library.sub
      , Sub.map SoundMsg SoundCard.sub
      , Sub.map InteractMsg <| Interact.sub interact
      ]
