@@ -1,8 +1,5 @@
 module Main exposing (..)
 
---import Tools.Panel as P
---import Pack exposing (Pack)
-
 import Browser
 import Browser.Events as BE
 import Browser.Navigation as Nav
@@ -12,7 +9,6 @@ import Editor.Interacting exposing (Interactable(..), Zone)
 import Element exposing (..)
 import Html exposing (Html)
 import Html.Attributes as Attr
-import Json.Decode as D
 import Math.Vector2 exposing (Vec2, getX, getY, vec2)
 import Random
 import Simple.Animation as Animation exposing (Animation, Millis)
@@ -57,14 +53,8 @@ main =
 
 type alias Model =
     { screenSize : Size
-
-    --, pixelPerSecond : Float
     , workplane : PanSvg
-
-    --, views : Views
     , doc : Doc.Model
-
-    --, pack : Pack
     , soundCard : SoundCard
     , state : State
     , interact : Interact.State Interactable Zone
@@ -111,23 +101,16 @@ type alias AutoGear =
 init : Size -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init screen url _ =
     let
-
         initDur =
             2000
     in
     ( { screenSize = screen
-
-      --, pixelPerSecond = initialPixPerSec
       , workplane =
             PanSvg.init workplaneId
                 screen
                 (vec2 0 0)
                 initDur
-
-      --, views = initViews
       , doc = Doc.init <| Just url
-
-      --, pack = Pack.init
       , soundCard = SoundCard.init
       , state = Prologue <| AutoGear (vec2 0 0) initDur (initDur * 2)
       , interact = Interact.init
@@ -166,13 +149,6 @@ update msg model =
             , Cmd.none
             )
 
-        --ViewLibChg fp ->
-        --    let
-        --        views =
-        --            model.views
-        --    in
-        --    ( { model | views = { views | lib = fp } }, Cmd.none )
-        --
         --ViewMenuChg vt ->
         --    let
         --        views =
@@ -307,20 +283,7 @@ view model =
 
 {- }
                    el
-                   ((case model.views.lib of
-                       Panel vt ->
-                           P.view
-                               ( ViewLibChg << Panel
-                               , map LibMsg <| Library.viewFileExplorer model.lib
-                               )
-                               P.Right
-                               vt
-                               model.screenSize
-
-                       _ ->
-                           Debug.todo "FullLib"
-                    )
-                       :: P.view
+                   (P.view
                            ( ViewMenuChg
                            , map DocMsg <| Doc.viewMenu model.doc
                            )
