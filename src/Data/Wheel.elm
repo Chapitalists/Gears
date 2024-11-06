@@ -21,8 +21,9 @@ type alias Wheeled a =
 
 type alias Wheel =
     { name : String
+    , millis : Float
     , startPercent : Float --TODO Makes no sense, if specific to sound, should be in sound -- Percent of whole sound, not just looped part
-    , volume : Float
+    , volume : Float -- TODO also spécific to sound
     , content : WheelContent
     , viewContent : Bool
     , mute : Bool
@@ -82,6 +83,7 @@ setContent c g =
 default : Wheel
 default =
     { name = ""
+    , millis = -1
     , startPercent = 0
     , volume = 1
     , content = C <| Content.S Sound.noSound
@@ -549,6 +551,7 @@ insideCollarView collar mayWheelInter parentUid =
 encoder : Wheel -> List ( String, E.Value )
 encoder w =
     [ ( "name", E.string w.name )
+    , ( "millis", E.float w.millis )
     , ( "startPercent", E.float w.startPercent )
     , ( "volume", E.float w.volume )
     , ( "mute", E.bool w.mute )
@@ -579,24 +582,27 @@ decoder getContentLength =
                                                             \mayColor ->
                                                                 Field.attemptAt [ "color", "hue" ] D.float <|
                                                                     \mayHue ->
-                                                                        D.succeed
-                                                                            { name = Maybe.withDefault "" name
-                                                                            , startPercent = startPercent
-                                                                            , volume = volume
-                                                                            , content = C content
-                                                                            , viewContent = Maybe.withDefault True viewContent
-                                                                            , mute = mute
-                                                                            , color =
-                                                                                case mayColor of
-                                                                                    Just c ->
-                                                                                        c
-
-                                                                                    Nothing ->
-                                                                                        case mayHue of
-                                                                                            Just h ->
-                                                                                                h
+                                                                        Field.attempt "millis" D.float <|
+                                                                            \mayMillis ->
+                                                                                D.succeed
+                                                                                    { name = Maybe.withDefault "" name
+                                                                                    , millis = Maybe.withDefault -1 mayMillis
+                                                                                    , startPercent = startPercent
+                                                                                    , volume = volume
+                                                                                    , content = C content
+                                                                                    , viewContent = Maybe.withDefault True viewContent
+                                                                                    , mute = mute
+                                                                                    , color =
+                                                                                        case mayColor of
+                                                                                            Just c ->
+                                                                                                c
 
                                                                                             Nothing ->
-                                                                                                0
-                                                                            }
+                                                                                                case mayHue of
+                                                                                                    Just h ->
+                                                                                                        h
+
+                                                                                                    Nothing ->
+                                                                                                        0
+                                                                                    }
             )

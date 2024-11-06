@@ -1,4 +1,4 @@
-module Library exposing
+port module Library exposing
     ( Library
     , Msg
     , init
@@ -7,16 +7,25 @@ module Library exposing
     , view
     )
 
-import Data.Wheel exposing (Wheel)
 import Dict exposing (Dict)
 import Element exposing (..)
 import Element.Font as Font
 import Element.Input as Input
-import Html.Attributes as Attr
 import Http
-import Palette exposing (..)
-import Tools.Utils exposing (httpErrorToString)
+import Json.Decode as D
+import Round
+import Tools.Utils exposing (htmlId, httpErrorToString)
 import Url exposing (Url)
+
+
+port requestSoundLoading : String -> Cmd msg
+
+
+
+--TODO Percents
+
+
+port gotSoundLoaded : (D.Value -> msg) -> Sub msg
 
 
 type Library
@@ -28,9 +37,19 @@ type alias FileList =
 
 
 type alias FileInfo =
-    { content : ContentType
-    , play : Maybe Float
-    , loaded : LoadState
+    FileItemExtensible {}
+
+
+type alias FileItem =
+    FileItemExtensible { path : String }
+
+
+type alias FileItemExtensible a =
+    { a
+        | content : ContentType
+        , play : Maybe Float
+        , loaded : LoadState
+        , millis : Float
     }
 
 
@@ -52,6 +71,7 @@ type LoadState
     = Not
     | Full
     | Percent Float
+    | Failed
 
 
 type RemoteData data
@@ -98,23 +118,25 @@ init url =
 type Msg
     = RequestFileList
     | GotFileList (Result Http.Error String)
+    | FileLoaded (Result D.Error String)
+    | ClickFile FileItem
 
 
 type alias Return =
     { model : Internals
     , cmd : Cmd Msg
-    , wheel : Maybe Wheel
+    , data : Maybe FileItem
     }
 
 
-update : Msg -> Library -> ( Library, Cmd Msg, Maybe Wheel )
+update : Msg -> Library -> ( Library, Cmd Msg, Maybe FileItem )
 update msg (Model model) =
     let
         return : Return
         return =
             { model = model
             , cmd = Cmd.none
-            , wheel = Nothing
+            , data = Nothing
             }
     in
     (case msg of
@@ -145,34 +167,80 @@ update msg (Model model) =
                                 | files = Got <| manageNewSoundList str
                             }
                     }
+
+        FileLoaded result ->
+            let
+                dict =
+                    failSafeRemoteFiles model.files
+                path =
+                    case result of
+                        Err e ->
+                            Debug.log (D.errorToString e) Failed
+                        Ok str =
+
+            in
+
+            case result of
+                Err e ->
+
+        ClickFile item ->
+            let
+                dict =
+                    failSafeRemoteFiles model.files
+
+                ( newItem, cmd ) =
+                    maybeLoad item
+
+                newDict =
+                    Dict.insert item.path (itemToInfo newItem) dict
+            in
+            { return
+                | model = { model | files = updateRemoteData model.files newDict }
+                , cmd = cmd
+                , data = Just newItem
+            }
     )
-        |> (\ret -> ( Model ret.model, ret.cmd, ret.wheel ))
+        |> (\ret -> ( Model ret.model, ret.cmd, ret.data ))
+
+
+sub : Sub Msg
+sub =
+    gotSoundLoaded (FileLoaded << D.decodeValue (D.field "path" D.string))
 
 
 view : Library -> Float -> Float -> Element Msg
-view (Model model) d scale =
+view (Model model) refD scale =
     case model.files of
         NotAsked ->
-            text "Get Files"
+            text "Not Asked…"
 
         Pending ->
             text "Waiting…"
 
         NewPending data ->
-            viewList data d scale
+            viewList data refD scale
 
         Got data ->
-            viewList data d scale
+            viewList data refD scale
 
         Error error ->
             text ("Error: " ++ httpErrorToString error)
 
 
+
+-- TODO : IDÉE ! pas scrollbar, mais scroll virtuel
+-- placer nearest au bon endroit, et le reste "above" ou "below"
+-- hover affiche la roue "onRight"
+
+
 viewList : FileList -> Float -> Float -> Element Msg
-viewList dict d scale =
+viewList dict refD scale =
     let
+        proccessedList =
+            List.map infoToItem <| Dict.toList dict
+
         l =
-            List.sortBy (fileToMillis << Tuple.second) <| Dict.toList dict
+            List.sortBy .millis proccessedList
     in
     case l of
         [] ->
@@ -185,13 +253,13 @@ viewList dict d scale =
                         (\el acc ->
                             let
                                 curD =
-                                    fileToMillis <| Tuple.second el
+                                    el.millis
 
-                                nearest =
-                                    curD <= d && acc.lastD > d
+                                isNearest =
+                                    curD <= refD && acc.lastD > refD
 
                                 newLine =
-                                    viewFile scale d nearest el
+                                    viewFile scale refD isNearest el
                             in
                             { lastD = curD
                             , l = newLine :: acc.l
@@ -206,65 +274,72 @@ viewList dict d scale =
             in
             column
                 [ scrollbarY
-                , htmlAttribute <| Attr.id libId
-                , moveUp d
+                , htmlId libId
+
+                --, moveDown d
                 ]
                 res.l
 
 
-viewFile : Float -> Float -> Bool -> ( String, FileInfo ) -> Element Msg
-viewFile scale d nearest ( path, info ) =
+viewFile : Float -> Float -> Bool -> FileItem -> Element Msg
+viewFile scale refD isNearest item =
     let
         size =
-            round <| scale * d
+            round <| scale * item.millis
     in
     row
-        [ height <| px size
-        , htmlAttribute <| Attr.id <| fileToId ( path, info )
-        ]
-        [ text <| pathToFilename path
-        , roundButton
-            size
-            True
-            nearest
-            Red
-            none
-        ]
+        --[ height <| px size
+        ((htmlId <| pathToId item.path)
+            :: (if isNearest then
+                    [ Font.bold ]
 
-
-viewOpenRefreshButtons : Msg -> Msg -> Bool -> List (Element Msg)
-viewOpenRefreshButtons openMsg refreshMsg connected =
-    [ Input.button []
-        { label = text "Ouvrir"
-        , onPress = Just openMsg
-        }
-    , Input.button
-        [ Font.color <|
-            if connected then
-                rgb 0 0 0
-
-            else
-                rgb 1 0 0
-        ]
-        { onPress = Just refreshMsg
-        , label = text "Actualiser"
-        }
-    ]
-
-
-viewLibColumn : List (Element Msg) -> Element Msg
-viewLibColumn =
-    column
-        [ width fill
-        , spacing 5
-        , padding 2
-        , scrollbarY
-        , htmlAttribute <| Attr.style "overflow-x" "hidden"
+                else
+                    []
+               )
+            ++ [ spacing 10 ]
+        )
+        [ Input.button []
+            { onPress = Just <| ClickFile item
+            , label = text <| pathToFilename item.path
+            }
+        , el [ Font.size 10 ] <|
+            text <|
+                Round.round 2 (item.millis - refD)
         ]
 
 
 
+--viewOpenRefreshButtons : Msg -> Msg -> Bool -> List (Element Msg)
+--viewOpenRefreshButtons openMsg refreshMsg connected =
+--    [ Input.button []
+--        { label = text "Ouvrir"
+--        , onPress = Just openMsg
+--        }
+--    , Input.button
+--        [ Font.color <|
+--            if connected then
+--                rgb 0 0 0
+--
+--            else
+--                rgb 1 0 0
+--        ]
+--        { onPress = Just refreshMsg
+--        , label = text "Actualiser"
+--        }
+--    ]
+--
+--
+--viewLibColumn : List (Element Msg) -> Element Msg
+--viewLibColumn =
+--    column
+--        [ width fill
+--        , spacing 5
+--        , padding 2
+--        , scrollbarY
+--        , htmlAttribute <| Attr.style "overflow-x" "hidden"
+--        ]
 --TODO Error management
+-- TODO Update existing !!!!!!!
 
 
 manageNewSoundList : String -> FileList
@@ -295,10 +370,11 @@ manageNewSoundList str =
                 samples :: channels :: sampleRate :: [] ->
                     Maybe.map3
                         (\samp chan rate ->
-                            FileInfo
-                                (Sound <| SoundInfo rate samp chan)
-                                Nothing
-                                Not
+                            { content = Sound <| SoundInfo rate samp chan
+                            , play = Nothing
+                            , loaded = Not
+                            , millis = 1000 * toFloat samp / toFloat rate
+                            }
                         )
                         (String.toInt samples)
                         (String.toInt channels)
@@ -354,32 +430,60 @@ fetchSoundList url =
 --                        l
 --            in
 --            fileToId nearestEl.file
+--TODO What about loading again if changed ?!?
 
 
-fileToMillis : FileInfo -> Float
-fileToMillis { content } =
-    case content of
-        Sound soundInfo ->
-            soundToMillis soundInfo
+maybeLoad : FileItem -> ( FileItem, Cmd msg )
+maybeLoad item =
+    case item.loaded of
+        Not ->
+            ( { item | loaded = Percent 0 }
+            , requestSoundLoading item.path
+            )
 
-        Mobile ->
-            0
+        Full ->
+            ( item, Cmd.none )
 
-        Collar ->
-            0
+        Percent _ ->
+            ( item, Cmd.none )
 
-        Automation ->
-            0
+        Failed ->
+            ( { item | loaded = Percent 0 }
+            , requestSoundLoading item.path
+            )
 
 
-soundToMillis : SoundInfo -> Float
-soundToMillis { sampleRate, samples } =
-    1000 * toFloat samples / toFloat sampleRate
+infoToItem : ( String, FileInfo ) -> FileItem
+infoToItem ( path, info ) =
+    { path = path
+    , content = info.content
+    , play = info.play
+    , loaded = info.loaded
+    , millis = info.millis
+    }
+
+
+itemToInfo : FileItem -> FileInfo
+itemToInfo item =
+    { content = item.content
+    , play = item.play
+    , loaded = item.loaded
+    , millis = item.millis
+    }
 
 
 fileToId : ( String, FileInfo ) -> String
 fileToId ( str, info ) =
+    pathToId str
+
+
+pathToId : String -> String
+pathToId str =
     str ++ "LibEntryId"
+
+
+
+-- TODO check https://package.elm-lang.org/packages/thomasin/elm-path/
 
 
 pathToDirList : String -> List String
@@ -405,6 +509,45 @@ cutExtension fullName =
             String.split "." fullName
     in
     String.join "." <| List.take (List.length l - 1) l
+
+
+remoteToMaybe : RemoteData a -> Maybe a
+remoteToMaybe remote =
+    case remote of
+        NotAsked ->
+            Nothing
+
+        Pending ->
+            Nothing
+
+        NewPending data ->
+            Just data
+
+        Got data ->
+            Just data
+
+        Error _ ->
+            Nothing
+
+
+updateRemoteData : RemoteData a -> a -> RemoteData a
+updateRemoteData remote data =
+    case remote of
+        NewPending _ ->
+            Debug.log "WARNING, new data pending, update’ll be lost…" <|
+                NewPending data
+
+        Got _ ->
+            Got data
+
+        _ ->
+            Debug.log "WARNING, no data, update ignored…" <|
+                remote
+
+
+failSafeRemoteFiles : RemoteData FileList -> FileList
+failSafeRemoteFiles =
+    Maybe.withDefault Dict.empty << remoteToMaybe
 
 
 libId : String
