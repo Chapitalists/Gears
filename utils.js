@@ -19,3 +19,13 @@ function addButton(name, fn, parent = body) {
 }
 
 function dist(x,y) {return Math.sqrt(Math.pow(x,2)+Math.pow(y,2))}
+
+function dataURLtoBuffer(uri) {
+  let byteString = atob(uri.split(',')[1])
+    , length = byteString.length
+    , bytes = new Uint8Array(length)
+  for (let i = 0 ; i < length ; i++) {
+    bytes[i] = byteString.charCodeAt(i)
+  }
+  return bytes
+}

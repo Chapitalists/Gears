@@ -1,6 +1,13 @@
 // TODO to prevent rounding, all calculations making time progress should be in scheduler timespace
 // presently, scheduling values get sometimes incremented by values coming from durations
 
+
+/////// WARNING the use of length and duration can be confusing
+// in buffer source nodes, duration refers to the sound, counting samples from the buffer
+// in my scheduler, length refers to the real time expected with the playbackRate applied
+// TODO change naming to be more intelligible ?
+
+
 const playPauseLatency = .1
     , ctx = new AudioContext()
     , masterGain = ctx.createGain()
@@ -13,7 +20,7 @@ let scheduler = {
   , running : false
   , intervalId : -1
   , startTime : -1
-  
+
   , getTime() {
     if (!this.running) return -1;
     return ctx.currentTime - this.startTime
@@ -22,10 +29,10 @@ let scheduler = {
     if (!this.running) return -1;
     return t + this.startTime
   }
-  
+
   , startThenPlay(topGears) {
     if (this.running) this.playPause(topGears)
-    
+
     else {
       this.running = true
 
@@ -38,15 +45,15 @@ let scheduler = {
       })
     }
   }
-  
+
   , stop() {
     if (!this.running) return;
-    
+
     clearInterval(this.intervalId)
     cancelAnimationFrame(this.nextRequestId)
-    
+
     this.running = false
-    
+
     let stopWheel = model => {
       if (model.soundPath) {
         model.players.forEach(pl => pl.node.stop())
@@ -58,11 +65,11 @@ let scheduler = {
     for (let id in this.playingTopModels) {
       stopWheel(this.playingTopModels[id])
     }
-    
+
     for (let model of this.modelsToDraw) {
       model.view.moveTo(0)
     }
-    
+
     ctx.suspend()
 
     this.intervalId = -1
@@ -71,10 +78,9 @@ let scheduler = {
     this.modelsToDraw = []
     this.playingTopModels = {}
   }
-  
-  
+
   , playingTopModels : {}
-  , prepare(t, model, destination, parentRate) {
+  , prepare(t, model, destination, parentRate) {    
     // TODO this is creating a new func instance for each method for each model
     // It’s bad!! Should be in proto ?
     model.lastScheduledTime = t
@@ -96,11 +102,34 @@ let scheduler = {
       this.gainNode.gain.value = this.mute ? 0 : this.volume
     } // TODO volume should rather be in dB
     model.updateVolume()
-    
+
     if (model.soundPath) {
       // WARNING in model, startPercent is of whole sound, here it’s of content
-      model.startPercent = (model.startPercent - model.loopPercents[0]) / (model.loopPercents[1] - model.loopPercents[0])
+      // not anymore in bigRefactor / 1.0 / proto draft pupil
+//      model.startPercent = (model.startPercent - model.loopPercents[0]) / (model.loopPercents[1] - model.loopPercents[0])
 
+    
+// TODO from main wheel to engine
+/* //// WHEEL PART
+ * wheelId
+ * interval
+ * mute // UNCHANGED should be in sound ?
+ * volume // UNCHANGED should be in sound ?
+ * wheelStartPercent
+ * view 
+ *
+ * //// PUPIL PART
+ * pupilDuration // ADAPTED
+ *
+ * //// SOUND PART
+ * soundPath // UNCHANGED
+ * soundPercents // ADAPTED
+ */
+      ////// PUPIL ADAPTER
+      model.loopPercents = model.soundPercents // TODO chose a name !
+      model.length = model.pupilDuration
+      ////// END PUPIL ADAPTER
+      
       model.players = []
       model.freePlayer = function(startTime) {
         setTimeout(
@@ -134,7 +163,7 @@ let scheduler = {
       model.rate = parentRate * model.duration / model.length
       model.subWheels = model.collar.beads.map(v => this.prepare(t, v, model.gainNode, model.rate))
     }
-    
+
     if (model.mobile) {
       // WARNING mobileOffset : ignore mobile startPercent because it’s broken now (see todolist)
       model.startPercent = 0
@@ -143,7 +172,7 @@ let scheduler = {
       model.rate = parentRate * model.duration / model.length
       model.subWheels = model.mobile.gears.map(v => this.prepare(t, v, model.gainNode, model.rate))
     }
-    
+
     model.realLength = model.length / parentRate
     model.lengthBeforeParentRate = model.length
     model.length = model.realLength
@@ -160,12 +189,12 @@ let scheduler = {
           this.tr.setRotate(percent * 360, 0, 0)
         }
       }
-      
+
       this.modelsToDraw.push(model)
     }
     return model
   }
-  
+
   , playPause(topGears) {
     let t = this.getTime() + playPauseLatency
     for (let model of topGears) {
@@ -174,7 +203,7 @@ let scheduler = {
       model = this.playingTopModels[model.id]
 
       let running = model.playPauseTimes[model.playPauseTimes.length - 1].play
-      
+
       if (running) {
         model.playPauseTimes.push({date : t, play : false})
       } else {
@@ -182,7 +211,7 @@ let scheduler = {
       }
     }
   }
-  
+
   , work() {
     let now = this.getTime()
       , max = now + this.lookAhead / 1000
@@ -190,7 +219,7 @@ let scheduler = {
       this.schedule(this.playingTopModels[id], now, max)
     }
   }
-      
+
   , schedule(model, now, max) {
     let ppt = model.playPauseTimes
     // For now, considering that playPauseTimes is filled chronologically and alternatively of play and pause
@@ -250,9 +279,9 @@ let scheduler = {
                 let sub = model.subWheels[i]
                   , lastStateIndex = sub.lastPlayPauseIndexAt(t)
                   , subLastState = sub.playPauseTimes[lastStateIndex]
-                
+
                 sub.playPauseTimes = sub.playPauseTimes.slice(0, lastStateIndex + 1)
-                
+
                 if (subLastState.play) {
                   pausingBeadIndex = i
                   beadPlayTime = subLastState.date
@@ -276,7 +305,7 @@ let scheduler = {
             }
 
           } else { // Normal pause
-          
+
             if (model.soundPath) {
               if (nextState.date <= t) { // No need to play more, even partially
 
@@ -304,21 +333,21 @@ let scheduler = {
             }
 
             if (model.collar) {
-              
+
               let nextLength = model.beadsDurs[model.nextBead] / model.rate
               while (t + nextLength <= nextState.date) {
                 this.scheduleBead(t, model, nextLength)
                 t += nextLength
                 nextLength = model.beadsDurs[model.nextBead] / model.rate
               }
-              
+
               let length = nextState.date - t
                 , cumul = model.beadsCumulDurs[model.nextBead - 1] / model.rate || 0
               this.scheduleBead(t, model, length, false)
-              
+
               nextState.percent = clampPercent((cumul + length) / model.length)
             }
-            
+
             if (model.mobile) {
               model.subWheels.forEach(v => v.playPauseTimes.push({date : nextState.date, play : false}))
               nextState.percent = clampPercent(
@@ -330,7 +359,7 @@ let scheduler = {
             t = nextState.date
 
           }
-          
+
           advanceState()
 
         } else { // And keep playing
@@ -348,7 +377,7 @@ let scheduler = {
               t += length
             }
           }
-          
+
           if (model.mobile) {
             t = max
           }
@@ -360,7 +389,7 @@ let scheduler = {
         if (nextState && nextState.date < max) { // And should play
           t = nextState.date
           if (t <= now) console.error("starting in the past, now : " + now + " scheduler : " + t)
-          
+
           let contentPercent = clampPercent(lastState.percent + model.startPercent)
 
           if (model.soundPath) {
@@ -377,7 +406,7 @@ let scheduler = {
             this.scheduleBead(t, model, length)
             t += length
           }
-          
+
           if (model.mobile) {
             model.lastStartTime = t
             model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
@@ -420,6 +449,14 @@ let scheduler = {
       , len = dur / model.rate
     return this.schedulePlayer(t, model, offsetDur, dur, len)
   }
+  // Just to schedule the start and stop of a player
+  // Hence, used only for simple wheels containing sound
+  //
+  // t is the time when to start (using ctxStartTime as the reference)
+  // model is the model of the wheel
+  // startOffset is the point where to start in the buffer (in seconds as if the rate was 1)
+  // duration is the time in seconds to play from the buffer (again ignoring the rate)
+  // length is the real time the player should play, used to stop it using our rounding
   , schedulePlayer(t, model, startOffset, duration, length) {
     let player = ctx.createBufferSource()
       , ctxStartTime = t + this.startTime
@@ -430,6 +467,13 @@ let scheduler = {
     player.onended = () => model.freePlayer(t)
     player.start(ctxStartTime, startOffset, duration)
     player.stop(ctxStopTime) // TODO stop and duration in schedulePlayer do the same thing, is it good ? Does it compensate for inexact buffer.duration ? See upward in prepare sound
+    // According to https://github.com/WebAudio/web-audio-api/issues/1660#issuecomment-3991786334
+    // duration counts the samples in the sound, hence bufferDuration (but in seconds)
+    // and stop(time) takes the playbackRate into account
+    // So I would think that using both is good ? But, in case of
+    // WARNING implementation could change ? check specs from times to times
+    //
+    // Last thoughts : the difference between the two will be the rounding differences between implementations and my scheduler
     return {
         node : player
       , startTime : t
@@ -437,11 +481,11 @@ let scheduler = {
       , startOffsetDur : startOffset
     }
   }
-  
-  
+
+
   , nextRequestId : -1
   , modelsToDraw : []
-  
+
   , draw() {
     // TODO keeps drawing event when paused. is it bad ?
     // TODO percent keeps growing, will it overflow ?
@@ -450,15 +494,15 @@ let scheduler = {
       let lastStateIndex = model.lastPlayPauseIndexAt(now)
         , lastState = model.playPauseTimes[lastStateIndex]
         , percent = 0
-      
+
       if (!lastState || !lastState.done) lastState = model.playPauseTimes[--lastStateIndex]
-      
+
       if (lastState && isFinite(lastState.percent)) {
         percent = clampPercent(lastState.play ?
             lastState.percent + (now - lastState.date) / model.length :
             lastState.percent)
       } else console.error("lastState was not done in draw :", lastState, "time is", now, "model", model)
-      
+
       model.view.moveTo(percent)
     }
     this.nextRequestId = requestAnimationFrame(() => this.draw())
