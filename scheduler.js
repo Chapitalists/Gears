@@ -439,6 +439,7 @@ let scheduler = {
     beadPPT.push({date : t + length, play : false})
     if (advanceBead) model.nextBead = (model.nextBead + 1) % model.subWheels.length
   }
+  , schedulePupil
   , scheduleLoop(t, maxT, model) {
     return [
       this.schedulePlayer(t, model, model.loopStartDur, model.duration, model.length)
