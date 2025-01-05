@@ -12,3 +12,43 @@ Exit les graphs :
 L’harmonie n’est pas persistente
 Les liens harmo et motor deviennent des listes de liens
 CF switch de edge list à adjacency list
+
+
+
+Réflexions Pupilles :
+
+   Une pupille est une encapsulation, qui contient potentiellement plusieurs sous-modèles (rosace)
+   Cas trivial : interval = pupilDuration OLD WAY
+   Pupille simple : interval > pupilDuration ONE SUBMODEL
+   Rosace : interval < pupilDuration MULTIPLE SUBMODELS
+   
+    2 cas à nouveau :
+    Ratios : Nombre fini de sous-modèles
+      Un ratio doit-il être entier ? Ou fraction d’entiers ?
+      
+    Pas Ratio : Nombre infini de sous-modèles, mais qui ne jouent qu’une fois chacun ?
+      Dans le cas des rosaces, quel est le comportement d’un mobile ?
+      Permet de répondre à la question :
+        Une fois qu’un sous-modèle de la rosace a été lu une fois, est-ce qu’il est lu une seconde fois ?
+        Ou est-ce chaque fois un nouveau modèle qui est spawné ?
+        Et s’il est lu plusieurs fois, quand est-ce qu’on le relis ?
+        
+Dans le cas d’une pupille simple contenant un mobile,
+c’est bien le même mobile qui est mis en pause et repris à chaque déclenchement.
+   
+   
+   PROPOSAL :
+   
+   Écrire ailleurs les fonctions prepare et schedule pour pupille en abstrayent le contenu
+   
+   une pupille a son propre PPT (parce qu’elle est playPausable et dessinable)
+   
+   FUNC spawnContentModel appelée à chaque point de déclenchement de la pupille
+   
+   Les contentModels sont schedulé comme avant ? en tout cas avec un PPT propre à chacun
+  
+  
+  
+  
+  Une pupille peut avoir plusieurs contenus ! Autrement dit, une roue contenir plusieurs pupilles
+  

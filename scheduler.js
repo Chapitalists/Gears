@@ -7,6 +7,10 @@
 // in my scheduler, length refers to the real time expected with the playbackRate applied
 // TODO change naming to be more intelligible ?
 
+/////// IMPORTANT NOTE
+// in PPT, percent is always in [0,1[ and represents the rotation of the wheel, not the playhead position
+// to get playHead position, one should add startPercent of the wheel
+
 
 const playPauseLatency = .1
     , ctx = new AudioContext()
@@ -81,18 +85,6 @@ let scheduler = {
 
   , playingTopModels : {}
   
-  // Une pupille est une encapsulation, qui contient potentiellement plusieurs sous-modèles (rosace)
-  // Cas simple : interval = pupilDuration OLD WAY
-  // Pupille simple : interval > pupilDuration ONE SUBMODEL
-  // Rosace : interval < pupilDuration INFINITE SUBMODELS
-  // PROPOSAL :
-  // Écrire ailleurs les fonctions prepare et schedule pour pupille en abstrayent le contenu
-  // une pupille a son propre PPT (parce qu’elle est playPausable et dessinable)
-  // FUNC spawnContentModel appelée à chaque point de déclenchement de la pupille
-  // Les contentModels sont schedulé comme avant ? en tout cas avec un PPT propre à chacun
-  
-  ///!!!!!!!!!!!!!!! Rosace sans ratio = contenus à l’infini ? !!!!!!!!!!!!!!!!!!!!!!!
-  
   , prepare(t, model, destination, parentRate) {    
     // TODO this is creating a new func instance for each method for each model
     // It’s bad!! Should be in proto ?
@@ -118,14 +110,15 @@ let scheduler = {
     
     if (model.interval) {
       // 3 cas : pupille, rosace ratio, rosace sans ratio
-      // 1 contenu, n contenus, l’infini de contenus
-      if (model.ratio) {
-        model.pupil.length = model.interval * model.ratio
-      }
+      // 1 contenu, n contenus, l’infini de contenus (qui disparaissent ? qui se recyclent ?)
+// TODO Rosace
+//      if (model.ratio) {
+//        model.pupil.length = model.interval * model.ratio
+//      }
       // MEMBERS NEEDED :
       // interval
       // pupil(s)
-      // ratio(s) (if pupil is exactly n times interval, only spawn n occurences)
+      // ratio(s) (if pupil is exactly n times interval, only spawn n occurences) (N or N/N ?)
       // startPercent
       // id
       // mute
@@ -134,13 +127,15 @@ let scheduler = {
       // TODO handle startPercent if we want content to be playing already
       // PROPOSAL negative startPercent = no / positive startPercent = yes => to compute
       // THEN pour les rosaces, startPercent > 1 => plusieurs contents déjà en cours
-      model.contents = [this.prepare(t, model.pupil, model.gainNode, parentRate)]
-      model.subwheels = []
-      if (model.ratio) {
-        for (let i = 0 ; i < ratio ; i++) {
-          model.subwheels.push(this.spawnContent(t, model.contents[i]))
-        }
-      }
+      model.content = this.prepare(t, model.pupil, model.gainNode, parentRate)
+// subwheelS is an array cause a rosace will contain multiple subWheels later
+      model.subWheels = [model.content]
+// TODO Rosace
+//      if (model.ratio) {
+//        for (let i = 0 ; i < ratio ; i++) {
+//          model.subWheels.push(this.spawnContent(t, model.contents[i]))
+//        }
+//      }
     }
 
     if (model.soundPath) {
@@ -266,11 +261,13 @@ let scheduler = {
   }
 
   , schedule(model, now, max) {
-    // TODO split into funcs per type (pauseMobile, startMobile, playMobile, etc…) for readability
+// TODO split into funcs per type (pauseMobile, startMobile, playMobile, etc…) for readability
     let ppt = model.playPauseTimes
     // For now, considering that playPauseTimes is filled chronologically and alternatively of play and pause
     // This is the assumption of user play and pause
     // collar or another source of play pause should manage their specificities
+    // An item in PPT is marked as done by advanceState after it has been managed in schedule
+    // it shoult then has a percent filled in
 
     // Clean play pause events before last
     ppt.splice(
@@ -285,6 +282,8 @@ let scheduler = {
       , nextState = ppt[nextStateIndex]
       , lastState = ppt[nextStateIndex - 1] || ppt[ppt.length - 1]
       , scheduleTime = nextState ? Math.min(nextState.date, model.lastScheduledTime) : model.lastScheduledTime
+    // advanceState only puts the done flag, but percent should have been filled
+    // TODO so if done is only a flag indicating that percent is filled, it’s a second source of truth and should disappear ?
       , advanceState = () => {
         nextState.done = true
         lastState = nextState
@@ -451,7 +450,10 @@ let scheduler = {
           let contentPercent = clampPercent(lastState.percent + model.startPercent)
 
           if (model.interval) {
-            
+            if (contentPercent === 0) {
+              model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
+              t += model.interval
+            }
           }
           
           if (model.soundPath) {
@@ -491,7 +493,7 @@ let scheduler = {
     }
     model.lastScheduledTime = scheduleTime
 
-    if (model.subwheels) {
+    if (model.subWheels) {
       model.subWheels.forEach(v => this.schedule(v, now, max))
     }
   }
@@ -544,11 +546,13 @@ let scheduler = {
       , startOffsetDur : startOffset
     }
   }
-  , spawnContent(t, content) {
+// TODO Rosace
+//  , spawnContent(t, content) {
     // BIG QUESTION !!!
     // si la pupille est um mobile, doit-il redémarrer à chaque fois ? Ou continuer ?
-    // C’est pour ça que collar garde ses beads actives au lieu d’en créer de nouvelles à la volée                                              
-  }
+    // C’est pour ça que collar garde ses beads actives au lieu d’en créer de nouvelles à la volée
+    // Il continue sa course, comme une bead, mais si rosace, alors quand ?
+//  }
 
   , nextRequestId : -1
   , modelsToDraw : []
@@ -562,7 +566,10 @@ let scheduler = {
         , lastState = model.playPauseTimes[lastStateIndex]
         , percent = 0
 
-      if (!lastState || !lastState.done) lastState = model.playPauseTimes[--lastStateIndex]
+      if (!lastState || !lastState.done) { // TODO what is this case ? an error ?
+        lastState = model.playPauseTimes[--lastStateIndex]
+        console.error("no lastState in draw (or not done), taking previous instead :", lastState, "index", lastStateIndex, "model", model)
+      }
 
       if (lastState && isFinite(lastState.percent)) {
         percent = clampPercent(lastState.play ?
