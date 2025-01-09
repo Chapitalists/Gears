@@ -450,6 +450,9 @@ let scheduler = {
           let contentPercent = clampPercent(lastState.percent + model.startPercent)
 
           if (model.interval) {
+            // this is just launching, could be done in play
+            // TODO should unpause any paused subwheels
+            // TODO => chose a way to notice if a subwheel is paused or waiting its launch time
             if (contentPercent === 0) {
               model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
               t += model.interval
