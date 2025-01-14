@@ -449,35 +449,13 @@ let scheduler = {
 
           let contentPercent = clampPercent(lastState.percent + model.startPercent)
 
-          if (model.interval) {
-            // this is just launching, could be done in play
-            // TODO should unpause any paused subwheels
-            // TODO => chose a way to notice if a subwheel is paused or waiting its launch time
-            if (contentPercent === 0) {
-              model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
-              t += model.interval
-            }
-          }
-          
-          if (model.soundPath) {
-            let offsetDur = contentPercent * model.duration + model.loopStartDur
-              , newPlayer = this.scheduleStart(t, model, offsetDur)
-            model.players.push(newPlayer)
-            t = newPlayer.stopTime
-          }
+          if (model.soundPath) t = this.unpauseSound(t, contentPercent, model)
 
-          if (model.collar) {
-            let cumulDur = model.beadsCumulDurs[model.nextBead]
-              , offsetDur = contentPercent * model.duration
-              , length = (cumulDur - offsetDur) / model.rate
-            this.scheduleBead(t, model, length)
-            t += length
-          }
+          if (model.interval) t = this.unpauseInterval(t, contentPercent, model)
 
-          if (model.mobile) {
-            model.lastStartTime = t
-            model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
-          }
+          if (model.collar) t = this.unpauseCollar(t, contentPercent, model)
+
+          if (model.mobile) this.unpauseMobile(contentPercent, model)
 
           nextState.percent = lastState.percent
           advanceState()
@@ -500,6 +478,44 @@ let scheduler = {
       model.subWheels.forEach(v => this.schedule(v, now, max))
     }
   }
+  , playSound(){}
+  , pauseSound(){}
+  , unpauseSound(t, contentPercent, model){
+    let offsetDur = contentPercent * model.duration + model.loopStartDur
+        , newPlayer = this.scheduleStart(t, model, offsetDur)
+    model.players.push(newPlayer)
+    return newPlayer.stopTime
+  }
+  , undoSound(){}
+  , playInterval(){}
+  , pauseInterval(){}
+  , unpauseInterval(t, contentPercent, model){
+    // this is just launching, could be done in play
+    // TODO should unpause any paused subwheels
+    // TODO => chose a way to notice if a subwheel is paused or waiting its launch time
+    if (contentPercent === 0) {
+      model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
+      return t + model.interval
+    }
+  }
+  , undoInterval(){}
+  , playCollar(){}
+  , pauseCollar(){}
+  , unpauseCollar(t, contentPercent, model){
+    let cumulDur = model.beadsCumulDurs[model.nextBead]
+        , offsetDur = contentPercent * model.duration
+        , length = (cumulDur - offsetDur) / model.rate
+    this.scheduleBead(t, model, length)
+    return t + length
+  }
+  , undoCollar(){}
+  , playMobile(){}
+  , pauseMobile(){}
+  , unpauseMobile(contentPercent, model){
+    model.lastStartTime = t
+    model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
+  }
+  , undoMobile(){}
   , scheduleBead(t, model, length, advanceBead = true) {
     // playing and pausing beads to keep track of a mobile content state
     let beadPPT = model.subWheels[model.nextBead].playPauseTimes
