@@ -138,66 +138,40 @@ let scheduler = {
     } // TODO volume should rather be in dB
     model.updateVolume()
 
-    if (model.soundPath) {
-      // WARNING in model, startPercent is of whole sound, here it’s of content
-      model.startPercent = (model.startPercent - model.loopPercents[0]) / (model.loopPercents[1] - model.loopPercents[0])
 
-      model.players = []
-      model.freePlayer = function(startTime) {
-        setTimeout(
-          () => this.players = this.players.filter(v => v.startTime != startTime)
-          , scheduler.lookAhead
-        )
-      }
-      model.buffer = buffers[model.soundPath]
-      // TODO beware, buffer duration could differ from saved duration in Elm model (due to resampling)
-      // probably it’s preferable to use saved duration from elm
-      // but, is it compensated by downward TODO ? (in schedulePlayer)
-      model.bufferDuration = model.buffer.duration
-      model.loopStartDur = model.loopPercents[0] * model.bufferDuration
-      model.loopEndDur = model.loopPercents[1] * model.bufferDuration
-      model.duration = model.loopEndDur - model.loopStartDur
-      model.rate = parentRate * model.duration / model.length
-      model.pitch = parentPitch * (model.stretch ? (model.length / model.duration) : 1)
-      if (model.pitch != 1) {
-        model.pitcher = new AudioWorkletNode(ctx, 'phase-vocoder-processor')
-        model.pitcher.parameters.get('pitchFactor').value = model.pitch
-        model.pitcher.connect(model.gainNode)
-      }
-    }
+// TODO from main wheel to engine
+/* //// WHEEL PART
+ * wheelId
+ * interval
+ * mute // UNCHANGED should be in sound ?
+ * volume // UNCHANGED should be in sound ?
+ * wheelStartPercent // ADAPTED
+ * view 
+ *
+ * //// PUPIL PART
+ * pupilDuration // ADAPTED
+ *
+ * //// SOUND PART
+ * soundPath // UNCHANGED
+ * soundPercents // ADAPTED
+ * 
+ * //// NEEDED
+ * soundStartPercent or pupilStartPercent
+ */
+      ////// PUPIL ADAPTER
+//      model.loopPercents = model.soundPercents // TODO chose a name !
+//      model.length = model.pupilDuration
+//      model.startPercent = model.wheelStartPercent
+//      model.soundStartPercent = 0
+      ////// END PUPIL ADAPTER
 
-    if (model.collar) {
-      // WARNING collarOffset : ignore collar startPercent because it’s broken now (see todolist)
-      model.startPercent = 0
+    if (model.soundPath) this.prepareSound(t, model, parentRate)
 
-      model.nextBead = 0
-      model.duration = model.collar.duration
-      model.beadsDurs = model.collar.beads.map(v => v.length)
-      model.beadsCumulDurs = []
-      for (let cumul = 0, i = 0 ; i < model.beadsDurs.length ; i++) {
-        cumul += model.beadsDurs[i]
-        model.beadsCumulDurs.push(cumul)
-      }
-      model.rate = parentRate * model.duration / model.length
-      model.pitch = parentPitch * (model.stretch ? (model.length / model.duration) : 1)
-      model.subWheels = model.collar.beads.map(v => this.prepare(t, v, model.gainNode, model.rate, model.pitch, auxed))
-    }
+    if (model.interval) this.prepareInterval(t, model, parentRate)
+    
+    if (model.collar) this.prepareCollar(t, model, parentRate)
 
-    if (model.mobile) {
-      // WARNING mobileOffset : ignore mobile startPercent because it’s broken now (see todolist)
-      model.startPercent = 0
-
-      model.duration = model.mobile.duration
-      model.rate = parentRate * model.duration / model.length
-      model.pitch = parentPitch * (model.stretch ? (model.length / model.duration) : 1)
-      model.subWheels = model.mobile.gears.map(v => this.prepare(t, v, model.gainNode, model.rate, model.pitch, auxed))
-    }
-
-    if (!model.duration) {
-      model.duration = model.length
-      model.rate = parentRate
-      model.empty = true
-    }
+    if (model.mobile) this.prepareMobile(t, model, parentRate)
 
     model.realLength = model.length / parentRate
     model.lengthBeforeParentRate = model.length
@@ -253,10 +227,13 @@ let scheduler = {
   }
 
   , schedule(model, now, max) {
+// TODO split into funcs per type (pauseMobile, startMobile, playMobile, etc…) for readability
     let ppt = model.playPauseTimes
     // For now, considering that playPauseTimes is filled chronologically and alternatively of play and pause
     // This is the assumption of user play and pause
     // collar or another source of play pause should manage their specificities
+    // An item in PPT is marked as done by advanceState after it has been managed in schedule
+    // it shoult then has a percent filled in
 
     // Clean play pause events before last
     ppt.splice(
@@ -271,6 +248,8 @@ let scheduler = {
       , nextState = ppt[nextStateIndex]
       , lastState = ppt[nextStateIndex - 1] || ppt[ppt.length - 1]
       , scheduleTime = nextState ? Math.min(nextState.date, model.lastScheduledTime) : model.lastScheduledTime
+    // advanceState only puts the done flag, but percent should have been filled
+    // TODO so if done is only a flag indicating that percent is filled, it’s a second source of truth and should disappear ?
       , advanceState = () => {
         nextState.done = true
         lastState = nextState
@@ -286,111 +265,28 @@ let scheduler = {
 
         if (nextState && nextState.date < max) { // And should pause
 
-          if (
-            (nextState.date < t || nextState.date < model.lastScheduledTime)
-            && !model.mobile && !model.empty
-          ) { // If we sheduled ahead of next
+          if (nextState.date < t || nextState.date < model.lastScheduledTime) { // If we sheduled ahead of next
             t = nextState.date // Bring back the time and undo
             if (t <= now) console.error("undoing the past, now : " + now + " scheduler : " + t)
 
-            if (model.soundPath) {
-              for (let pl of model.players) {
-                if (pl.startTime <= t && t <= pl.stopTime) {
-                  pl.node.stop(this.toCtxTime(t))
-                  nextState.percent = clampPercent((t - pl.startTime) / model.length + pl.startContentPercent - model.startPercent)
-                }
-                if (pl.startTime > t) pl.node.stop()
-              }
-              if (!isFinite(nextState.percent)) {
-                console.error("couldn’t find pausing player, unknown pause percent", now, nextState)
-                nextState.percent = 0
-              }
-            }
+            if (model.soundPath) this.undoSound(t, nextState, model, now)
 
-            if (model.collar) { // If collar, undo playPause of subWheels
-              let pausingBeadIndex = -1
-                , beadPlayTime
-              for (let i = 0 ; i < model.subWheels.length ; i++) {
-                let sub = model.subWheels[i]
-                  , lastStateIndex = sub.lastPlayPauseIndexAt(t)
-                  , subLastState = sub.playPauseTimes[lastStateIndex]
+            if (model.interval) this.undoInterval()
 
-                sub.playPauseTimes = sub.playPauseTimes.slice(0, lastStateIndex + 1)
+            if (model.collar) this.undoCollar(t, nextState, model, now)
 
-                if (subLastState.play) {
-                  pausingBeadIndex = i
-                  beadPlayTime = subLastState.date
-                  sub.playPauseTimes.push({date : t, play : false})
-                } else { // WARNING hack to force the subWheel undoing
-                  // TODO this hack could be replaced generally by transmitting the undo info to subWheels
-                  sub.playPauseTimes.push({date : t, play : true})
-                  sub.playPauseTimes.push({date : t, play : false})
-                }
-              }
-              if (pausingBeadIndex == -1) {
-                console.error("couldn’t find pausing bead, unknown pause percent and next Bead", now, nextState)
-                nextState.percent = 0
-                model.nextBead = 0
-              } else {
-                let length = t - beadPlayTime
-                  , cumul = model.beadsCumulDurs[pausingBeadIndex - 1] / model.rate || 0
-                nextState.percent = clampPercent((cumul + length) / model.length)
-                model.nextBead = pausingBeadIndex
-              }
-            }
+            // nothing to undo in mobile, normal pause
+            if (model.mobile) this.pauseMobile(t, lastState, nextState, model)
 
           } else { // Normal pause
 
-            if (model.soundPath) {
-              if (nextState.date == t) { // No need to play more, even partially
-// Impossible unless bead scheduling ? Then it’s 0 animation loop percent
-                nextState.percent = 0
+            if (model.soundPath) this.pauseSound(t, nextState, model)
 
-              } else {
-                let newPlayers = []
-                  , startTime
+            if (model.interval) this.pauseInterval()
 
-                if (nextState.date > t + model.length) { // At least one full play
-                  newPlayers = this.scheduleLoop(t, nextState.date - model.length, model)
-                  startTime = newPlayers[newPlayers.length - 1].stopTime
-                } else { // Just a partial play
-                  startTime = t
-                }
-                let length = nextState.date - startTime
-                  , duration = length * model.rate
+            if (model.collar) this.pauseCollar(t, nextState, model)
 
-                newPlayers.push(this.schedulePlayer(startTime, model, 0, duration, length))
-
-                model.players = model.players.concat(newPlayers)
-
-                nextState.percent = clampPercent(length / model.length - model.startPercent)
-              }
-            }
-
-            if (model.collar) {
-
-              let nextLength = model.beadsDurs[model.nextBead] / model.rate
-              while (t + nextLength <= nextState.date) {
-                this.scheduleBead(t, model, nextLength)
-                t += nextLength
-                nextLength = model.beadsDurs[model.nextBead] / model.rate
-              }
-
-              let length = nextState.date - t
-                , cumul = model.beadsCumulDurs[model.nextBead - 1] / model.rate || 0
-              this.scheduleBead(t, model, length, false)
-
-              nextState.percent = clampPercent((cumul + length) / model.length)
-            }
-
-            if (model.mobile || model.empty) {
-              if (model.mobile)
-                model.subWheels.forEach(v => v.playPauseTimes.push({date : nextState.date, play : false}))
-              nextState.percent = clampPercent(
-                lastState.percent
-                + (nextState.date - model.lastStartTime) / model.length
-              )
-            }
+            if (model.mobile) this.pauseMobile(t, lastState, nextState, model)
 
             t = nextState.date
 
@@ -400,23 +296,13 @@ let scheduler = {
 
         } else { // And keep playing
 
-          if (model.soundPath) {
-            let newPlayers = this.scheduleLoop(t, max, model)
-            model.players = model.players.concat(newPlayers)
-            t = model.players[model.players.length - 1].stopTime
-          }
+          if (model.soundPath) t = this.playSound(t, max, model)
+          
+          if (model.interval) t = this.playInterval(t, max, model)
 
-          if (model.collar) {
-            while (t <= max) {
-              let length = model.beadsDurs[model.nextBead] / model.rate
-              this.scheduleBead(t, model, length)
-              t += length
-            }
-          }
+          if (model.collar) t = this.playCollar(t, max, model)
 
-          if (model.mobile || model.empty) {
-            t = max
-          }
+          if (model.mobile) t = this.playMobile(t, max)
 
         }
 
@@ -428,29 +314,19 @@ let scheduler = {
 
           let contentPercent = clampPercent(lastState.percent + model.startPercent)
 
-          if (model.soundPath) {
-            let newPlayer = this.scheduleStart(t, model, contentPercent)
-            model.players.push(newPlayer)
-            t = newPlayer.stopTime
-          }
+          if (model.soundPath) t = this.unpauseSound(t, contentPercent, model)
 
-          if (model.collar) {
-            let cumulDur = model.beadsCumulDurs[model.nextBead]
-              , offsetDur = contentPercent * model.duration
-              , length = (cumulDur - offsetDur) / model.rate
-            this.scheduleBead(t, model, length)
-            t += length
-          }
+          if (model.interval) t = this.unpauseInterval(t, contentPercent, model)
 
-          if (model.mobile || model.empty) {
-            model.lastStartTime = t
-            if (model.mobile)
-              model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
-          }
+          if (model.collar) t = this.unpauseCollar(t, contentPercent, model)
+
+          if (model.mobile) this.unpauseMobile(t, contentPercent, model)
 
           nextState.percent = lastState.percent
+          
           advanceState()
-          if (model.mobile) {
+
+          if (model.mobile) { // now nextState has advanced !
             if (nextState) t = nextState.date
             else t = max
           }
@@ -465,11 +341,252 @@ let scheduler = {
     }
     model.lastScheduledTime = scheduleTime
 
-    if (model.collar || model.mobile) {
+    if (model.subWheels) {
       model.subWheels.forEach(v => this.schedule(v, now, max))
     }
   }
+  
+  , prepareSound(t, model, parentRate) {
+
+    // WARNING in model, startPercent is of whole sound, here it’s of content
+    model.startPercent = (model.startPercent - model.loopPercents[0]) / (model.loopPercents[1] - model.loopPercents[0])
+    model.players = []
+    // TODO this is creating a new func instance for each method for each model
+    model.freePlayer = function(startTime) {
+      setTimeout(
+          () => this.players = this.players.filter(
+            v => v.startTime !== startTime
+          )
+          , scheduler.lookAhead
+      )
+    }
+    model.buffer = buffers[model.soundPath]
+    // TODO beware, buffer duration could differ from saved duration in Elm model (due to resampling)
+    // probably it’s preferable to use saved duration from elm
+    // but, is it compensated by downward TODO ? (in schedulePlayer)
+    model.bufferDuration = model.buffer.duration
+    model.loopStartDur = model.loopPercents[0] * model.bufferDuration
+    model.loopEndDur = model.loopPercents[1] * model.bufferDuration
+    model.duration = model.loopEndDur - model.loopStartDur
+    model.rate = parentRate * model.duration / model.length
+  }
+  , playSound(t, max, model) {
+    let newPlayers = this.scheduleLoop(t, max, model)
+    model.players = model.players.concat(newPlayers)
+    return model.players[model.players.length - 1].stopTime
+  }
+  // TODO doesn’t use lastState ?
+  , pauseSound(t, pauseState, model) {
+    if (pauseState.date <= t) { // No need to play more, even partially
+
+      pauseState.percent = clampPercent(0 - model.startPercent)
+
+    } else {
+      let newPlayers = []
+        , startTime
+
+      if (pauseState.date > t + model.length) { // At least one full play
+        newPlayers = this.scheduleLoop(t, pauseState.date - model.length, model)
+        startTime = newPlayers[newPlayers.length - 1].stopTime
+      } else { // Just a partial play
+        startTime = t
+      }
+      let length = pauseState.date - startTime
+        , duration = length * model.rate
+
+      newPlayers.push(
+        this.schedulePlayer(startTime, model, model.loopStartDur, duration, length)
+      )
+
+      model.players = model.players.concat(newPlayers)
+
+      pauseState.percent = clampPercent(length / model.length - model.startPercent)
+    }
+  }
+  , unpauseSound(t, contentPercent, model) {
+    let offsetDur = contentPercent * model.duration + model.loopStartDur
+      , newPlayer = this.scheduleStart(t, model, offsetDur)
+    model.players.push(newPlayer)
+    return newPlayer.stopTime
+  }
+  , undoSound(t, pauseState, model, now) {
+    for (let pl of model.players) {
+      if (pl.startTime <= t && t <= pl.stopTime) {
+        pl.node.stop(this.toCtxTime(t))
+        pauseState.percent = clampPercent((t - pl.startTime) / model.length + pl.startContentPercent / model.duration - model.startPercent)
+      }
+      if (pl.startTime > t) pl.node.stop()
+    }
+    if (!isFinite(pauseState.percent)) {
+      console.error("couldn’t find pausing player, unknown pause percent", now, pauseState)
+      pauseState.percent = 0
+    }
+  }
+  
+  , prepareInterval(t, model, parentRate) {
+    model.rate = parentRate * model.duration / model.length
+      
+    // 3 cas : pupille, rosace ratio, rosace sans ratio
+    // 1 contenu, n contenus, l’infini de contenus (qui disparaissent ? qui se recyclent ?)
+// TODO Rosace
+//      if (model.ratio) {
+//        model.pupil.length = model.interval * model.ratio
+//      }
+    // MEMBERS NEEDED :
+    // interval
+    // pupil(s)
+    // ratio(s) (if pupil is exactly n times interval, only spawn n occurences) (N or N/N ?)
+    // startPercent
+    // id
+    // mute
+    // volume
+    // view ?
+    // TODO handle startPercent if we want content to be playing already
+    // PROPOSAL negative startPercent = no / positive startPercent = yes => to compute
+    // THEN pour les rosaces, startPercent > 1 => plusieurs contents déjà en cours
+    model.content = this.prepare(t, model.pupil, model.gainNode, parentRate)
+// subwheelS is an array cause a rosace will contain multiple subWheels later
+    model.subWheels = [model.content]
+// TODO Rosace
+//      if (model.ratio) {
+//        for (let i = 0 ; i < ratio ; i++) {
+//          model.subWheels.push(this.spawnContent(t, model.contents[i]))
+//        }
+//      }
+  }
+  , playInterval(t, max, model) {
+    while (t <= max) {
+      if (model.ratio) {
+        // pop last and unshift ?
+        // est-ce que ça importe ? Dans quel cas serait-il utile d’avoir les contenus dans l’ordre ?
+      } else {
+        let newContent = this.spawnContent(t, model.contents)
+      }
+      t += model.interval
+    }
+  }
+  , pauseInterval() {}
+  , unpauseInterval(t, contentPercent, model) {
+    // this is just launching, could be done in play
+    // TODO should unpause any paused subwheels
+    // TODO => chose a way to notice if a subwheel is paused or waiting its launch time
+    if (contentPercent === 0) {
+      model.subWheels.forEach(v => v.playPauseTimes.push({date : t, play : true}))
+      return t + model.interval
+    }
+  }
+  , undoInterval() {}
+  
+  , prepareCollar(t, model, parentRate) {
+    // WARNING collarOffset : ignore collar startPercent because it’s broken now (see todolist)
+    model.startPercent = 0
+
+    model.nextBead = 0
+    model.duration = model.collar.duration
+    model.beadsDurs = model.collar.beads.map(v => v.length)
+    model.beadsCumulDurs = []
+    for (let cumul = 0, i = 0 ; i < model.beadsDurs.length ; i++) {
+      cumul += model.beadsDurs[i]
+      model.beadsCumulDurs.push(cumul)
+    }
+    model.rate = parentRate * model.duration / model.length
+    model.subWheels = model.collar.beads.map(
+      v => this.prepare(t, v, model.gainNode, model.rate)
+    )
+  }
+  , playCollar(t, max, model) {
+    while (t <= max) {
+      let length = model.beadsDurs[model.nextBead] / model.rate
+      this.scheduleBead(t, model, length)
+      return t + length
+    }
+  }
+  // TODO doesn’t use playState ?
+  , pauseCollar(t, pauseState, model) {
+    let nextLength = model.beadsDurs[model.nextBead] / model.rate
+    while (t + nextLength <= pauseState.date) {
+      this.scheduleBead(t, model, nextLength)
+      t += nextLength
+      nextLength = model.beadsDurs[model.nextBead] / model.rate
+    }
+
+    let length = pauseState.date - t
+      , cumul = model.beadsCumulDurs[model.nextBead - 1] / model.rate || 0
+    this.scheduleBead(t, model, length, false)
+
+    pauseState.percent = clampPercent((cumul + length) / model.length)
+  }
+  , unpauseCollar(t, contentPercent, model) {
+    let cumulDur = model.beadsCumulDurs[model.nextBead]
+      , offsetDur = contentPercent * model.duration
+      , length = (cumulDur - offsetDur) / model.rate
+    this.scheduleBead(t, model, length)
+    return t + length
+  }
+  , undoCollar(t, pauseState, model, now) {//WIP TODO
+    // undo playPause of subWheels
+    let pausingBeadIndex = -1
+      , beadPlayTime
+    for (let i = 0 ; i < model.subWheels.length ; i++) {
+      let sub = model.subWheels[i]
+        , lastStateIndex = sub.lastPlayPauseIndexAt(t)
+        , subLastState = sub.playPauseTimes[lastStateIndex]
+
+      sub.playPauseTimes = sub.playPauseTimes.slice(0, lastStateIndex + 1)
+
+      if (subLastState.play) {
+        pausingBeadIndex = i
+        beadPlayTime = subLastState.date
+        sub.playPauseTimes.push({date : t, play : false})
+      } else { // WARNING hack to force the subWheel undoing
+        // TODO this hack could be replaced generally by transmitting the undo info to subWheels
+        sub.playPauseTimes.push({date : t, play : true})
+        sub.playPauseTimes.push({date : t, play : false})
+      }
+    }
+    if (pausingBeadIndex === -1) {
+      console.error("couldn’t find pausing bead, unknown pause percent and next Bead", now, pauseState)
+      pauseState.percent = 0
+      model.nextBead = 0
+    } else {
+      let length = t - beadPlayTime
+        , cumul = model.beadsCumulDurs[pausingBeadIndex - 1] / model.rate || 0
+      pauseState.percent = clampPercent((cumul + length) / model.length)
+      model.nextBead = pausingBeadIndex
+    }
+  }
+  
+  , prepareMobile(t, model, parentRate) {
+    // WARNING mobileOffset : ignore mobile startPercent because it’s broken now (see todolist)
+    model.startPercent = 0
+
+    model.duration = model.mobile.duration
+    model.rate = parentRate * model.duration / model.length
+    model.subWheels = model.mobile.gears.map(
+      v => this.prepare(t, v, model.gainNode, model.rate)
+    )
+  }
+  , playMobile(t, max) {
+    return max
+  }
+  , pauseMobile(t, playState, pauseState, model) { // playState is last, pauseState is next
+    model.subWheels.forEach(
+      v => v.playPauseTimes.push({date : pauseState.date, play : false})
+    )
+    pauseState.percent = clampPercent(
+      playState.percent
+      + (pauseState.date - model.lastStartTime) / model.length
+    )
+  }
+  , unpauseMobile(t, contentPercent, model) { // t is playTime
+    model.lastStartTime = t
+    model.subWheels.forEach(
+      v => v.playPauseTimes.push({date : t, play : true})
+    )
+  }
+
   , scheduleBead(t, model, length, advanceBead = true) {
+    // playing and pausing beads to keep track of a mobile content state
     let beadPPT = model.subWheels[model.nextBead].playPauseTimes
     beadPPT.push({date : t, play : true})
     beadPPT.push({date : t + length, play : false})
@@ -516,7 +633,10 @@ let scheduler = {
         , lastState = model.playPauseTimes[lastStateIndex]
         , percent = 0
 
-      if (!lastState || !lastState.done) lastState = model.playPauseTimes[--lastStateIndex]
+      if (!lastState || !lastState.done) { // TODO what is this case ? an error ?
+        lastState = model.playPauseTimes[--lastStateIndex]
+        console.error("no lastState in draw (or not done), taking previous instead :", lastState, "index", lastStateIndex, "model", model)
+      }
 
       if (lastState && isFinite(lastState.percent)) {
         percent = clampPercent(lastState.play ?
@@ -533,3 +653,4 @@ let scheduler = {
 function clampPercent(p) {
   return p - Math.floor(p)
 }
+
