@@ -3,6 +3,7 @@
 // Or do everything in percentage ?
 
 const playPauseLatency = .1
+    , decimalCount = 9
     , ctx = new AudioContext()
     , masterGain = ctx.createGain()
 let auxGains = []
@@ -265,7 +266,8 @@ let scheduler = {
 
         if (nextState && nextState.date < max) { // And should pause
 
-          if (nextState.date < t || nextState.date < model.lastScheduledTime) { // If we sheduled ahead of next
+          let safeNextDate = safeFloat(nextState.date)
+          if (safeNextDate < safeFloat(t) || safeNextDate < safeFloat(model.lastScheduledTime)) { // If we sheduled ahead of next
             t = nextState.date // Bring back the time and undo
             if (t <= now) console.error("undoing the past, now : " + now + " scheduler : " + t)
 
@@ -356,6 +358,7 @@ let scheduler = {
       setTimeout(
           () => this.players = this.players.filter(
             v => v.startTime !== startTime
+              //TODO should’em be safeFloats ?
           )
           , scheduler.lookAhead
       )
@@ -418,7 +421,8 @@ let scheduler = {
       if (pl.startTime > t) pl.node.stop()
     }
     if (!isFinite(pauseState.percent)) {
-      console.error("couldn’t find pausing player, unknown pause percent", now, pauseState)
+      // TODO sometimes when Playing a collar, we get there for a bead that tries to undo nothing (found a misregistered lastScheduledTime
+      console.error("couldn’t find pausing player, unknown pause percent : t, now ", t, now, pauseState, model)
       pauseState.percent = 0
     }
   }
@@ -644,7 +648,7 @@ let scheduler = {
             lastState.percent)
       } else console.error("lastState was not done in draw :", lastState, "time is", now, "model", model)
 
-      model.view.moveTo(percent)
+      model.view.moveTo(safeFloat(percent))
     }
     this.nextRequestId = requestAnimationFrame(() => this.draw())
   }
@@ -654,3 +658,7 @@ function clampPercent(p) {
   return p - Math.floor(p)
 }
 
+function safeFloat(f) {
+  let big = Math.pow(10, decimalCount)
+  return Math.round(f * big)/big
+}
