@@ -502,8 +502,9 @@ let scheduler = {
     while (t <= max) {
       let length = model.beadsDurs[model.nextBead] / model.rate
       this.scheduleBead(t, model, length)
-      return t + length
+      t += length
     }
+    return t
   }
   // TODO doesn’t use playState ?
   , pauseCollar(t, pauseState, model) {
