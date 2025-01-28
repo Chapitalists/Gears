@@ -18,6 +18,27 @@ function addButton(name, fn, parent = body) {
   return bt
 }
 
+function addSlider(name, min, max, step, value, fn, parent = body) {
+  let div = document.createElement('div')
+    , slider = document.createElement('input')
+    , label = document.createElement('label')
+  slider.setAttribute('type', 'range')
+  slider.setAttribute('min', min.toString())
+  slider.setAttribute('max', max.toString())
+  slider.setAttribute('step', step.toString())
+  slider.setAttribute('value', value.toString())
+  slider.setAttribute('name', name)
+  slider.onchange = (e => {
+    label.innerHTML = name + ' ' + slider.valueAsNumber.toString()
+    fn(slider.valueAsNumber)
+  })
+  label.setAttribute('for', name)
+  label.innerHTML = name
+  div.appendChild(slider)
+  div.appendChild(label)
+  parent.appendChild(div)
+}
+
 function dist(x,y) {return Math.sqrt(Math.pow(x,2)+Math.pow(y,2))}
 
 function dataURLtoBuffer(uri) {
@@ -27,5 +48,5 @@ function dataURLtoBuffer(uri) {
   for (let i = 0 ; i < length ; i++) {
     bytes[i] = byteString.charCodeAt(i)
   }
-  return bytes
+  return bytes.buffer
 }

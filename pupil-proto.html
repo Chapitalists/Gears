@@ -14,13 +14,79 @@ Copyright ou © ou Copr. Clément Bossut, (2024)
   <body>
     
     <input type='file' id='file'>
-    <audio controls id='audio'>
+    <audio controls id='audio'></audio>
+
+    <div id="controls"></div>
     
     <div id=debug></div>
 
     <script src=./utils.js></script>
     <script src=./scheduler.js></script>
     <script src=./pupil.js></script>
+
+      <svg height="100%"
+           id="svg"
+           preserveAspectRatio="none meet"
+           viewBox="-15.56651560818084 -14.430046555435952 31.068445640473627 28.9785"
+           width="100%">
+        <defs>
+          <radialGradient id="anim">
+            <stop offset="10%"
+                  stop-color="white"
+                  stop-opacity="1">
+            </stop>
+            <stop offset="100%"
+                  stop-color="white"
+                  stop-opacity="0">
+            </stop>
+          </radialGradient>
+        </defs>
+        <g transform="translate(0 0)">
+          <g id="PUPIL">
+            <circle class="outer"
+                    cx="0"
+                    cy="0"
+                    fill="rgba(100%,0%,31.67%,0)"
+                    r="1.81115625"
+                    stroke="rgba(0%,0%,0%,1)"
+                    stroke-dasharray=""
+                    stroke-width="0.12074375">
+            </circle>
+            <rect class="head"
+                  height="0.2414875"
+                  transform="rotate(0 0 0) translate(0 -1.9319)"
+                  width="0.12074375"
+                  x="-0.060371875"
+                  y="-0.12074375">
+            </rect>
+          </g>
+          <g id="CONTENT">
+            <circle class="outer"
+                    cx="0"
+                    cy="0"
+                    fill="rgba(100%,0%,31.67%,1)"
+                    r="1.81115625"
+                    stroke="rgba(0%,0%,0%,1)"
+                    stroke-dasharray=""
+                    stroke-width="0.12074375">
+            </circle>
+<!--            <circle class="inner anim"-->
+<!--                    cx="0"-->
+<!--                    cy="0"-->
+<!--                    fill="url(#anim)"-->
+<!--                    r="1.81115625"-->
+<!--                    transform="scale(0 0)">-->
+<!--            </circle>-->
+            <rect class="head"
+                  height="0.2414875"
+                  transform="rotate(0 0 0) translate(0 -1.9319)"
+                  width="0.12074375"
+                  x="-0.060371875"
+                  y="-0.12074375">
+            </rect>
+          </g>
+        </g>
+      </svg>
 
   </body>
 
