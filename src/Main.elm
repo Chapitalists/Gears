@@ -1,29 +1,51 @@
-module Main exposing (..)
+port module Main exposing (..)
 
 import Browser
 import Browser.Events as BE
 import Browser.Navigation as Nav
 import Color
-import Doc exposing (Doc)
+import Data.Common exposing (Identifier)
+import Data.Pupil as Pupil
+import Data.Wheel as Wheel exposing (Wheel)
 import Editor.Interacting exposing (Interactable(..), Zone)
 import Element exposing (..)
+import Element.Font as Font
+import Element.Input as Input
+import File exposing (File)
+import File.Select as Select
 import Html exposing (Html)
 import Html.Attributes as Attr
+import Json.Decode as D
+import Json.Encode as E
 import Math.Vector2 exposing (Vec2, getX, getY, vec2)
 import Random
 import Simple.Animation as Animation exposing (Animation, Millis)
 import Simple.Animation.Animated as Animated
 import Simple.Animation.Property as P
+import Sound exposing (Sound)
 import SoundCard exposing (SoundCard)
+import Task
 import Time exposing (Posix, every)
-import Tools.Interact as Interact exposing (Action(..), Event)
-import Tools.PanSvg as PanSvg exposing (PanSvg)
-import Tools.Utils exposing (Size)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
 import TypedSvg.Types exposing (Length(..), Opacity(..))
 import Url exposing (Url)
+import Utils.Coll as Coll
+import Utils.Interact as Interact exposing (Action(..), Event)
+import Utils.Palette exposing (Palette(..), roundButton)
+import Utils.PanSvg as PanSvg exposing (PanSvg)
+import Utils.Panel as Panel exposing (Panel)
+import Utils.Utils exposing (Size, WheelMod(..), defaultStyle, drawWheel, htmlId, toggleListElement, unmaybeMap)
+
+
+port newSound : ( String, String ) -> Cmd msg
+
+
+port soundOk : (D.Value -> msg) -> Sub msg
+
+
+port testPlay : E.Value -> Cmd msg
 
 
 
@@ -66,6 +88,7 @@ type State
     = Prologue AutoGear
     | Creating AutoGear Vec2 Float
     | Bubble Vec2 Float
+    | Wheel Wheel
 
 
 type alias AutoGear =
@@ -132,17 +155,31 @@ type Msg
       --| ViewSoundChg P.ViewType
     | WorkplaneMsg PanSvg.Msg
       --| DocMsg Doc.Msg
-    | SoundMsg SoundCard.Msg
+    | SoundCardMsg SoundCard.Msg
     | InteractMsg (Interact.Msg Interactable Zone)
     | RequestAutoGear
     | GotAutoGear AutoGear
     | UpdateCreating Float
+    | OpenSound File
+    | GotSoundURL String String
+    | SoundLoaded (Result D.Error Sound)
     | NOOP
+    | SKIP
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        SKIP ->
+            ( { model
+                | state =
+                    Wheel <|
+                        makeWheel (vec2 0 0) 2000 <|
+                            Sound.fakeSound 1000
+              }
+            , Cmd.none
+            )
+
         GotScreenSize size ->
             ( { model
                 | screenSize = size
@@ -175,13 +212,12 @@ update msg model =
         --            Doc.update subMsg model.doc
         --    in
         --    ( { model | doc = doc }, Cmd.map DocMsg cmd )
-
-        SoundMsg subMsg ->
+        SoundCardMsg subMsg ->
             let
                 ( sc, cmd ) =
                     SoundCard.update subMsg model.soundCard
             in
-            ( { model | soundCard = sc }, Cmd.map SoundMsg cmd )
+            ( { model | soundCard = sc }, Cmd.map SoundCardMsg cmd )
 
         InteractMsg subMsg ->
             let
@@ -221,6 +257,35 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        OpenSound file ->
+            ( model
+            , Task.perform (GotSoundURL <| File.name file) <| File.toUrl file
+            )
+
+        GotSoundURL name url ->
+            ( model
+            , newSound ( name, url )
+            )
+
+        SoundLoaded result ->
+            case result of
+                Err e ->
+                    let
+                        _ =
+                            Debug.log "Wrong sound format" e
+                    in
+                    ( model, Cmd.none )
+
+                Ok sound ->
+                    case model.state of
+                        Bubble pos dur ->
+                            ( { model | state = Wheel <| makeWheel pos dur sound }
+                            , Cmd.none
+                            )
+
+                        _ ->
+                            ( model, Cmd.none )
+
         NOOP ->
             ( model, Cmd.none )
 
@@ -234,7 +299,7 @@ sub { state, screenSize, interact } =
     ([ BE.onResize (\w h -> GotScreenSize { width = w, height = h })
 
      --, Sub.map DocMsg <| Doc.sub doc
-     , Sub.map SoundMsg SoundCard.sub
+     , Sub.map SoundCardMsg SoundCard.sub
      , Sub.map InteractMsg <| Interact.sub interact
      ]
         ++ (case state of
@@ -279,6 +344,11 @@ view model =
 
                         Bubble p d ->
                             [ S.circle (gearAttrs p d) [] ]
+
+                        Wheel w ->
+                            [ Html.map InteractMsg <|
+                                Wheel.view w defaultStyle Nothing wheelId Nothing
+                            ]
         ]
     }
 
@@ -344,7 +414,9 @@ manageInteractEvent model event =
                         _ =
                             Debug.log "d t" ( d, t )
                     in
-                    ( { model | state = Bubble p t }, Cmd.none )
+                    ( { model | state = Bubble p t }
+                    , Select.file soundMimeTypes OpenSound
+                    )
 
                 ( ISurface, Clicked _ ) ->
                     ( { model | state = Prologue g }, Cmd.none )
@@ -354,6 +426,57 @@ manageInteractEvent model event =
 
         _ ->
             return
+
+
+makeWheel : Vec2 -> Float -> Sound -> Wheel
+makeWheel pos dur sound =
+    Wheel.fromSoundAndInterval sound
+        dur
+        { pos = pos
+        , bgHue = 0
+        , pupilHue = 0.8
+        }
+
+
+playWheel : Wheel -> E.Value
+playWheel w =
+    let
+        wheel =
+            Wheel.getEngined w
+
+        mayPupil =
+            Maybe.map Pupil.getEngined wheel.pupil
+    in
+    -- somewhat copied from Engine.encodeWheel / encodeGear
+    E.object
+        ([ ( "wheelId", E.string wheelId ) --TODO
+         , ( "interval", E.float wheel.interval )
+         , ( "mute", E.bool False ) --TODO
+         , ( "volume", E.float 1 ) --TODO
+         , ( "wheelStartPercent", E.float wheel.startPercent )
+         , ( "view", E.bool True ) --TODO
+         ]
+            ++ unmaybeMap mayPupil
+                []
+                (\pupil ->
+                    [ ( "pupilDuration", E.float pupil.duration )
+                    , ( "pupilStartPercent", E.float pupil.startPercent )
+                    ]
+                        ++ (let
+                                sound =
+                                    Sound.getEngined pupil.sound
+                            in
+                            [ ( "soundPath", E.string sound.path )
+                            , ( "soundPercents"
+                              , E.list E.float
+                                    [ sound.startPercent
+                                    , sound.endPercent
+                                    ]
+                              )
+                            ]
+                           )
+                )
+        )
 
 
 autoGear :
@@ -435,6 +558,21 @@ randPrologue ratio =
     Random.map3 AutoGear (Random.map2 vec2 x y) dur laps
 
 
+soundMimeTypes : List String
+soundMimeTypes =
+    [ "audio/x-wav", "audio/wav" ]
+
+
 workplaneId : String
 workplaneId =
     "mainWorkPlaneID"
+
+
+wheelId : String
+wheelId =
+    "wheel-ID"
+
+
+pupilId : String
+pupilId =
+    "pupil-ID"

@@ -9,6 +9,27 @@ if (app.ports.requestMicOpening) app.ports.requestMicOpening.subscribe(openMic)
 if (app.ports.requestMicRecStart) app.ports.requestMicRecStart.subscribe(startMicRec)
 if (app.ports.requestMicRecStop) app.ports.requestMicRecStop.subscribe(stopMicRec)
 
+/////////  MINIMAL PROTOTYPE
+
+if (app.ports.newSound) app.ports.newSound.subscribe(soloSound)
+
+let sound = null
+
+async function soloSound(args) {
+  let name = args[0]
+    , uri = args[1]
+    , bstr = atob(uri.split(',')[1])
+    , bytes = new Uint8Array(bstr.length)
+    for (let i = 0; i < bstr.length; i++) {
+        bytes[i] = bstr.charCodeAt(i)
+    }
+  sound = await ctx.decodeAudioData(bytes.buffer)
+
+  app.ports.soundOk.send({path:name, length:sound.duration*1000})
+}
+
+//////////////////
+
 const buffers = {}
     // , ro = new ResizeObserver(sendSize)
     , recorder = new Recorder(masterGain)
