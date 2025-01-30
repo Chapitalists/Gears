@@ -1,4 +1,12 @@
-module Sound exposing (..)
+module Sound exposing
+    ( Sound
+    , decoder
+    , fakeSound
+    , getEngined
+    , getLoopPercents
+    , getName
+    , length
+    )
 
 import Json.Decode as D
 import Json.Decode.Field as Field
@@ -14,8 +22,24 @@ type Sound
         }
 
 
-noSound =
-    S { path = "NO_SOUND", duration = 0, startPercent = 0, endPercent = 0 }
+fakeSound : Float -> Sound
+fakeSound f =
+    S { path = "", duration = f, startPercent = 0, endPercent = 1 }
+
+
+type alias Engined =
+    { path : String
+    , startPercent : Float
+    , endPercent : Float
+    }
+
+
+getEngined : Sound -> Engined
+getEngined (S s) =
+    { path = s.path
+    , startPercent = s.startPercent
+    , endPercent = s.endPercent
+    }
 
 
 length : Sound -> Float
@@ -26,6 +50,11 @@ length (S s) =
 getPath : Sound -> String
 getPath (S { path }) =
     path
+
+
+getName : Sound -> String
+getName (S { path }) =
+    fileNameFromPath path
 
 
 fileNameFromPath : String -> String

@@ -1,11 +1,11 @@
-module Engine exposing
+port module Engine exposing
     ( Engine
-    , addPlaying
+      --, addPlaying
     , init
     , muted
     , playingIds
     , setParentUid
-    , setPlaying
+      --, setPlaying
     , stop
     , volumeChanged
     )
@@ -15,11 +15,15 @@ import Data.Common exposing (Identifier)
 import Data.Content as Content
 import Data.Gear as Gear exposing (Gear)
 import Data.Mobile as Mobile exposing (Geer, Mobeel)
+import Data.Pupil as Pupil
 import Data.Wheel as Wheel exposing (Wheel)
 import Json.Encode as E
 import Motor
 import Sound
 import Tools.Coll as Coll exposing (Coll, Id)
+
+
+port toEngine : E.Value -> Cmd msg
 
 
 type Engine
@@ -43,34 +47,44 @@ playingIds (E { playing }) =
     playing
 
 
-setPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
-setPlaying l coll (E e) =
-    ( E { e | playing = l }
-    , if List.isEmpty l then
-        []
 
-      else
-        [ playPause e.parentUid coll <| List.filter (\el -> not <| List.member el l) e.playing ]
-    )
+--setPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
+--setPlaying l coll (E e) =
+--    ( E { e | playing = l }
+--    , if List.isEmpty l then
+--        []
+--
+--      else
+--        [ playPause e.parentUid coll <| List.filter (\el -> not <| List.member el l) e.playing ]
+--    )
+--addPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
+--addPlaying l coll (E e) =
+--    ( E { e | playing = e.playing ++ l }
+--    , if List.isEmpty l then
+--        []
+--
+--      else
+--        [ playPause e.parentUid coll l ]
+--    )
+--playPause : String -> Coll Geer -> List (Id Geer) -> E.Value
+--playPause parentUid coll els =
+--    E.object
+--        [ ( "action", E.string "playPause" )
+--        , ( "gears", E.list (encodeGear True parentUid coll) els )
+--        ]
 
 
-addPlaying : List (Id Geer) -> Coll Geer -> Engine -> ( Engine, List E.Value )
-addPlaying l coll (E e) =
-    ( E { e | playing = e.playing ++ l }
-    , if List.isEmpty l then
-        []
+playWheel : Wheel -> Cmd msg
+playWheel wheel =
+    let
+        w =
+            Wheel.getEngined wheel
 
-      else
-        [ playPause e.parentUid coll l ]
-    )
-
-
-playPause : String -> Coll Geer -> List (Id Geer) -> E.Value
-playPause parentUid coll els =
-    E.object
-        [ ( "action", E.string "playPause" )
-        , ( "gears", E.list (encodeGear True parentUid coll) els )
-        ]
+        mayP =
+            Maybe.map Pupil.getEngined w.pupil
+    in
+    toEngine <|
+        E.object []
 
 
 stop : E.Value
@@ -100,81 +114,81 @@ volumeChanged ( id, list ) volume (E e) =
     ]
 
 
-encodeWheel : Wheel -> Bool -> String -> List ( String, E.Value )
-encodeWheel w hasView parentUid =
-    [ ( "mute", E.bool w.mute )
-    , ( "volume", E.float <| clamp 0 1 w.volume )
-    , ( "startPercent", E.float w.startPercent )
-    , ( "view", E.bool hasView )
-    ]
-        ++ (case Wheel.getWheelContent w of
-                Content.S s ->
-                    [ ( "soundPath", E.string <| Sound.getPath s )
-                    , ( "loopPercents", E.list E.float <| Sound.getLoopPercentsList s )
-                    ]
 
-                Content.M m ->
-                    [ ( "mobile", encodeMobile m False parentUid ) ]
-
-                Content.C c ->
-                    [ ( "collar", encodeCollar c hasView parentUid ) ]
-           )
-
-
-encodeGear : Bool -> String -> Coll Geer -> Id Geer -> E.Value
-encodeGear hasView parentUid coll id =
-    let
-        g =
-            Coll.get id coll
-
-        length =
-            Mobile.getLength g coll
-
-        uid =
-            parentUid ++ Gear.toUID id
-    in
-    if length == 0 then
-        let
-            _ =
-                Debug.log (uid ++ "’s length is 0") g
-        in
-        E.null
-
-    else
-        E.object
-            ([ ( "id", E.string <| uid )
-             , ( "length", E.float length )
-             ]
-                ++ encodeWheel g.wheel hasView uid
-            )
-
-
-encodeMobile : Mobeel -> Bool -> String -> E.Value
-encodeMobile { motor, gears } hasView parentUid =
-    E.object
-        [ ( "duration", E.float <| Mobile.getLengthId motor gears )
-        , ( "gears", E.list (encodeGear hasView parentUid gears) <| Motor.getMotored motor gears )
-        ]
-
-
-encodeCollar : Colleer -> Bool -> String -> E.Value
-encodeCollar c hasView parentUid =
-    E.object
-        [ ( "duration", E.float <| Collar.getCumulLengthAt c.matrice c )
-        , ( "loopStart", E.float c.loop )
-        , ( "beads", E.list (encodeBead hasView parentUid) <| List.indexedMap (\i el -> ( i, el )) <| Collar.getBeads c )
-        ]
-
-
-encodeBead : Bool -> String -> ( Int, Beed ) -> E.Value
-encodeBead hasView parentUid ( i, b ) =
-    let
-        uid =
-            Content.beadUIDExtension parentUid i
-    in
-    E.object
-        ([ ( "length", E.float b.length )
-         , ( "id", E.string uid )
-         ]
-            ++ encodeWheel b.wheel hasView uid
-        )
+--encodeWheel : Wheel -> Bool -> String -> List ( String, E.Value )
+--encodeWheel w hasView parentUid =
+--    [ ( "mute", E.bool w.mute )
+--    , ( "volume", E.float <| clamp 0 1 w.volume )
+--    , ( "startPercent", E.float w.startPercent )
+--    , ( "view", E.bool hasView )
+--    ]
+--        ++ (case Wheel.getWheelContent w of
+--                Content.S s ->
+--                    [ ( "soundPath", E.string <| Sound.getPath s )
+--                    , ( "loopPercents", E.list E.float <| Sound.getLoopPercentsList s )
+--                    ]
+--
+--                Content.M m ->
+--                    [ ( "mobile", encodeMobile m False parentUid ) ]
+--
+--                Content.C c ->
+--                    [ ( "collar", encodeCollar c hasView parentUid ) ]
+--           )
+--
+--encodeGear : Bool -> String -> Coll Geer -> Id Geer -> E.Value
+--encodeGear hasView parentUid coll id =
+--    let
+--        g =
+--            Coll.get id coll
+--
+--        length =
+--            Mobile.getLength g coll
+--
+--        uid =
+--            parentUid ++ Gear.toUID id
+--    in
+--    if length == 0 then
+--        let
+--            _ =
+--                Debug.log (uid ++ "’s length is 0") g
+--        in
+--        E.null
+--
+--    else
+--        E.object
+--            ([ ( "id", E.string <| uid )
+--             , ( "length", E.float length )
+--             ]
+--                ++ encodeWheel g.wheel hasView uid
+--            )
+--
+--
+--encodeMobile : Mobeel -> Bool -> String -> E.Value
+--encodeMobile { motor, gears } hasView parentUid =
+--    E.object
+--        [ ( "duration", E.float <| Mobile.getLengthId motor gears )
+--        , ( "gears", E.list (encodeGear hasView parentUid gears) <| Motor.getMotored motor gears )
+--        ]
+--
+--
+--encodeCollar : Colleer -> Bool -> String -> E.Value
+--encodeCollar c hasView parentUid =
+--    E.object
+--        [ ( "duration", E.float <| Collar.getCumulLengthAt c.matrice c )
+--        , ( "loopStart", E.float c.loop )
+--        , ( "beads", E.list (encodeBead hasView parentUid) <| List.indexedMap (\i el -> ( i, el )) <| Collar.getBeads c )
+--        ]
+--
+--
+--encodeBead : Bool -> String -> ( Int, Beed ) -> E.Value
+--encodeBead hasView parentUid ( i, b ) =
+--    let
+--        uid =
+--            Content.beadUIDExtension parentUid i
+--    in
+--    E.object
+--        ([ ( "length", E.float b.length )
+--         , ( "id", E.string uid )
+--         ]
+--            ++ encodeWheel b.wheel hasView uid
+--        )
