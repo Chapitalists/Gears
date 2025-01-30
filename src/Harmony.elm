@@ -5,8 +5,8 @@ import Json.Decode.Field as Field
 import Json.Encode as E
 import Link exposing (Link)
 import Round
-import Tools.Coll as Coll exposing (Coll, Id)
-import Tools.Fraction as Fract exposing (Fraction)
+import Utils.Coll as Coll exposing (Coll, Id)
+import Utils.Fraction as Fract exposing (Fraction)
 
 
 

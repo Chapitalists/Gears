@@ -3,20 +3,19 @@ module Editor.Interacting exposing (..)
 import Data.Common exposing (Identifier)
 import Data.Mobile exposing (Geer)
 import Link exposing (Link)
-import Pack exposing (Packed)
 import Sound exposing (Sound)
-import Tools.Coll exposing (Id)
+import Utils.Coll exposing (Id)
 
 
 type Interactable
     = ISurface
-    | IPack
+      --| IPack
     | IWheel Identifier
-    | IResizeHandle (Id Geer) Bool -- True = right
-    | IPacked (Id Packed)
+      --| IResizeHandle (Id Geer) Bool -- True = right
+      --| IPacked (Id Packed)
     | ILink (Link Geer)
     | ISound Sound
-    | ISoundLib (List String)
+      --| ISoundLib (List String)
     | IWaveCursor Cursor
     | IWaveSel
     | IWaveMapSel
@@ -24,7 +23,7 @@ type Interactable
 
 type Zone
     = ZSurface
-    | ZPack
+      --| ZPack
     | ZWave
     | ZWaveMap
 

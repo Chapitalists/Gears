@@ -1,7 +1,8 @@
-module Tools.Interact exposing (..)
+module Utils.Interact exposing (..)
 
 import Browser.Events as BE
 import Html
+import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse as Mouse
 import Json.Decode as D
@@ -326,6 +327,7 @@ draggableEvents id =
                 (vecFromTuple e.clientPos)
                 e.keys
                 time
+    , Html.Attributes.attribute "class" "draggable"
     ]
 
 

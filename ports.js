@@ -10,9 +10,9 @@ if (app.ports.requestMicRecStart) app.ports.requestMicRecStart.subscribe(startMi
 if (app.ports.requestMicRecStop) app.ports.requestMicRecStop.subscribe(stopMicRec)
 
 const buffers = {}
-    , ro = new ResizeObserver(sendSize)
+    // , ro = new ResizeObserver(sendSize)
     , recorder = new Recorder(masterGain)
-ro.observe(document.getElementById('svgResizeObserver'))
+// ro.observe(document.getElementById('svgResizeObserver'))
 
 let deb = null
 

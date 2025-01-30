@@ -1,4 +1,4 @@
-module Tools.Coll exposing
+module Utils.Coll exposing
     ( Coll
     , Id
     , decoder

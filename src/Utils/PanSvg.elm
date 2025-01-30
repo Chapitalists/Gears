@@ -1,4 +1,4 @@
-port module Tools.PanSvg exposing
+port module Utils.PanSvg exposing
     ( Direction(..)
     , FloatSize
     , Msg(..)
@@ -18,10 +18,10 @@ import Html.Attributes
 import Html.Events.Extra.Wheel as Wheel
 import Json.Decode as D
 import Math.Vector2 as Vec exposing (Vec2, vec2)
-import Tools.Utils exposing (Size)
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
 import TypedSvg.Types
+import Utils.Utils exposing (Size)
 
 
 port newSVGSize : (D.Value -> msg) -> Sub msg
