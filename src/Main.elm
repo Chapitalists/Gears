@@ -76,6 +76,7 @@ main =
 type alias Model =
     { screenSize : Size
     , workplane : PanSvg
+    , sel : List Identifier
 
     --, doc : Doc.Model
     , soundCard : SoundCard
@@ -101,6 +102,9 @@ type alias AutoGear =
 
 --TODO deal rand prologue and Creating growth with onAnimationFrame
 --TODO all times in millis !
+--
+--
+--
 --type alias Views =
 --    { lib : P.ViewType
 --    , menu : P.ViewType
@@ -134,6 +138,7 @@ init screen url _ =
                 screen
                 (vec2 0 0)
                 initDur
+      , sel = []
 
       --, doc = Doc.init <| Just url
       , soundCard = SoundCard.init
@@ -346,8 +351,22 @@ view model =
                             [ S.circle (gearAttrs p d) [] ]
 
                         Wheel w ->
+                            let
+                                mod =
+                                    if List.isEmpty model.sel then
+                                        None
+
+                                    else
+                                        Selected False
+
+                                style =
+                                    { defaultStyle | mod = mod }
+
+                                fakeInteract =
+                                    Just <| IWheel ( Coll.startId, [] )
+                            in
                             [ Html.map InteractMsg <|
-                                Wheel.view w defaultStyle Nothing wheelId Nothing
+                                Wheel.view w style fakeInteract wheelId Nothing
                             ]
         ]
     }
@@ -424,7 +443,17 @@ manageInteractEvent model event =
                 _ ->
                     return
 
-        _ ->
+        Wheel w ->
+            case ( event.item, event.action ) of
+                ( IWheel id, Clicked _ ) ->
+                    ( { model | sel = toggleListElement id model.sel }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    return
+
+        Bubble _ _ ->
             return
 
 
