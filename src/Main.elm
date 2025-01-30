@@ -54,7 +54,8 @@ main =
 type alias Model =
     { screenSize : Size
     , workplane : PanSvg
-    , doc : Doc.Model
+
+    --, doc : Doc.Model
     , soundCard : SoundCard
     , state : State
     , interact : Interact.State Interactable Zone
@@ -110,7 +111,8 @@ init screen url _ =
                 screen
                 (vec2 0 0)
                 initDur
-      , doc = Doc.init <| Just url
+
+      --, doc = Doc.init <| Just url
       , soundCard = SoundCard.init
       , state = Prologue <| AutoGear (vec2 0 0) initDur (initDur * 2)
       , interact = Interact.init
@@ -129,7 +131,7 @@ type Msg
       --| ViewMenuChg P.ViewType
       --| ViewSoundChg P.ViewType
     | WorkplaneMsg PanSvg.Msg
-    | DocMsg Doc.Msg
+      --| DocMsg Doc.Msg
     | SoundMsg SoundCard.Msg
     | InteractMsg (Interact.Msg Interactable Zone)
     | RequestAutoGear
@@ -167,12 +169,12 @@ update msg model =
             , Cmd.none
             )
 
-        DocMsg subMsg ->
-            let
-                ( doc, cmd ) =
-                    Doc.update subMsg model.doc
-            in
-            ( { model | doc = doc }, Cmd.map DocMsg cmd )
+        --DocMsg subMsg ->
+        --    let
+        --        ( doc, cmd ) =
+        --            Doc.update subMsg model.doc
+        --    in
+        --    ( { model | doc = doc }, Cmd.map DocMsg cmd )
 
         SoundMsg subMsg ->
             let
@@ -228,9 +230,10 @@ update msg model =
 
 
 sub : Model -> Sub Msg
-sub { doc, state, screenSize, interact } =
+sub { state, screenSize, interact } =
     ([ BE.onResize (\w h -> GotScreenSize { width = w, height = h })
-     , Sub.map DocMsg <| Doc.sub doc
+
+     --, Sub.map DocMsg <| Doc.sub doc
      , Sub.map SoundMsg SoundCard.sub
      , Sub.map InteractMsg <| Interact.sub interact
      ]
