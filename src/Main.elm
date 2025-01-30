@@ -81,8 +81,21 @@ type alias Model =
     --, doc : Doc.Model
     , soundCard : SoundCard
     , state : State
+    , tools : Tools
     , interact : Interact.State Interactable Zone
     }
+
+
+type alias Tools =
+    { panels : List Panel
+    , floating : List Vec2
+    }
+
+
+
+--type alias FloatingTool =
+--    { pos : Vec2
+--    , }
 
 
 type State
@@ -143,6 +156,7 @@ init screen url _ =
       --, doc = Doc.init <| Just url
       , soundCard = SoundCard.init
       , state = Prologue <| AutoGear (vec2 0 0) initDur (initDur * 2)
+      , tools = Tools [] []
       , interact = Interact.init
       }
     , Cmd.none
@@ -329,7 +343,8 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "Gears !"
     , body =
-        [ layout [] <|
+        --[ layout [ htmlId "svgResizeObserver" ] <|
+        [ layout [ inFront <| viewTools model.tools ] <|
             Element.html <|
                 S.svg
                     (List.map (Attr.map WorkplaneMsg)
@@ -402,6 +417,20 @@ view model =
        ]
    }
 -}
+
+
+viewTools : Tools -> Element Msg
+viewTools { panels, floating } =
+    el [ alignRight ] <|
+        roundButton 30 True False Red <|
+            Input.button
+                [ centerX
+                , centerY
+                , Font.size 15
+                ]
+                { onPress = Just SKIP
+                , label = text "SKIP"
+                }
 
 
 manageInteractEvent :
