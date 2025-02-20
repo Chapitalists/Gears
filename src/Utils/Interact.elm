@@ -60,7 +60,7 @@ type alias ClickState item zone =
     , abs : Vec2
     , hold : HoldState zone
     , keys : Mouse.Keys
-    , startTime : Int
+    , startTime : Float
     }
 
 
@@ -81,10 +81,10 @@ init =
 type Msg item zone
     = HoverIn item
     | HoverOut
-    | StartClick item Vec2 Vec2 Mouse.Keys Int -- offsetPos clientPos
+    | StartClick item Vec2 Vec2 Mouse.Keys Float -- offsetPos clientPos
     | ClickMove zone Vec2 Vec2
     | ClickHold
-    | EndClick Int
+    | EndClick Float
     | AbortClick
     | NOOP
 
@@ -131,7 +131,7 @@ type Action zone
     | DragEnded Bool -- True for Up, False for Abort
     | Start Vec2
     | Holded
-    | HoldEnded Int -- milliseconds
+    | HoldEnded Float -- milliseconds
 
 
 type alias DragInfo zone =
@@ -276,7 +276,7 @@ sub (S { click }) =
 
         Just { hold } ->
             [ BE.onMouseUp <|
-                D.map (EndClick << round) <|
+                D.map EndClick <|
                     D.field "timeStamp" D.float
             , BE.onVisibilityChange
                 (\v ->
@@ -333,7 +333,7 @@ draggableEvents id =
 
 type alias TimedEvent =
     { e : Mouse.Event
-    , time : Int
+    , time : Float
     }
 
 
@@ -342,19 +342,17 @@ decodeWithTime =
     D.map2 TimedEvent
         Mouse.eventDecoder
     <|
-        D.map round <|
-            D.field "timeStamp" D.float
+        D.field "timeStamp" D.float
 
 
 onMouseDowm : (TimedEvent -> msg) -> Html.Attribute msg
 onMouseDowm msg =
     let
         opt m =
-            Debug.log "dec" <|
-                { message = m
-                , stopPropagation = True
-                , preventDefault = True
-                }
+            { message = m
+            , stopPropagation = True
+            , preventDefault = True
+            }
 
         decoder =
             D.map opt <| D.map msg <| decodeWithTime

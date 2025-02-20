@@ -458,11 +458,7 @@ manageInteractEvent model event =
         Creating g p t ->
             case ( event.item, event.action ) of
                 ( ISurface, HoldEnded d ) ->
-                    let
-                        _ =
-                            Debug.log "d t" ( d, t )
-                    in
-                    ( { model | state = Bubble p t }
+                    ( { model | state = Bubble p d }
                     , Select.file soundMimeTypes OpenSound
                     )
 
