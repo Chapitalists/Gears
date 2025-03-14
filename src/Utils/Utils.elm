@@ -9,7 +9,6 @@ import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core exposing (Svg, text)
 import TypedSvg.Types exposing (AnchorAlignment(..), Fill(..), Length(..), Opacity(..), Transform(..))
-import Utils.Interact as Interact
 
 
 type alias Size =

@@ -6,6 +6,7 @@
 }
 
 body {
+  touch-action: none;
   overscroll-behavior: contain;
 }
 
@@ -18,10 +19,6 @@ input {
   -webkit-user-select: auto;
   -moz-user-select: auto;
   -ms-user-select: auto;
-}
-
-#svgResizeObserver {
-  touch-action: none;
 }
 
 svg * {

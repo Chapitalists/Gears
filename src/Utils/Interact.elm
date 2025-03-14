@@ -1,13 +1,30 @@
 module Utils.Interact exposing (..)
 
-import Browser.Events as BE
+import Dict exposing (Dict)
 import Html
 import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse as Mouse
+import Html.Events.Extra.Pointer as Pointer
 import Json.Decode as D
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Time exposing (Posix)
+import Utils.Utils exposing (unmaybeMap)
+
+
+interactMinTime : Float
+interactMinTime =
+    15
+
+
+tapMaxTime : Float
+tapMaxTime =
+    300
+
+
+movePixelThreshold : Float
+movePixelThreshold =
+    20
 
 
 holdTime : Float
@@ -15,72 +32,76 @@ holdTime =
     500
 
 
-type alias Interact item =
-    Maybe ( item, Mode )
 
-
-type Mode
-    = Hover
-    | Click
-    | Hold
-    | Drag
-
-
-getInteract : State item zone -> Interact item
-getInteract (S s) =
-    case ( s.hover, s.click ) of
-        ( Just item, Nothing ) ->
-            Just ( item, Hover )
-
-        ( _, Just { item, hold } ) ->
-            case hold of
-                Moving _ ->
-                    Just ( item, Drag )
-
-                Holding ->
-                    Just ( item, Hold )
-
-                Clicking ->
-                    Just ( item, Click )
-
-        _ ->
-            Nothing
+--type alias Interact item =
+--    Maybe ( item, Mode )
+--
+--
+--type Mode
+--    = Hover
+--    | Click
+--    | Hold
+--    | Drag
+--getInteract : State item zone -> Interact item
+--getInteract (S s) =
+--    case ( s.hover, s.touch ) of
+--        ( Just item, Nothing ) ->
+--            Just ( item, Hover )
+--
+--        ( _, Just { item, hold } ) ->
+--            case hold of
+--                Moving _ ->
+--                    Just ( item, Drag )
+--
+--                Holding ->
+--                    Just ( item, Hold )
+--
+--                Clicking ->
+--                    Just ( item, Click )
+--
+--        _ ->
+--            Nothing
 
 
 type State item zone
-    = S
-        { hover : Maybe item
-        , click : Maybe (ClickState item zone)
-        }
+    = S (Dict Int (ClickInfos item zone))
 
 
-type alias ClickState item zone =
+type alias ClickInfos item zone =
     { item : item
+    , over : Maybe item
     , pos : Vec2
     , abs : Vec2
-    , hold : HoldState zone
+    , state : ClickState zone
     , keys : Mouse.Keys
+    , startPos : Vec2
+    , startAbs : Vec2
     , startTime : Float
     }
 
 
-type HoldState zone
+type ClickState zone
     = Clicking
     | Holding
-    | Moving ( Vec2, zone )
+    | Moving zone -- startZone
+
+
+
+--| PreClicking
 
 
 init : State item zone
 init =
-    S
-        { hover = Nothing
-        , click = Nothing
-        }
+    S Dict.empty
 
 
-type Msg item zone
-    = HoverIn item
-    | HoverOut
+type alias Msg item zone =
+    ( Int, BaseEvent item zone )
+
+
+type BaseEvent item zone
+    = Enter item
+    | Leave
     | StartClick item Vec2 Vec2 Mouse.Keys Float -- offsetPos clientPos
     | ClickMove zone Vec2 Vec2
     | ClickHold
@@ -90,16 +111,17 @@ type Msg item zone
 
 
 map : (a -> b) -> Msg a c -> Msg b c
-map f m =
-    case m of
-        HoverIn a ->
-            HoverIn (f a)
+map f ( i, m ) =
+    ( i
+    , case m of
+        Enter a ->
+            Enter (f a)
+
+        Leave ->
+            Leave
 
         StartClick a v c k t ->
             StartClick (f a) v c k t
-
-        HoverOut ->
-            HoverOut
 
         ClickMove z v c ->
             ClickMove z v c
@@ -115,6 +137,7 @@ map f m =
 
         NOOP ->
             NOOP
+    )
 
 
 type alias Event item zone =
@@ -129,8 +152,8 @@ type Action zone
     | DragIn
     | DragOut
     | DragEnded Bool -- True for Up, False for Abort
-    | Start Vec2
-    | Holded
+      --| Start Vec2
+    | Holded Vec2
     | HoldEnded Float -- milliseconds
 
 
@@ -138,8 +161,8 @@ type alias DragInfo zone =
     { start : ( Vec2, zone )
     , oldPos : Vec2
     , newPos : Vec2
-    , startD : Vec2
-    , absD : Vec2
+    , startD : Vec2 -- ??
+    , absD : Vec2 -- ??
     }
 
 
@@ -147,110 +170,146 @@ update :
     Msg item zone
     -> State item zone
     -> ( State item zone, Maybe (Event item zone) )
-update msg (S state) =
-    case msg of
-        HoverIn id ->
-            ( S { state | hover = Just id }
-            , Maybe.map (always (Event DragIn id)) state.click
-            )
+update ( id, msg ) (S touches) =
+    let
+        mayTouch =
+            Dict.get id touches
 
-        HoverOut ->
-            ( S { state | hover = Nothing }
-            , Maybe.map2 (always (\hover -> Event DragIn hover))
-                state.click
-                state.hover
-            )
-
-        StartClick id pos abs keys time ->
+        return ( mayT, e ) =
             ( S
-                { state
-                    | click =
-                        Just
-                            { item = id
-                            , pos = pos
-                            , abs = abs
-                            , hold = Clicking
-                            , keys = keys
-                            , startTime = time
-                            }
-                }
-            , Just { item = id, action = Start pos }
+                (case mayT of
+                    Just t ->
+                        Dict.insert id t touches
+
+                    Nothing ->
+                        Dict.remove id touches
+                )
+            , e
             )
+
+        mayUpdate =
+            return << unmaybeMap mayTouch ( Nothing, Nothing )
+    in
+    case msg of
+        --HoverIn item ->
+        --    ( S { state | hover = Just item }
+        --      --, Maybe.map (always (Event DragIn item)) state.touch
+        --    , Nothing
+        --    )
+        --
+        --HoverOut ->
+        --    ( S { state | hover = Nothing }
+        --      --, Maybe.map2 (always (\hover -> Event DragOut hover))
+        --      --    state.touch
+        --      --    state.hover
+        --    , Nothing
+        --    )
+        Enter item ->
+            Debug.todo "Enter (dragIn, or hoverIn?)"
+
+        Leave ->
+            Debug.todo "Leave (dragOut, or hoverOut?)"
+
+        StartClick item pos abs keys time ->
+            return
+                ( Just
+                    { item = item
+                    , over = Nothing
+                    , pos = pos
+                    , abs = abs
+                    , state = Clicking
+                    , keys = keys
+                    , startPos = pos
+                    , startAbs = abs
+                    , startTime = time
+                    }
+                , Nothing
+                  --Just
+                  --    { item = item, action = Start pos }
+                )
 
         ClickMove zone pos abs ->
-            case state.click of
-                Just click ->
+            mayUpdate
+                (\click ->
                     let
-                        dragInit =
-                            case click.hold of
-                                Moving res ->
-                                    res
+                        startZone =
+                            case click.state of
+                                Moving z ->
+                                    z
 
                                 _ ->
-                                    ( click.pos, zone )
-                    in
-                    ( S
-                        { state
-                            | click =
-                                Just
-                                    { click
-                                        | pos = pos
-                                        , abs = abs
-                                        , hold = Moving dragInit
-                                    }
-                        }
-                    , Just <|
-                        Event
-                            (Dragged
-                                { start = dragInit
-                                , oldPos = click.pos
-                                , newPos = pos
-                                , startD = Vec.sub abs click.abs
-                                , absD = Vec.sub abs click.abs
-                                }
-                                zone
-                             <|
-                                tupleFromKeys click.keys
-                            )
-                            click.item
-                    )
+                                    zone
 
-                _ ->
-                    ( S state, Nothing )
+                        moveAmount =
+                            Debug.log "startDiff" <| Vec.distance click.startPos pos
+                    in
+                    if moveAmount < movePixelThreshold then
+                        ( Just
+                            { click
+                                | pos = pos
+                                , abs = abs
+                                , state = click.state
+                            }
+                        , Nothing
+                        )
+
+                    else
+                        ( Just
+                            { click
+                                | pos = pos
+                                , abs = abs
+                                , state = Moving startZone
+                            }
+                        , Just <|
+                            { item = click.item
+                            , action =
+                                Dragged
+                                    { start = ( click.startPos, startZone )
+                                    , oldPos = click.pos
+                                    , newPos = pos
+                                    , startD = Vec.sub abs click.abs
+                                    , absD = Vec.sub abs click.abs
+                                    }
+                                    zone
+                                <|
+                                    tupleFromKeys click.keys
+                            }
+                        )
+                )
 
         ClickHold ->
-            case state.click of
-                Just click ->
-                    ( S { state | click = Just { click | hold = Holding } }
-                    , Just <| Event Holded click.item
+            mayUpdate
+                (\click ->
+                    ( Just { click | state = Holding }
+                    , Just <| { action = Holded click.pos, item = click.item }
                     )
-
-                _ ->
-                    ( S state, Nothing )
+                )
 
         EndClick time ->
-            case state.click of
-                Just { item, hold, keys, startTime } ->
-                    ( S { state | click = Nothing }
-                    , case hold of
-                        Moving _ ->
-                            Just <| Event (DragEnded True) item
+            mayUpdate
+                (\{ item, state, keys, startTime } ->
+                    ( Nothing
+                    , Just
+                        { item = item
+                        , action =
+                            case state of
+                                Moving _ ->
+                                    DragEnded True
 
-                        Holding ->
-                            Just <| Event (HoldEnded (time - startTime)) item
+                                Holding ->
+                                    HoldEnded (time - startTime)
 
-                        Clicking ->
-                            Just <| Event (Clicked <| tupleFromKeys keys) item
+                                Clicking ->
+                                    Clicked <| tupleFromKeys keys
+                        }
                     )
-
-                _ ->
-                    ( S state, Nothing )
+                )
 
         AbortClick ->
-            case state.click of
-                Just { item, hold, keys } ->
-                    ( S { state | click = Nothing }
-                    , case hold of
+            mayUpdate
+                (\{ item, state, keys } ->
+                    ( Nothing
+                    , case state of
                         Moving _ ->
                             Just <| Event (DragEnded False) item
 
@@ -260,79 +319,117 @@ update msg (S state) =
                         Clicking ->
                             Nothing
                     )
-
-                _ ->
-                    ( S state, Nothing )
+                )
 
         NOOP ->
-            ( S state, Nothing )
+            ( S touches, Nothing )
 
 
 sub : State item zone -> Sub (Msg item zone)
-sub (S { click }) =
-    (case click of
-        Nothing ->
-            []
+sub (S touches) =
+    Dict.foldl
+        (\id { state } subs ->
+            case state of
+                Clicking ->
+                    (Time.every holdTime <| always ( id, ClickHold ))
+                        :: subs
 
-        Just { hold } ->
-            [ BE.onMouseUp <|
-                D.map EndClick <|
-                    D.field "timeStamp" D.float
-            , BE.onVisibilityChange
-                (\v ->
-                    -- TODO check bug visibility hidden not emitted on window change but on tab change
-                    Debug.log (Debug.toString v) <|
-                        case v of
-                            BE.Hidden ->
-                                AbortClick
-
-                            _ ->
-                                NOOP
-                )
-            ]
-                ++ (case hold of
-                        Clicking ->
-                            [ Time.every holdTime <| always ClickHold ]
-
-                        _ ->
-                            []
-                   )
-    )
+                _ ->
+                    subs
+        )
+        []
+        touches
         |> Sub.batch
 
 
-dragSpaceEvents : State item zone -> zone -> List (Html.Attribute (Msg item zone))
-dragSpaceEvents (S { click }) zone =
-    case click of
-        Nothing ->
-            []
 
-        Just _ ->
-            [ Mouse.onMove <| \{ offsetPos, clientPos } -> ClickMove zone (vecFromTuple offsetPos) (vecFromTuple clientPos) ]
+--dragSpaceEvents : State item zone -> zone -> List (Html.Attribute (Msg item zone))
+
+
+dragSpaceEvents : zone -> List (Html.Attribute (Msg item zone))
+dragSpaceEvents zone =
+    --dragSpaceEvents (S { click }) zone =
+    --case click of
+    --    Nothing ->
+    --        []
+    --
+    --    Just _ ->
+    [ Pointer.onMove <|
+        \{ pointer, pointerId } ->
+            let
+                _ =
+                    Debug.log "move" pointerId
+            in
+            ( pointerId
+            , ClickMove zone
+                (vecFromTuple pointer.offsetPos)
+                (vecFromTuple pointer.clientPos)
+            )
+    ]
 
 
 hoverEvents : item -> List (Html.Attribute (Msg item zone))
-hoverEvents id =
-    [ Mouse.onEnter <| always <| HoverIn id
-    , Mouse.onLeave <| always HoverOut
+hoverEvents =
+    dragTargetEvents
+
+
+
+--[ Mouse.onEnter <| always <| HoverIn item
+--, Mouse.onLeave <| always HoverOut
+--]
+
+
+dragTargetEvents : item -> List (Html.Attribute (Msg item zone))
+dragTargetEvents item =
+    [ Pointer.onEnter <|
+        \{ pointer, pointerId } -> ( pointerId, Enter item )
+    , Pointer.onLeave <|
+        \{ pointer, pointerId } -> ( pointerId, Leave )
     ]
 
 
 draggableEvents : item -> List (Html.Attribute (Msg item zone))
-draggableEvents id =
-    [ onMouseDowm <|
+draggableEvents item =
+    [ onPointerDown <|
         \{ e, time } ->
-            StartClick id
-                (vecFromTuple e.offsetPos)
-                (vecFromTuple e.clientPos)
-                e.keys
+            let
+                _ =
+                    Debug.log "down" ( e.pointerId, time )
+            in
+            ( e.pointerId
+            , StartClick item
+                (vecFromTuple e.pointer.offsetPos)
+                (vecFromTuple e.pointer.clientPos)
+                e.pointer.keys
                 time
+            )
+    , onPointerUp <|
+        \{ e, time } ->
+            let
+                _ =
+                    Debug.log "up" ( e.pointerId, time )
+            in
+            ( e.pointerId
+            , EndClick time
+            )
+    , onPointerCancel <|
+        \e ->
+            let
+                _ =
+                    Debug.log "cancel" e.pointerId
+            in
+            ( e.pointerId
+            , AbortClick
+            )
     , Html.Attributes.attribute "class" "draggable"
+    , Html.Attributes.attribute "onPointerDown" "lala"
+
+    --"event.target.setPointerCapture(event.pointerId)"
     ]
 
 
 type alias TimedEvent =
-    { e : Mouse.Event
+    { e : Pointer.Event
     , time : Float
     }
 
@@ -340,13 +437,13 @@ type alias TimedEvent =
 decodeWithTime : D.Decoder TimedEvent
 decodeWithTime =
     D.map2 TimedEvent
-        Mouse.eventDecoder
+        Pointer.eventDecoder
     <|
         D.field "timeStamp" D.float
 
 
-onMouseDowm : (TimedEvent -> msg) -> Html.Attribute msg
-onMouseDowm msg =
+customOn : String -> (TimedEvent -> msg) -> Html.Attribute msg
+customOn event msg =
     let
         opt m =
             { message = m
@@ -357,7 +454,22 @@ onMouseDowm msg =
         decoder =
             D.map opt <| D.map msg <| decodeWithTime
     in
-    Html.Events.custom "mousedown" decoder
+    Html.Events.custom event decoder
+
+
+onPointerDown : (TimedEvent -> msg) -> Html.Attribute msg
+onPointerDown =
+    customOn "pointerdown"
+
+
+onPointerUp : (TimedEvent -> msg) -> Html.Attribute msg
+onPointerUp =
+    customOn "pointerup"
+
+
+onPointerCancel : (Pointer.Event -> msg) -> Html.Attribute msg
+onPointerCancel =
+    Pointer.onCancel
 
 
 
