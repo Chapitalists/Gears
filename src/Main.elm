@@ -26,6 +26,7 @@ import Sound exposing (Sound)
 import SoundCard exposing (SoundCard)
 import Task
 import Time exposing (Posix, every)
+import Tools exposing (Tools)
 import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core as Svg exposing (Svg)
@@ -84,18 +85,6 @@ type alias Model =
     , tools : Tools
     , interact : Interact.State Interactable Zone
     }
-
-
-type alias Tools =
-    { panels : List Panel
-    , floating : List Vec2
-    }
-
-
-
---type alias FloatingTool =
---    { pos : Vec2
---    , }
 
 
 type State
