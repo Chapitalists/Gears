@@ -103,10 +103,8 @@ view (Model model) uid attrs =
             getLoopPercents model
     in
     drawWheel
-        (vec2 0 0)
-        (Sound.length model.sound)
-        model.startPercent
-        (Color.hsl model.hue 1 0.5)
+            length
+            (Just <| Color.hsl model.hue 1 0.5)
         defaultStyle
         uid
         attrs

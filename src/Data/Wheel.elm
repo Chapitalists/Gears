@@ -14,7 +14,7 @@ import TypedSvg.Attributes as SA
 import TypedSvg.Core exposing (..)
 import TypedSvg.Types exposing (AnchorAlignment(..), Fill(..), Length(..), Opacity(..), Transform(..))
 import Utils.Interact as Interact
-import Utils.Utils exposing (WheelMod(..), WheelStyle, drawWheel, unmaybeMap)
+import Utils.Utils exposing (WheelStyle, drawWheel, unmaybeMap)
 
 
 type Wheel

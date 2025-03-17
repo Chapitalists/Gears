@@ -36,7 +36,7 @@ import Utils.Interact as Interact exposing (Action(..), Event)
 import Utils.Palette exposing (Palette(..), roundButton)
 import Utils.PanSvg as PanSvg exposing (PanSvg)
 import Utils.Panel as Panel exposing (Panel)
-import Utils.Utils exposing (Size, WheelMod(..), defaultStyle, drawWheel, htmlId, toggleListElement, unmaybeMap)
+import Utils.Utils exposing (Size, defaultStyle, drawWheel, htmlId, toggleListElement, unmaybeMap)
 
 
 port newSound : ( String, String ) -> Cmd msg
@@ -367,15 +367,8 @@ view model =
 
                         Wheel w ->
                             let
-                                mod =
-                                    if List.isEmpty model.sel then
-                                        None
-
-                                    else
-                                        Selected False
-
                                 style =
-                                    { defaultStyle | mod = mod }
+                                    { defaultStyle | selected = not <| List.isEmpty model.sel }
 
                                 fakeInteract =
                                     Just <| IWheel ( Coll.startId, [] )
