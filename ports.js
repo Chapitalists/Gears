@@ -25,7 +25,15 @@ async function soloSound(args) {
     }
   sound = await ctx.decodeAudioData(bytes.buffer)
 
+  scheduler.startThenPlay()
+
   app.ports.soundOk.send({path:name, length:sound.duration*1000})
+}
+
+if (app.ports.testPlay) app.ports.testPlay.subscribe(testPlay)
+
+function testPlay(model) {
+  scheduler.playPause(model)
 }
 
 //////////////////

@@ -335,6 +335,7 @@ sub { state, screenSize, interact } =
      --, Sub.map DocMsg <| Doc.sub doc
      , Sub.map SoundCardMsg SoundCard.sub
      , Sub.map InteractMsg <| Interact.sub interact
+     , soundOk (SoundLoaded << D.decodeValue Sound.decoder)
      ]
         ++ (case state of
                 Prologue g ->
@@ -491,7 +492,7 @@ manageInteractEvent model event =
             case ( event.item, event.action ) of
                 ( IWheel id, Clicked _ ) ->
                     ( { model | sel = toggleListElement id model.sel }
-                    , Cmd.none
+                    , testPlay <| playWheel id w
                     )
 
                 _ ->
@@ -511,8 +512,8 @@ makeWheel pos dur percent sound =
         }
 
 
-playWheel : Wheel -> E.Value
-playWheel w =
+playWheel : Identifier -> Wheel -> E.Value
+playWheel ( id, beadList ) w =
     let
         wheel =
             Wheel.getEngined w
@@ -522,33 +523,40 @@ playWheel w =
     in
     -- somewhat copied from Engine.encodeWheel / encodeGear
     E.object
-        ([ ( "wheelId", E.string wheelId ) --TODO
-         , ( "interval", E.float wheel.interval )
-         , ( "mute", E.bool False ) --TODO
-         , ( "volume", E.float 1 ) --TODO
-         , ( "wheelStartPercent", E.float wheel.startPercent )
-         , ( "view", E.bool True ) --TODO
-         ]
-            ++ unmaybeMap mayPupil
-                []
-                (\pupil ->
-                    [ ( "pupilDuration", E.float pupil.duration )
-                    ]
-                        ++ (let
-                                sound =
-                                    Sound.getEngined pupil.sound
-                            in
-                            [ ( "soundPath", E.string sound.path )
-                            , ( "soundPercents"
-                              , E.list E.float
-                                    [ sound.startPercent
-                                    , sound.endPercent
-                                    ]
-                              )
+        [ ( Coll.idToString id
+          , E.object
+                ([ ( "wheelId", E.string wheelId ) --TODO
+                 , ( "interval", E.float wheel.interval )
+                 , ( "mute", E.bool False ) --TODO
+                 , ( "volume", E.float 1 ) --TODO
+                 , ( "launchPercent", E.float wheel.launchPercent )
+                 , ( "view", E.bool True ) --TODO
+                 ]
+                    ++ unmaybeMap mayPupil
+                        []
+                        (\pupil ->
+                            [ ( "pupilDuration", E.float pupil.duration )
                             ]
-                           )
+                                ++ (let
+                                        sound =
+                                            Sound.getEngined pupil.sound
+                                    in
+                                    [ ( "soundPath", E.string sound.path )
+                                    , ( "soundPercents"
+                                      , E.list E.float
+                                            [ sound.startPercent
+                                            , sound.endPercent
+                                            ]
+                                      )
+                                    , ( "soundStartPercent"
+                                      , E.float sound.loopPercent
+                                      )
+                                    ]
+                                   )
+                        )
                 )
-        )
+          )
+        ]
 
 
 autoGear :
