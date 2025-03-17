@@ -32,7 +32,7 @@ type alias Internals =
     { name : String
     , pos : Vec2
     , interval : Float -- millis
-    , startPercent : Float
+    , launchPercent : Float
     , pupil : Maybe Pupil
     }
 
@@ -40,7 +40,7 @@ type alias Internals =
 type alias Engined =
     { name : String
     , interval : Float
-    , startPercent : Float
+    , launchPercent : Float
     , pupil : Maybe Pupil
     }
 
@@ -61,7 +61,7 @@ fromSoundAndInterval sound dur start { pos, pupilHue } =
         { name = Sound.getName sound
         , pos = pos
         , interval = dur
-        , startPercent = start
+        , launchPercent = start
         , pupil = Just <| Pupil.fromSound sound pupilHue
         }
 
@@ -70,7 +70,7 @@ getEngined : Wheel -> Engined
 getEngined (Model model) =
     { name = model.name
     , interval = model.interval
-    , startPercent = model.startPercent
+    , launchPercent = model.launchPercent
     , pupil = model.pupil
     }
 
@@ -93,7 +93,7 @@ default =
         { name = ""
         , pos = vec2 0 0
         , interval = -1
-        , startPercent = 0
+        , launchPercent = 0
         , pupil = Nothing
         }
 
@@ -264,7 +264,7 @@ view (Model model) style mayInteract uid maySymbol =
                 []
 
         pupilAngle =
-            model.startPercent * 2 * pi - pi / 2
+            model.launchPercent * 2 * pi - pi / 2
 
         pupilTransform d s =
             S.g [ SA.transform [ Translate (d / 2 * cos pupilAngle) (d / 2 * sin pupilAngle) ] ] [ s ]
