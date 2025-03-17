@@ -22,7 +22,6 @@ type Pupil
 type alias Internals =
     { hue : Float -- hue
     , duration : Float -- millis
-    , startPercent : Float
     , sound : Sound -- WARNING temporary simplification
 
     --, content : Content a
@@ -32,7 +31,6 @@ type alias Internals =
 
 type alias Engined =
     { duration : Float
-    , startPercent : Float
     , sound : Sound
 
     --, content : Content
@@ -44,7 +42,6 @@ fromSound sound hue =
     Model
         { hue = hue
         , duration = Sound.length sound
-        , startPercent = 0
         , sound = sound
         , viewContent = True
         }
@@ -53,7 +50,6 @@ fromSound sound hue =
 getEngined : Pupil -> Engined
 getEngined (Model model) =
     { duration = model.duration
-    , startPercent = model.startPercent
     , sound = model.sound
 
     --, content = model.content

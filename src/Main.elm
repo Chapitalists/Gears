@@ -507,7 +507,6 @@ playWheel w =
                 []
                 (\pupil ->
                     [ ( "pupilDuration", E.float pupil.duration )
-                    , ( "pupilStartPercent", E.float pupil.startPercent )
                     ]
                         ++ (let
                                 sound =
