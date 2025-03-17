@@ -92,20 +92,22 @@ view :
     Pupil
     -> String
     -> List (Html.Attribute msg)
+    -> (Float -> Svg msg -> Svg msg)
     -> Svg msg
-view (Model model) uid attrs =
+view (Model model) uid attrs transformer =
     let
-        ( loopStart, loopEnd ) =
-            getLoopPercents model
+        length =
+            Sound.length model.sound
     in
-    drawWheel
+    transformer length <|
+        drawWheel
             length
             (Just <| Color.hsl model.hue 1 0.5)
-        defaultStyle
-        uid
-        attrs
-        []
-        []
+            defaultStyle
+            uid
+            attrs
+            []
+            []
 
 
 

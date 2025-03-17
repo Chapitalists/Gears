@@ -34,7 +34,6 @@ type alias Internals =
     , interval : Float -- millis
     , startPercent : Float
     , pupil : Maybe Pupil
-    , bgHue : Float
     }
 
 
@@ -48,7 +47,6 @@ type alias Engined =
 
 type alias Cosmetics =
     { pos : Vec2
-    , bgHue : Float
     , pupilHue : Float
     }
 
@@ -64,7 +62,6 @@ fromSoundAndInterval sound dur { pos, bgHue, pupilHue } =
         , pos = pos
         , interval = dur
         , startPercent = 0
-        , bgHue = bgHue
         , pupil = Just <| Pupil.fromSound sound pupilHue
         }
 
@@ -98,7 +95,6 @@ default =
         , interval = -1
         , startPercent = 0
         , pupil = Nothing
-        , bgHue = 0
         }
 
 
@@ -236,7 +232,6 @@ type Msg
 --
 --        ToggleContentView ->
 --            { g | wheel = { wheel | viewContent = not wheel.viewContent } }
---TODO Should use Utils.drawWheel if possible
 
 
 view :
@@ -249,60 +244,69 @@ view :
     -> Maybe (Svg (Interact.Msg interact x))
     -> Svg (Interact.Msg interact x)
 view (Model model) style mayInteract uid maySymbol =
-    --mayWheelInteract mayHandleInteract uid =
     let
-        d =
-            model.interval
-
-        pos =
-            model.pos
-
-        startPercent =
-            model.startPercent
-
-        tickH =
-            d / 15
-
-        tickW =
-            d / 30
-
-        circum =
-            d * pi
-
         -- hover should disappear ? currently keeped for testing
         ( hoverAttrs, dragAttrs ) =
             unmaybeMap mayInteract ( [], [] ) <| \interact -> ( Interact.draggableEvents interact, Interact.hoverEvents interact )
 
         --unmaybeMap mayWheelInteract ( [], [] ) <|
         --    \( interact, l ) -> ( Interact.hoverEvents <| interact l, Interact.draggableEvents <| interact l )
-        pupilView =
+        stroke =
+            model.interval / 30
+
+        axis =
+            S.circle
+                [ SA.cx <| Num 0
+                , SA.cy <| Num 0
+                , SA.r <| Num stroke
+                , SA.strokeWidth <| Num stroke
+                ]
+                []
+
+        pupilAngle =
+            model.startPercent * 2 * pi - pi / 2
+
+        pupilTransform d s =
+            S.g [ SA.transform [ Translate (d / 2 * cos pupilAngle) (d / 2 * sin pupilAngle) ] ] [ s ]
+
+        pupil =
             case model.pupil of
                 Nothing ->
                     []
 
-                Just pupil ->
+                Just p ->
                     [ S.g
-                        ([ SA.transform [ Translate 0 0 ]
-                         , SA.opacity <| Opacity 0.5
-                         ]
-                            ++ dragAttrs
-                        )
-                        [ Pupil.view pupil (uid ++ "-pupil") dragAttrs ]
+                        [ SA.opacity <| Opacity 0.5
+                        ]
+                        [ Pupil.view p (uid ++ "-pupil") dragAttrs pupilTransform ]
                     ]
+
+        interval =
+            S.g
+                [ SA.transform [ Translate 0 -(model.interval / 2) ] ]
+                [ drawWheel
+                    model.interval
+                    Nothing
+                    style
+                    uid
+                    (hoverAttrs ++ dragAttrs)
+                    []
+                    [ S.rect
+                        [ SA.width <| Num <| stroke / 2
+                        , SA.height <| Num model.interval
+                        , SA.y <| Num <| -model.interval / 2
+                        ]
+                        []
+                    ]
+                ]
 
         toolView =
             unmaybeMap maySymbol
     in
-    drawWheel
-        model.pos
-        model.interval
-        model.startPercent
-        (Color.hsla model.bgHue 0.8 0.5 0.8)
-        style
-        uid
-        (hoverAttrs ++ dragAttrs)
-        pupilView
-        []
+    S.g
+        [ SA.transform [ Translate (getX model.pos) (getY model.pos) ]
+        ]
+        (pupil ++ [ interval, axis ])
 
 
 
