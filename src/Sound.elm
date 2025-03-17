@@ -19,18 +19,26 @@ type Sound
         , duration : Float
         , startPercent : Float
         , endPercent : Float
+        , loopPercent : Float
         }
 
 
 fakeSound : Float -> Sound
 fakeSound f =
-    S { path = "", duration = f, startPercent = 0, endPercent = 1 }
+    S
+        { path = ""
+        , duration = f
+        , startPercent = 0
+        , endPercent = 1
+        , loopPercent = 0
+        }
 
 
 type alias Engined =
     { path : String
     , startPercent : Float
     , endPercent : Float
+    , loopPercent : Float
     }
 
 
@@ -39,6 +47,7 @@ getEngined (S s) =
     { path = s.path
     , startPercent = s.startPercent
     , endPercent = s.endPercent
+    , loopPercent = s.loopPercent
     }
 
 
@@ -66,11 +75,6 @@ fileNameFromPath =
         << List.head
         << List.reverse
         << String.split "/"
-
-
-getLoopPercentsList : Sound -> List Float
-getLoopPercentsList (S { startPercent, endPercent }) =
-    [ startPercent, endPercent ]
 
 
 getLoopPercents : Sound -> ( Float, Float )
@@ -140,13 +144,20 @@ decoder =
                         \mayStart ->
                             Field.attempt "endPercent" D.float <|
                                 \mayEnd ->
-                                    D.succeed <|
-                                        S
-                                            { path = p
-                                            , duration = l
-                                            , startPercent = Maybe.withDefault 0 mayStart
-                                            , endPercent = Maybe.withDefault 1 mayEnd
-                                            }
+                                    Field.attempt "loopPercent" D.float <|
+                                        \mayLoop ->
+                                            D.succeed <|
+                                                let
+                                                    start =
+                                                        Maybe.withDefault 0 mayStart
+                                                in
+                                                S
+                                                    { path = p
+                                                    , duration = l
+                                                    , startPercent = start
+                                                    , endPercent = Maybe.withDefault 1 mayEnd
+                                                    , loopPercent = Maybe.withDefault start mayLoop
+                                                    }
 
 
 encoder : Sound -> E.Value
@@ -156,4 +167,5 @@ encoder (S s) =
         , ( "length", E.float s.duration )
         , ( "startPercent", E.float s.startPercent )
         , ( "endPercent", E.float s.endPercent )
+        , ( "loopPercent", E.float s.loopPercent )
         ]
