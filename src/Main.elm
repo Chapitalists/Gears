@@ -10,7 +10,7 @@ import Data.Wheel as Wheel exposing (Wheel)
 import Editor.Interacting exposing (Interactable(..), Zone)
 import Element exposing (..)
 import Element.Font as Font
-import Element.Input as Input
+import Element.Input as Input exposing (defaultThumb, labelHidden)
 import File exposing (File)
 import File.Select as Select
 import Html exposing (Html)
@@ -89,6 +89,7 @@ type alias Model =
 type alias Tools =
     { panels : List Panel
     , floating : List Vec2
+    , percent : Float
     }
 
 
@@ -156,7 +157,7 @@ init screen url _ =
       --, doc = Doc.init <| Just url
       , soundCard = SoundCard.init
       , state = Prologue <| AutoGear (vec2 0 0) initDur (initDur * 2)
-      , tools = Tools [] []
+      , tools = Tools [] [] 0
       , interact = Interact.init
       }
     , Cmd.none
@@ -184,16 +185,30 @@ type Msg
     | SoundLoaded (Result D.Error Sound)
     | NOOP
     | SKIP
+    | NewPercent Float
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        NewPercent p ->
+            let
+                tools =
+                    model.tools
+            in
+            ( { model
+                | state =
+                    Wheel <| makeWheel (vec2 0 0) 2000 p <| Sound.fakeSound 1000
+                , tools = { tools | percent = p }
+              }
+            , Cmd.none
+            )
+
         SKIP ->
             ( { model
                 | state =
                     Wheel <|
-                        makeWheel (vec2 0 0) 2000 <|
+                        makeWheel (vec2 0 0) 2000 0 <|
                             Sound.fakeSound 1000
               }
             , Cmd.none
@@ -298,7 +313,7 @@ update msg model =
                 Ok sound ->
                     case model.state of
                         Bubble pos dur ->
-                            ( { model | state = Wheel <| makeWheel pos dur sound }
+                            ( { model | state = Wheel <| makeWheel pos dur 0 sound }
                             , Cmd.none
                             )
 
@@ -413,17 +428,28 @@ view model =
 
 
 viewTools : Tools -> Element Msg
-viewTools { panels, floating } =
+viewTools { percent } =
     el [ alignRight ] <|
-        roundButton 30 True False Red <|
-            Input.button
-                [ centerX
-                , centerY
-                , Font.size 15
-                ]
-                { onPress = Just SKIP
-                , label = text "SKIP"
+        column []
+            [ roundButton 30 True False Red <|
+                Input.button
+                    [ centerX
+                    , centerY
+                    , Font.size 15
+                    ]
+                    { onPress = Just SKIP
+                    , label = text "SKIP"
+                    }
+            , Input.slider []
+                { onChange = NewPercent
+                , label = labelHidden "percent"
+                , min = 0
+                , max = 1
+                , value = percent
+                , thumb = defaultThumb
+                , step = Nothing
                 }
+            ]
 
 
 manageInteractEvent :
@@ -475,12 +501,12 @@ manageInteractEvent model event =
             return
 
 
-makeWheel : Vec2 -> Float -> Sound -> Wheel
-makeWheel pos dur sound =
+makeWheel : Vec2 -> Float -> Float -> Sound -> Wheel
+makeWheel pos dur percent sound =
     Wheel.fromSoundAndInterval sound
         dur
+        percent
         { pos = pos
-        , bgHue = 0
         , pupilHue = 0.8
         }
 

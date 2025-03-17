@@ -55,13 +55,13 @@ type alias Conteet =
     Content Wheel
 
 
-fromSoundAndInterval : Sound -> Float -> Cosmetics -> Wheel
-fromSoundAndInterval sound dur { pos, bgHue, pupilHue } =
+fromSoundAndInterval : Sound -> Float -> Float -> Cosmetics -> Wheel
+fromSoundAndInterval sound dur start { pos, pupilHue } =
     Model
         { name = Sound.getName sound
         , pos = pos
         , interval = dur
-        , startPercent = 0
+        , startPercent = start
         , pupil = Just <| Pupil.fromSound sound pupilHue
         }
 
