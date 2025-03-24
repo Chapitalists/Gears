@@ -136,19 +136,7 @@ let scheduler = {
     model.length = model.realLength
 
     if (model.view && model.id) {
-      let el = document.getElementById(model.id)
-        , tr = svg.createSVGTransform()
-      tr.setRotate(0,0,0)
-      el.transform.baseVal.initialize(tr)
-
-      model.view = {
-          tr : tr
-        , moveTo : function (percent) {
-          this.tr.setRotate(percent * 360, 0, 0)
-        }
-      }
-
-      this.modelsToDraw.push(model)
+      this.prepareDraw(model)
     }
     return model
   }
@@ -201,7 +189,7 @@ let scheduler = {
         if (nextState && nextState.date < max) { // And should pause
 
           let safeNextDate = safeFloat(nextState.date)
-          if (safeNextDate < safeFloat(t) || safeNextDate < safeFloat(model.lastScheduledTime)) { // If we sheduled ahead of next
+          if (safeNextDate < safeFloat(t) || safeNextDate < safeFloat(model.lastScheduledTime)) { // If we scheduled ahead of next
             t = nextState.date // Bring back the time and undo
             if (t <= now) console.error("undoing the past, now : " + now + " scheduler : " + t)
 
@@ -429,29 +417,27 @@ let scheduler = {
   , undoInterval(lastState, pauseState, model, now) { // TODO maybe copy this logic to other undos (use lastState to compute percent)
     // undo playPause of subWheels
     let t = pauseState.date
-      , pupil = model.subWheels[0]
-      , contentPercent = clampPercent(lastState.percent + (pauseState.date - model.lastStartTime) / model.interval)
-      , lastLaunchTime = t - contentPercent * model.interval
-      , lastStateIndex = pupil.lastPlayPauseIndexAt(t)
-      , lastPupilState = pupil.playPauseTimes[lastStateIndex]
-    
-    pupil.playPauseTimes = pupil.playPauseTimes.slice(0, lastStateIndex + 1)
-    if (lastPupilState.play) {
-      pupil.playPauseTimes.push({date : t, play : false})
-    } else {
-      // TODO same hack as collar, does it works ? Test play & pause during same interval
-      // TODO NOPE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      pupil.playPauseTimes.push({date : t, play : true})
-      pupil.playPauseTimes.push({date : t, play : false})
+    for (let pupil of model.subWheels) {
+      //, contentPercent = clampPercent(lastState.percent + (pauseState.date - model.lastStartTime) / model.interval)
+      //, lastLaunchTime = t - contentPercent * model.interval
+      let lastStateIndex = pupil.lastPlayPauseIndexAt(t)
+        , lastPupilState = pupil.playPauseTimes[lastStateIndex]
+
+      pupil.playPauseTimes = pupil.playPauseTimes.slice(0, lastStateIndex + 1)
+      if (lastPupilState.play) {
+        pupil.playPauseTimes.push({date: t, play: false})
+      } else {
+        // TODO same hack as collar, does it works ? Test play & pause during same interval
+        // TODO NOPE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        pupil.playPauseTimes.push({date: t, play: true})
+        pupil.playPauseTimes.push({date: t, play: false})
+      }
     }
     
-    pauseState.percent = contentPercent
+    pauseState.percent = clampPercent(lastState.percent + (pauseState.date - model.lastStartTime) / model.interval)
   }
   
   , prepareCollar(t, model, parentRate) {
-    // WARNING collarOffset : ignore collar startPercent because it’s broken now (see todolist)
-    model.startPercent = 0
-
     model.nextBead = 0
     model.duration = model.collar.duration
     model.beadsDurs = model.collar.beads.map(v => v.length)
@@ -555,12 +541,14 @@ let scheduler = {
     )
   }
 
-  , schedulePupil(t, pupil, pauseTime) {
-    let pupilPPT = pupil.playPauseTimes
-    pauseTime = pauseTime || t + pupil.length
+  , schedulePupil(t, pupil) {
+    let newP = this.spawnContent(t, pupil)
+    let pupilPPT = newP.playPauseTimes
+    newP.expireTime = t + pupil.length
 
     pupilPPT.push({date : t, play : true})
-    pupilPPT.push({date : pauseTime, play : false})
+    pupilPPT.push({date : newP.expireTime, play : false})
+    return newP
   }
   , scheduleBead(t, model, length, advanceBead = true) {
     // playing and pausing beads to keep track of a mobile content state
@@ -621,14 +609,47 @@ let scheduler = {
     o.players = []
     // TODO create deep copies of all scheduler variables for each subWheel type
     // beads, collar, mobile, … Maybe each prepare func be split in variable & const
+
+    if (o.view) {
+      let view = o.view = Object.create(o.view)
+        , parent = view.parent = view.node.parentNode
+        , node = view.node = view.node.cloneNode(true)
+      view.tr = node.transform.baseVal.getItem(0)
+      node.setAttribute("opacity", 1)
+      view.seen = false
+    }
+    this.modelsToDraw.push(o)
+
+    return o
   }
 
   , nextRequestId : -1
   , modelsToDraw : []
 
+  , prepareDraw(model) {
+    let el = document.getElementById(model.id)
+      , tr = svg.createSVGTransform()
+      , rx = parseFloat(el.getAttribute("rx"))
+      , ry = parseFloat(el.getAttribute("ry"))
+    //tr.setRotate(0,0,0)
+    el.transform.baseVal.initialize(tr)
+
+    model.view = {
+        node : el
+      , tr : tr
+      , rx : rx
+      , ry : ry
+      , moveTo : function (percent) {
+        this.tr.setRotate(percent * 360, this.rx, this.ry)
+      }
+    }
+
+    this.modelsToDraw.push(model)
+  }
   , draw() {
     // TODO keeps drawing event when paused. is it bad ?
     let now = scheduler.getTime()
+      , modelsToRemove = []
     for (let model of this.modelsToDraw) {
       let lastStateIndex = model.lastPlayPauseIndexAt(now)
         , lastState = model.playPauseTimes[lastStateIndex]
@@ -644,9 +665,25 @@ let scheduler = {
             lastState.percent + (now - lastState.date) / model.length :
             lastState.percent)
       } else console.error("lastState was not done in draw :", lastState, "time is", now, "model", model)
+console.log(model.view.parent, percent, model.view.seen, model)
+      if (model.view.parent && safeFloat(percent) > 0 && !model.view.seen) {console.log("yes!")
+        model.view.parent.appendChild(model.view.node)
+        model.view.seen = true
+      }
+
+      if (model.view.seen && ( safeFloat(percent) <= 0 || safeFloat(percent) >= 1)) {
+        model.view.parent.removeChild(model.view.node)
+        model.view.seen = false
+        modelsToRemove.push(model)
+      }
 
       model.view.moveTo(safeFloat(percent))
     }
+
+    for (let model of modelsToRemove) {
+      this.modelsToDraw.splice(this.modelsToDraw.findIndex(v => v == model), 1)
+    }
+
     this.nextRequestId = requestAnimationFrame(() => this.draw())
   }
 }
