@@ -3,6 +3,7 @@ module Data.Pupil exposing
     , fromSound
     , getContent
     , getEngined
+    , getLength
     , view
     )
 
@@ -70,6 +71,11 @@ getLoopPercents model =
     Sound.getLoopPercents model.sound
 
 
+getLength : Pupil -> Float
+getLength (Model model) =
+    Sound.length model.sound
+
+
 
 -- WARNING temporary simplification
 --case model.content of
@@ -92,22 +98,20 @@ view :
     Pupil
     -> String
     -> List (Html.Attribute msg)
-    -> (Float -> Svg msg -> Svg msg)
     -> Svg msg
-view (Model model) uid attrs transformer =
+view (Model model) uid attrs =
     let
         length =
-            Sound.length model.sound
+            getLength (Model model)
     in
-    transformer length <|
-        drawWheel
-            length
-            (Just <| Color.hsl model.hue 1 0.5)
-            defaultStyle
-            uid
-            attrs
-            []
-            []
+    drawWheel
+        length
+        (Just <| Color.hsl model.hue 1 0.5)
+        defaultStyle
+        uid
+        attrs
+        []
+        []
 
 
 

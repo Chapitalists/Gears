@@ -250,12 +250,9 @@ view :
     -> Svg (Interact.Msg interact x)
 view (Model model) style mayInteract uid maySymbol =
     let
-        -- hover should disappear ? currently keeped for testing
-        ( hoverAttrs, dragAttrs ) =
-            unmaybeMap mayInteract ( [], [] ) <| \interact -> ( Interact.draggableEvents interact, Interact.hoverEvents interact )
+        dragAttrs =
+            unmaybeMap mayInteract [] <| \interact -> Interact.draggableEvents interact
 
-        --unmaybeMap mayWheelInteract ( [], [] ) <|
-        --    \( interact, l ) -> ( Interact.hoverEvents <| interact l, Interact.draggableEvents <| interact l )
         stroke =
             model.interval / 30
 
@@ -268,22 +265,41 @@ view (Model model) style mayInteract uid maySymbol =
                 ]
                 []
 
-        pupilAngle =
-            model.launchPercent * 2 * pi - pi / 2
-
-        pupilTransform d s =
-            S.g [ SA.transform [ Translate (d / 2 * cos pupilAngle) (d / 2 * sin pupilAngle) ] ] [ s ]
-
         pupil =
             case model.pupil of
                 Nothing ->
                     []
 
                 Just p ->
+                    let
+                        pupilLength =
+                            Pupil.getLength p
+
+                        pupilAngle =
+                            model.launchPercent * 2 * pi - pi / 2
+
+                        pupilX =
+                            pupilLength / 2 * cos pupilAngle
+
+                        pupilY =
+                            pupilLength / 2 * sin pupilAngle
+
+                        pupilTranslate =
+                            SA.transform [ Translate pupilX pupilY ]
+                    in
                     [ S.g
-                        [ SA.opacity <| Opacity 0.5
+                        [ pupilTranslate
+
+                        --, Html.Attributes.id <| uid ++ "-animate-pupil"
+                        --, SA.transform [ Rotate 0 -pupilX -pupilY ]
                         ]
-                        [ Pupil.view p (uid ++ "-pupil") dragAttrs pupilTransform ]
+                        [ Pupil.view p
+                            (uid ++ pupilID)
+                            [ SA.opacity <| Opacity 0.5
+                            , Html.Attributes.attribute "rx" <| String.fromFloat -pupilX
+                            , Html.Attributes.attribute "ry" <| String.fromFloat -pupilY
+                            ]
+                        ]
                     ]
 
         interval =
@@ -294,7 +310,9 @@ view (Model model) style mayInteract uid maySymbol =
                     Nothing
                     style
                     uid
-                    (hoverAttrs ++ dragAttrs)
+                    [ Html.Attributes.attribute "rx" "0"
+                    , Html.Attributes.attribute "ry" <| String.fromFloat (model.interval / 2)
+                    ]
                     []
                     [ S.rect
                         [ SA.width <| Num <| stroke / 2
@@ -309,8 +327,9 @@ view (Model model) style mayInteract uid maySymbol =
             unmaybeMap maySymbol
     in
     S.g
-        [ SA.transform [ Translate (getX model.pos) (getY model.pos) ]
-        ]
+        (SA.transform [ Translate (getX model.pos) (getY model.pos) ]
+            :: dragAttrs
+        )
         (pupil ++ [ interval, axis ])
 
 
