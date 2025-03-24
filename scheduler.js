@@ -8,10 +8,6 @@
 // in my scheduler, length refers to the real time expected with the playbackRate applied
 // TODO change naming to be more intelligible ?
 
-/////// IMPORTANT NOTE
-// in PPT, percent is always in [0,1[ and represents the rotation of the wheel, not the playhead position
-// to get playHead position, add startPercent of the wheel
-
 
 const playPauseLatency = .1 // fixed latency for user interaction
     , decimalCount = 9 // for safeFloat, time values beeing in seconds in WebAudio
@@ -126,10 +122,6 @@ let scheduler = {
       this.gainNode.gain.value = this.mute ? 0 : this.volume
     } // TODO volume should rather be in dB
     model.updateVolume()
-    
-      // WARNING in model, startPercent is of whole sound, here it’s of content
-      // not anymore in bigRefactor / 1.0 / proto draft pupil
-//      model.startPercent = (model.startPercent - model.loopPercents[0]) / (model.loopPercents[1] - model.loopPercents[0])
 
     if (model.soundPath) this.prepareSound(t, model, parentRate)
 
@@ -256,7 +248,7 @@ let scheduler = {
           t = nextState.date
           if (t <= now) console.error("starting in the past, now : " + now + " scheduler : " + t)
 
-          let contentPercent = clampPercent(lastState.percent + model.startPercent)
+          let contentPercent = lastState.percent
 
           if (model.soundPath) t = this.unpauseSound(t, contentPercent, model)
 
@@ -322,7 +314,7 @@ let scheduler = {
     // TODO full plays could be managed by playSound (see pauseInterval)
     if (pauseState.date <= t) { // No need to play more, even partially
 
-      pauseState.percent = clampPercent(0 - model.startPercent)
+      pauseState.percent = clampPercent(0 - model.soundStartPercent)
 
     } else {
       let newPlayers = []
@@ -343,7 +335,7 @@ let scheduler = {
 
       model.players = model.players.concat(newPlayers)
 
-      pauseState.percent = clampPercent(length / model.length - model.startPercent)
+      pauseState.percent = clampPercent(length / model.length - model.soundStartPercent)
     }
   }
   , unpauseSound(t, contentPercent, model) {
@@ -357,7 +349,7 @@ let scheduler = {
     for (let pl of model.players) {
       if (pl.startTime <= t && t <= pl.stopTime) {
         pl.node.stop(this.toCtxTime(t))
-        pauseState.percent = clampPercent((t - pl.startTime) / model.length + pl.startOffsetDur / model.duration - model.startPercent)
+        pauseState.percent = clampPercent((t - pl.startTime) / model.length + pl.startOffsetDur / model.duration - model.soundStartPercent)
       }
       if (pl.startTime > t) pl.node.stop()
     }
@@ -373,57 +365,63 @@ let scheduler = {
     // interval
     // pupil(s)
     // instances [id-1, id-2]
-    // startPercent
+    // launchPercent
     // id
     // mute
     // volume
     // view
     // restartMobiles TODO add this to collars
     // shotWheel
-    // TODO handle startPercent if we want content to be playing already
-    // PROPOSAL negative startPercent = no / positive startPercent = yes => to compute
-    // THEN pour les rosaces, startPercent > 1 => plusieurs contents déjà en cours
+    // TODO handle launchPercent if we want content to be playing already
+    // PROPOSAL negative launchPercent = no / positive launchPercent = yes => to compute
+    // THEN pour les rosaces, launchPercent > 1 => plusieurs contents déjà en cours
     model.length = model.interval // for draw, every model has a length
     model.content = this.prepare(t, model.pupil, model.gainNode, parentRate)
-    model.subWheels = model.instances.forEach(v => this.spawnContent(t, model.content, v))
-    model.contentToUnpause = true
+    model.subWheels = []
+    //model.subWheels = model.instances.forEach(v => this.spawnContent(t, model.content, v))
     model.transmitPause = !model.shotWheel
   }
   // plays as many full intervals as possible, t is always an unscheduled launch time
   , playInterval(t, max, model) {
     while (t <= max) {
-      if (model.ratio) {
-        // pop last and unshift ?
-        // est-ce que ça importe ? Dans quel cas serait-il utile d’avoir les contenus dans l’ordre ?
-      } else {
-        this.schedulePupil(t, model.subWheels[0])
-      }
+      model.subWheels.push(this.schedulePupil(t, model.content))
       t += model.interval
     }
     return t
   }
   , pauseInterval(t, pauseState, model) { // TODO maybe copy this logic to other pauses (use play)
-    t = this.playInterval(t, pauseState.date - model.interval, model)
-    
-    let pupil = model.subWheels[0]
-    
-    if (pauseState.date >= t + pupil.length || !model.transmitPause) {
-      this.schedulePupil(t, pupil)
-    } else {
-      this.schedulePupil(t, pupil, pauseState.date)
-      model.contentToUnpause = true
+    this.playInterval(t, pauseState.date, model)
+
+    for (let pupil of model.subWheels) {
+      // pupil instances always have pause for their destruction
+      let pupilPPT = pupil.playPauseTimes
+        , lastPPT = pupilPPT[pupilPPT.length - 1]
+      console.log("pause", lastPPT)
+      if (safeFloat(pauseState.date) < safeFloat(lastPPT.date)) {
+        lastPPT.date = pauseState.date
+        lastPPT.done = false
+        lastPPT.percent = undefined
+        pupil.expireTime = undefined
+      }
     }
-    
-    pauseState.percent = clampPercent(length / model.interval)
+
+    pauseState.percent = clampPercent((pauseState.date - t) / model.interval)
   }
   , unpauseInterval(t, contentPercent, model) {
     model.lastStartTime = t
+
     let offset = contentPercent * model.interval
     
-    if (model.contentToUnpause) {
-      let pupil = model.subWheels[0]
-        , pauseTime = pupil.length - offset
-      this.schedulePupil(t, pupil, pauseTime)
+    for (let pupil of model.subWheels) {
+      if (!pupil.expireTime) {
+        let pupilPPT = pupil.playPauseTimes
+          , lastPPT = pupilPPT[pupilPPT.length - 1]
+          , timeLeft = (1 - lastPPT.percent) * pupil.length
+        console.log("unpause", lastPPT)
+        pupil.playPauseTimes.push({date: t, play: true})
+        pupil.playPauseTimes.push({date: t + timeLeft, play: false})
+        pupil.expireTime = t + timeLeft
+      }
     }
     
     return t + model.interval - offset
@@ -532,9 +530,6 @@ let scheduler = {
   }
   
   , prepareMobile(t, model, parentRate) {
-    // WARNING mobileOffset : ignore mobile startPercent because it’s broken now (see todolist)
-    model.startPercent = 0
-
     model.duration = model.mobile.duration
     model.rate = parentRate * model.duration / model.length
     model.subWheels = model.mobile.gears.map(
