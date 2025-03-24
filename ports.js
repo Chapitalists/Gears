@@ -1,4 +1,5 @@
 const app = Elm.Main.init({flags : {width : window.innerWidth, height : window.innerHeight}})
+    , svg = document.getElementsByTagName('svg')[0]
 
 if (app.ports.requestSoundLoading) app.ports.requestSoundLoading.subscribe(loadSound)
 if (app.ports.toEngine) app.ports.toEngine.subscribe(engine)
@@ -24,8 +25,9 @@ async function soloSound(args) {
         bytes[i] = bstr.charCodeAt(i)
     }
   sound = await ctx.decodeAudioData(bytes.buffer)
+  buffers[name] = sound
 
-  scheduler.startThenPlay()
+  scheduler.startThenPlay([])
 
   app.ports.soundOk.send({path:name, length:sound.duration*1000})
 }
@@ -33,7 +35,7 @@ async function soloSound(args) {
 if (app.ports.testPlay) app.ports.testPlay.subscribe(testPlay)
 
 function testPlay(model) {
-  scheduler.playPause(model)
+  scheduler.playPause([model])
 }
 
 //////////////////

@@ -1,4 +1,4 @@
-module Data.Wheel exposing (Wheel, default, fromSoundAndInterval, getEngined, view)
+module Data.Wheel exposing (Wheel, default, fromSoundAndInterval, getEngined, pupilID, view)
 
 import Color exposing (Color)
 import Data.Content as Content exposing (Bead, Content, Mobile)
@@ -19,6 +19,11 @@ import Utils.Utils exposing (WheelStyle, drawWheel, unmaybeMap)
 
 type Wheel
     = Model Internals
+
+
+pupilID : String
+pupilID =
+    "pupil"
 
 
 

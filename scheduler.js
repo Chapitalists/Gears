@@ -299,8 +299,8 @@ let scheduler = {
     // probably it’s preferable to use saved duration from elm
     // but, is it compensated by downward TODO ? (in schedulePlayer)
     model.bufferDuration = model.buffer.duration
-    model.loopStartDur = model.loopPercents[0] * model.bufferDuration
-    model.loopEndDur = model.loopPercents[1] * model.bufferDuration
+    model.loopStartDur = model.soundPercents[0] * model.bufferDuration
+    model.loopEndDur = model.soundPercents[1] * model.bufferDuration
     model.duration = model.loopEndDur - model.loopStartDur
     model.rate = parentRate * model.duration / model.length
   }

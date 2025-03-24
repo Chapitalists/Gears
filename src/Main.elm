@@ -523,19 +523,22 @@ playWheel ( id, beadList ) w =
     in
     -- somewhat copied from Engine.encodeWheel / encodeGear
     E.object
-        [ ( Coll.idToString id
-          , E.object
-                ([ ( "wheelId", E.string wheelId ) --TODO
-                 , ( "interval", E.float wheel.interval )
-                 , ( "mute", E.bool False ) --TODO
-                 , ( "volume", E.float 1 ) --TODO
-                 , ( "launchPercent", E.float wheel.launchPercent )
-                 , ( "view", E.bool True ) --TODO
-                 ]
-                    ++ unmaybeMap mayPupil
-                        []
-                        (\pupil ->
-                            [ ( "pupilDuration", E.float pupil.duration )
+        ([ ( "id", E.string wheelId ) --TODO
+         , ( "interval", E.float <| wheel.interval / 1000 )
+         , ( "mute", E.bool False ) --TODO
+         , ( "volume", E.float 1 ) --TODO
+         , ( "launchPercent", E.float wheel.launchPercent )
+         , ( "view", E.bool True ) --TODO
+         ]
+            ++ unmaybeMap mayPupil
+                []
+                (\pupil ->
+                    [ ( "pupil"
+                      , E.object <|
+                            [ ( "id", E.string (wheelId ++ Wheel.pupilID) )
+                            , ( "length", E.float <| pupil.duration / 1000 )
+                            , ( "volume", E.float 1 )
+                            , ( "view", E.bool True )
                             ]
                                 ++ (let
                                         sound =
@@ -553,10 +556,10 @@ playWheel ( id, beadList ) w =
                                       )
                                     ]
                                    )
-                        )
+                      )
+                    ]
                 )
-          )
-        ]
+        )
 
 
 autoGear :
@@ -651,8 +654,3 @@ workplaneId =
 wheelId : String
 wheelId =
     "wheel-ID"
-
-
-pupilId : String
-pupilId =
-    "pupil-ID"
