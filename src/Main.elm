@@ -7,7 +7,7 @@ import Color
 import Data.Common exposing (Identifier)
 import Data.Pupil as Pupil
 import Data.Wheel as Wheel exposing (Wheel)
-import Editor.Interacting exposing (Interactable(..), Zone)
+import Editor.Interacting exposing (Interactable(..), Zone(..))
 import Element exposing (..)
 import Element.Font as Font
 import Element.Input as Input exposing (defaultThumb, labelHidden)
@@ -366,7 +366,9 @@ view model =
                     (List.map (Attr.map WorkplaneMsg)
                         (PanSvg.svgAttributes model.workplane)
                         ++ List.map (Attr.map InteractMsg)
-                            (Interact.draggableEvents ISurface)
+                            (Interact.draggableEvents ISurface
+                                ++ Interact.dragSpaceEvents ZSurface
+                            )
                     )
                 <|
                     case model.state of
@@ -465,7 +467,7 @@ manageInteractEvent model event =
     case model.state of
         Prologue g ->
             case ( event.item, event.action ) of
-                ( ISurface, Start pos ) ->
+                ( ISurface, Holded pos ) ->
                     let
                         p =
                             PanSvg.mapIn pos model.workplane
