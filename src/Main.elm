@@ -32,6 +32,7 @@ import TypedSvg.Core as Svg exposing (Svg)
 import TypedSvg.Types exposing (Length(..), Opacity(..))
 import Url exposing (Url)
 import Utils.Coll as Coll
+import Utils.Gesture as Gesture
 import Utils.Interact as Interact exposing (Action(..), Event)
 import Utils.Palette exposing (Palette(..), roundButton)
 import Utils.PanSvg as PanSvg exposing (PanSvg)
@@ -393,6 +394,7 @@ view model =
                             in
                             [ Html.map InteractMsg <|
                                 Wheel.view w style fakeInteract wheelId Nothing
+                            , Gesture.view model.workplane model.screenSize w
                             ]
         ]
     }

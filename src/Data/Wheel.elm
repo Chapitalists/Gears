@@ -1,4 +1,4 @@
-module Data.Wheel exposing (Wheel, default, fromSoundAndInterval, getEngined, pupilID, view)
+module Data.Wheel exposing (Wheel, default, fromSoundAndInterval, getEngined, getPos, pupilID, view)
 
 import Color exposing (Color)
 import Data.Content as Content exposing (Bead, Content, Mobile)
@@ -83,6 +83,11 @@ getEngined (Model model) =
 getContent : Wheel -> Maybe Conteet
 getContent (Model model) =
     Maybe.map Pupil.getContent model.pupil
+
+
+getPos : Wheel -> Vec2
+getPos (Model w) =
+    w.pos
 
 
 setPupil : Maybe Pupil -> Wheel -> Wheel
