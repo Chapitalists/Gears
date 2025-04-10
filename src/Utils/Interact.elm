@@ -143,6 +143,7 @@ map f ( i, m ) =
 type alias Event item zone =
     { action : Action zone
     , item : item
+    , touchId : Int
     }
 
 
@@ -175,7 +176,7 @@ update ( id, msg ) (S touches) =
         mayTouch =
             Dict.get id touches
 
-        return ( mayT, e ) =
+        return ( mayT, mayE ) =
             ( S
                 (case mayT of
                     Just t ->
@@ -184,7 +185,9 @@ update ( id, msg ) (S touches) =
                     Nothing ->
                         Dict.remove id touches
                 )
-            , e
+            , Maybe.map
+                (\e -> { action = e.action, item = e.item, touchId = id })
+                mayE
             )
 
         mayUpdate =
@@ -311,10 +314,10 @@ update ( id, msg ) (S touches) =
                     ( Nothing
                     , case state of
                         Moving _ ->
-                            Just <| Event (DragEnded False) item
+                            Just <| { action = DragEnded False, item = item }
 
                         Holding ->
-                            Just <| Event (HoldEnded 0) item
+                            Just <| { action = HoldEnded 0, item = item }
 
                         Clicking ->
                             Nothing
