@@ -390,10 +390,13 @@ view model =
                                     { defaultStyle | selected = not <| List.isEmpty model.sel }
 
                                 fakeInteract =
-                                    Just <| IWheel ( Coll.startId, [] )
+                                    IWheel ( Coll.startId, [] )
+
+                                dragAttrs =
+                                    Interact.draggableEvents fakeInteract
                             in
-                            [ Html.map InteractMsg <|
-                                Wheel.view w style fakeInteract wheelId Nothing
+                            [ Svg.map InteractMsg <|
+                                Wheel.view w style dragAttrs wheelId Nothing
                             , Gesture.view model.workplane model.screenSize w
                             ]
         ]

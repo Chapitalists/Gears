@@ -13,7 +13,6 @@ import TypedSvg as S
 import TypedSvg.Attributes as SA
 import TypedSvg.Core exposing (..)
 import TypedSvg.Types exposing (AnchorAlignment(..), Fill(..), Length(..), Opacity(..), Transform(..))
-import Utils.Interact as Interact
 import Utils.Utils exposing (WheelStyle, drawWheel, unmaybeMap)
 
 
@@ -247,17 +246,12 @@ type Msg
 view :
     Wheel
     -> WheelStyle
-    -> Maybe interact
-    ---> Maybe ( List Int -> interact, List Int )
-    ---> Maybe (Bool -> interact)
+    -> List (Attribute msg)
     -> String
-    -> Maybe (Svg (Interact.Msg interact x))
-    -> Svg (Interact.Msg interact x)
-view (Model model) style mayInteract uid maySymbol =
+    -> Maybe (Svg msg)
+    -> Svg msg
+view (Model model) style attrs uid maySymbol =
     let
-        dragAttrs =
-            unmaybeMap mayInteract [] <| \interact -> Interact.draggableEvents interact
-
         stroke =
             model.interval / 30
 
@@ -333,7 +327,7 @@ view (Model model) style mayInteract uid maySymbol =
     in
     S.g
         (SA.transform [ Translate (getX model.pos) (getY model.pos) ]
-            :: dragAttrs
+            :: attrs
         )
         (pupil ++ [ interval, axis ])
 
