@@ -1,12 +1,18 @@
-module Data.Wheel exposing (Wheel, default, fromSoundAndInterval, getEngined, getPos, pupilID, view)
+module Data.Wheel exposing
+    ( IntervalOrPupil(..)
+    , Wheel
+    , default
+    , fromSoundAndInterval
+    , getEngined
+    , getInterval
+    , getPos
+    , pupilID
+    , view
+    )
 
-import Color exposing (Color)
-import Data.Content as Content exposing (Bead, Content, Mobile)
+import Data.Content exposing (Bead, Content, Mobile)
 import Data.Pupil as Pupil exposing (Pupil)
 import Html.Attributes
-import Json.Decode as D
-import Json.Decode.Field as Field
-import Json.Encode as E
 import Math.Vector2 exposing (..)
 import Sound exposing (Sound)
 import TypedSvg as S
@@ -23,6 +29,11 @@ type Wheel
 pupilID : String
 pupilID =
     "pupil"
+
+
+type IntervalOrPupil
+    = Interval
+    | Pupil
 
 
 
@@ -87,6 +98,11 @@ getContent (Model model) =
 getPos : Wheel -> Vec2
 getPos (Model w) =
     w.pos
+
+
+getInterval : Wheel -> Float
+getInterval (Model w) =
+    w.interval
 
 
 setPupil : Maybe Pupil -> Wheel -> Wheel

@@ -6,7 +6,7 @@ import Browser.Navigation as Nav
 import Color
 import Data.Common exposing (Identifier)
 import Data.Pupil as Pupil
-import Data.Wheel as Wheel exposing (Wheel)
+import Data.Wheel as Wheel exposing (IntervalOrPupil(..), Wheel)
 import Editor.Interacting exposing (Interactable(..), Zone(..))
 import Element exposing (..)
 import Element.Font as Font
@@ -32,8 +32,8 @@ import TypedSvg.Core as Svg exposing (Svg)
 import TypedSvg.Types exposing (Length(..), Opacity(..))
 import Url exposing (Url)
 import Utils.Coll as Coll
-import Utils.Gesture as Gesture
-import Utils.Interact as Interact exposing (Action(..), Event)
+import Utils.Gesture as Gesture exposing (Event(..), Gesture)
+import Utils.Interact as Interact exposing (Action(..))
 import Utils.Palette exposing (Palette(..), roundButton)
 import Utils.PanSvg as PanSvg exposing (PanSvg)
 import Utils.Panel as Panel exposing (Panel)
@@ -84,6 +84,7 @@ type alias Model =
     , state : State
     , tools : Tools
     , interact : Interact.State Interactable Zone
+    , gesture : Gesture
     }
 
 
@@ -104,7 +105,11 @@ type State
     = Prologue AutoGear
     | Creating AutoGear Vec2 Float
     | Bubble Vec2 Float
-    | Wheel Wheel
+    | Wheel Wheel (Maybe ( Float, Wheel.IntervalOrPupil ))
+
+
+
+--| Modify Wheel Wheel
 
 
 type alias AutoGear =
@@ -160,6 +165,7 @@ init screen url _ =
       , state = Prologue <| AutoGear (vec2 0 0) initDur (initDur * 2)
       , tools = Tools [] [] 0
       , interact = Interact.init
+      , gesture = Gesture.init
       }
     , Cmd.none
     )
@@ -177,7 +183,6 @@ type Msg
     | WorkplaneMsg PanSvg.Msg
       --| DocMsg Doc.Msg
     | SoundCardMsg SoundCard.Msg
-    | InteractMsg (Interact.Msg Interactable Zone)
     | RequestAutoGear
     | GotAutoGear AutoGear
     | UpdateCreating Float
@@ -187,6 +192,8 @@ type Msg
     | NOOP
     | SKIP
     | NewPercent Float
+    | InteractMsg (Interact.Msg Interactable Zone)
+    | GestureMsg Gesture.Msg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -199,7 +206,11 @@ update msg model =
             in
             ( { model
                 | state =
-                    Wheel <| makeWheel (vec2 0 0) 2000 p <| Sound.fakeSound 1000
+                    Wheel
+                        (makeWheel (vec2 0 0) 2000 p <|
+                            Sound.fakeSound 1000
+                        )
+                        Nothing
                 , tools = { tools | percent = p }
               }
             , Cmd.none
@@ -208,9 +219,11 @@ update msg model =
         SKIP ->
             ( { model
                 | state =
-                    Wheel <|
-                        makeWheel (vec2 0 0) 2000 0 <|
+                    Wheel
+                        (makeWheel (vec2 0 0) 2000 0 <|
                             Sound.fakeSound 1000
+                        )
+                        Nothing
               }
             , Cmd.none
             )
@@ -253,21 +266,6 @@ update msg model =
                     SoundCard.update subMsg model.soundCard
             in
             ( { model | soundCard = sc }, Cmd.map SoundCardMsg cmd )
-
-        InteractMsg subMsg ->
-            let
-                ( state, mayEvent ) =
-                    Interact.update subMsg model.interact
-
-                newModel =
-                    { model | interact = state }
-            in
-            case mayEvent of
-                Just e ->
-                    manageInteractEvent newModel e
-
-                Nothing ->
-                    ( newModel, Cmd.none )
 
         RequestAutoGear ->
             let
@@ -314,7 +312,12 @@ update msg model =
                 Ok sound ->
                     case model.state of
                         Bubble pos dur ->
-                            ( { model | state = Wheel <| makeWheel pos dur 0 sound }
+                            ( { model
+                                | state =
+                                    Wheel
+                                        (makeWheel pos dur 0 sound)
+                                        Nothing
+                              }
                             , Cmd.none
                             )
 
@@ -324,18 +327,69 @@ update msg model =
         NOOP ->
             ( model, Cmd.none )
 
+        InteractMsg subMsg ->
+            let
+                ( state, mayEvent ) =
+                    Interact.update subMsg model.interact
+
+                newModel =
+                    { model | interact = state }
+            in
+            case mayEvent of
+                Just e ->
+                    manageInteractEvent newModel e
+
+                Nothing ->
+                    ( newModel, Cmd.none )
+
+        GestureMsg subMsg ->
+            case model.state of
+                Wheel w _ ->
+                    let
+                        ( gesture, event ) =
+                            Gesture.update model.gesture subMsg
+
+                        modScale =
+                            Debug.log "scale"
+                                << (^) 2
+                                << (\n -> n / 100)
+                                << Debug.log "diff"
+
+                        state =
+                            case event of
+                                Just (Up d) ->
+                                    Wheel w <| Just ( modScale d, Interval )
+
+                                Just (Down d) ->
+                                    Wheel w <| Just ( modScale -d, Interval )
+
+                                _ ->
+                                    model.state
+                    in
+                    ( { model
+                        | gesture = gesture
+                        , state = state
+                      }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
 
 
 -- SUBS
 
 
 sub : Model -> Sub Msg
-sub { state, screenSize, interact } =
+sub { state, screenSize, gesture } =
     ([ BE.onResize (\w h -> GotScreenSize { width = w, height = h })
 
      --, Sub.map DocMsg <| Doc.sub doc
      , Sub.map SoundCardMsg SoundCard.sub
-     , Sub.map InteractMsg <| Interact.sub interact
+
+     --, Sub.map InteractMsg <| Interact.sub interact
+     , Sub.map GestureMsg <| Gesture.sub gesture
      , soundOk (SoundLoaded << D.decodeValue Sound.decoder)
      ]
         ++ (case state of
@@ -366,10 +420,10 @@ view model =
                 S.svg
                     (List.map (Attr.map WorkplaneMsg)
                         (PanSvg.svgAttributes model.workplane)
-                        ++ List.map (Attr.map InteractMsg)
-                            (Interact.draggableEvents ISurface
-                                ++ Interact.dragSpaceEvents ZSurface
-                            )
+                     --++ List.map (Attr.map InteractMsg)
+                     --    (Interact.draggableEvents ISurface
+                     --        ++ Interact.dragSpaceEvents ZSurface
+                     --    )
                     )
                 <|
                     case model.state of
@@ -384,7 +438,7 @@ view model =
                         Bubble p d ->
                             [ S.circle (gearAttrs p d) [] ]
 
-                        Wheel w ->
+                        Wheel w mayMod ->
                             let
                                 style =
                                     { defaultStyle | selected = not <| List.isEmpty model.sel }
@@ -394,11 +448,36 @@ view model =
 
                                 dragAttrs =
                                     Interact.draggableEvents fakeInteract
+
+                                gestDragAttrs =
+                                    Gesture.attributes
+
+                                modView =
+                                    -- TODO should translate, but where is the fn to translate from center pos ? (cf wheel.view.pupilTranslate)
+                                    case mayMod of
+                                        Just ( scale, Interval ) ->
+                                            [ drawWheel
+                                                (Wheel.getInterval w * scale)
+                                                Nothing
+                                                { defaultStyle | thin = True }
+                                                "mod"
+                                                []
+                                                []
+                                                []
+                                            ]
+
+                                        _ ->
+                                            []
                             in
-                            [ Svg.map InteractMsg <|
-                                Wheel.view w style dragAttrs wheelId Nothing
-                            , Gesture.view model.workplane model.screenSize w
-                            ]
+                            List.map (Svg.map GestureMsg)
+                                (Wheel.view w style gestDragAttrs wheelId Nothing
+                                    :: Gesture.view
+                                        model.gesture
+                                        model.workplane
+                                        model.screenSize
+                                        w
+                                    ++ modView
+                                )
         ]
     }
 
@@ -462,7 +541,7 @@ viewTools { percent } =
 
 manageInteractEvent :
     Model
-    -> Event Interactable Zone
+    -> Interact.Event Interactable Zone
     -> ( Model, Cmd Msg )
 manageInteractEvent model event =
     let
@@ -495,7 +574,7 @@ manageInteractEvent model event =
                 _ ->
                     return
 
-        Wheel w ->
+        Wheel w _ ->
             case ( event.item, event.action ) of
                 ( IWheel id, Clicked _ ) ->
                     ( { model | sel = toggleListElement id model.sel }

@@ -1,4 +1,4 @@
-module Utils.Interact exposing (..)
+port module Utils.Interact exposing (..)
 
 import Dict exposing (Dict)
 import Html
@@ -10,6 +10,9 @@ import Json.Decode as D
 import Math.Vector2 as Vec exposing (Vec2, vec2)
 import Time exposing (Posix)
 import Utils.Utils exposing (unmaybeMap)
+
+
+port pointerUpSub : (D.Value -> msg) -> Sub msg
 
 
 interactMinTime : Float
@@ -244,7 +247,7 @@ update ( id, msg ) (S touches) =
                                     zone
 
                         moveAmount =
-                            Debug.log "startDiff" <| Vec.distance click.startPos pos
+                            Vec.distance click.startPos pos
                     in
                     if moveAmount < movePixelThreshold then
                         ( Just
@@ -281,6 +284,10 @@ update ( id, msg ) (S touches) =
                 )
 
         ClickHold ->
+            let
+                _ =
+                    Debug.log "interHold" ()
+            in
             mayUpdate
                 (\click ->
                     ( Just { click | state = Holding }
@@ -330,18 +337,19 @@ update ( id, msg ) (S touches) =
 
 sub : State item zone -> Sub (Msg item zone)
 sub (S touches) =
-    Dict.foldl
-        (\id { state } subs ->
-            case state of
-                Clicking ->
-                    (Time.every holdTime <| always ( id, ClickHold ))
-                        :: subs
+    pointerUpSub (portToMsg << D.decodeValue decodeWithCancel)
+        :: Dict.foldl
+            (\id { state } subs ->
+                case state of
+                    Clicking ->
+                        (Time.every holdTime <| always ( id, ClickHold ))
+                            :: subs
 
-                _ ->
-                    subs
-        )
-        []
-        touches
+                    _ ->
+                        subs
+            )
+            []
+            touches
         |> Sub.batch
 
 
@@ -395,10 +403,10 @@ draggableEvents : item -> List (Html.Attribute (Msg item zone))
 draggableEvents item =
     [ onPointerDown <|
         \{ e, time } ->
-            let
-                _ =
-                    Debug.log "down" ( e.pointerId, time )
-            in
+            --let
+            --    _ =
+            --        Debug.log "down" ( e.pointerId, time )
+            --in
             ( e.pointerId
             , StartClick item
                 (vecFromTuple e.pointer.offsetPos)
@@ -406,27 +414,28 @@ draggableEvents item =
                 e.pointer.keys
                 time
             )
-    , onPointerUp <|
-        \{ e, time } ->
-            let
-                _ =
-                    Debug.log "up" ( e.pointerId, time )
-            in
-            ( e.pointerId
-            , EndClick time
-            )
-    , onPointerCancel <|
-        \e ->
-            let
-                _ =
-                    Debug.log "cancel" e.pointerId
-            in
-            ( e.pointerId
-            , AbortClick
-            )
-    , Html.Attributes.attribute "class" "draggable"
-    , Html.Attributes.attribute "onPointerDown" "lala"
 
+    --, onPointerUp <|
+    --    \{ e, time } ->
+    --        --let
+    --        --    _ =
+    --        --        Debug.log "up" ( e.pointerId, time )
+    --        --in
+    --        ( e.pointerId
+    --        , EndClick time
+    --        )
+    --, onPointerCancel <|
+    --    \e ->
+    --        let
+    --            _ =
+    --                Debug.log "cancel" e.pointerId
+    --        in
+    --        ( e.pointerId
+    --        , AbortClick
+    --        )
+    , Html.Attributes.attribute "class" "draggable"
+
+    --, Html.Attributes.attribute "onPointerDown" "lala"
     --"event.target.setPointerCapture(event.pointerId)"
     ]
 
@@ -443,6 +452,32 @@ decodeWithTime =
         Pointer.eventDecoder
     <|
         D.field "timeStamp" D.float
+
+
+decodeWithCancel : D.Decoder ( TimedEvent, Bool )
+decodeWithCancel =
+    D.map2 Tuple.pair
+        decodeWithTime
+    <|
+        D.field "cancel" D.bool
+
+
+portToMsg : Result D.Error ( TimedEvent, Bool ) -> Msg item zone
+portToMsg r =
+    case r of
+        Ok ( { e, time }, cancel ) ->
+            if cancel then
+                ( e.pointerId, AbortClick )
+
+            else
+                ( e.pointerId, EndClick time )
+
+        Err error ->
+            let
+                _ =
+                    Debug.log "interact.pointerUpSubDecoding (portToMsg)" error
+            in
+            ( -1, NOOP )
 
 
 customOn : String -> (TimedEvent -> msg) -> Html.Attribute msg
@@ -465,17 +500,15 @@ onPointerDown =
     customOn "pointerdown"
 
 
-onPointerUp : (TimedEvent -> msg) -> Html.Attribute msg
-onPointerUp =
-    customOn "pointerup"
 
-
-onPointerCancel : (Pointer.Event -> msg) -> Html.Attribute msg
-onPointerCancel =
-    Pointer.onCancel
-
-
-
+--onPointerUp : (TimedEvent -> msg) -> Html.Attribute msg
+--onPointerUp =
+--    customOn "pointerup"
+--
+--
+--onPointerCancel : (Pointer.Event -> msg) -> Html.Attribute msg
+--onPointerCancel =
+--    Pointer.onCancel
 -- MISC
 
 
