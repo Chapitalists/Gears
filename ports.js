@@ -16,6 +16,19 @@ if (app.ports.newSound) app.ports.newSound.subscribe(soloSound)
 
 let sound = null
 
+function release(cancel) {
+  if (app.ports.pointerUpSub) {
+    return e => {
+      e.cancel = cancel
+      app.ports.pointerUpSub.send(e)
+    }
+  }
+}
+document.onpointercancel = release(true)
+document.onpointerup = release(false)
+window.onpointercancel = release(true)
+window.onpointerup = release(false)
+
 async function soloSound(args) {
   let name = args[0]
     , uri = args[1]
