@@ -177,7 +177,6 @@ type Msg
     | WorkplaneMsg PanSvg.Msg
       --| DocMsg Doc.Msg
     | SoundCardMsg SoundCard.Msg
-    | InteractMsg (Interact.Msg Interactable Zone)
     | RequestAutoGear
     | GotAutoGear AutoGear
     | UpdateCreating Float
@@ -187,6 +186,7 @@ type Msg
     | NOOP
     | SKIP
     | NewPercent Float
+    | InteractMsg (Interact.Msg Interactable Zone)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -254,21 +254,6 @@ update msg model =
             in
             ( { model | soundCard = sc }, Cmd.map SoundCardMsg cmd )
 
-        InteractMsg subMsg ->
-            let
-                ( state, mayEvent ) =
-                    Interact.update subMsg model.interact
-
-                newModel =
-                    { model | interact = state }
-            in
-            case mayEvent of
-                Just e ->
-                    manageInteractEvent newModel e
-
-                Nothing ->
-                    ( newModel, Cmd.none )
-
         RequestAutoGear ->
             let
                 ratio =
@@ -322,6 +307,23 @@ update msg model =
                             ( model, Cmd.none )
 
         NOOP ->
+            ( model, Cmd.none )
+
+        InteractMsg subMsg ->
+            let
+                ( state, mayEvent ) =
+                    Interact.update subMsg model.interact
+
+                newModel =
+                    { model | interact = state }
+            in
+            case mayEvent of
+                Just e ->
+                    manageInteractEvent newModel e
+
+                Nothing ->
+                    ( newModel, Cmd.none )
+
             ( model, Cmd.none )
 
 
