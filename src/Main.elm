@@ -311,7 +311,7 @@ update msg model =
 
         InteractMsg subMsg ->
             let
-                ( state, mayEvent ) =
+                ( state, mayEvent, cmd ) =
                     Interact.update subMsg model.interact
 
                 newModel =
@@ -319,10 +319,11 @@ update msg model =
             in
             case mayEvent of
                 Just e ->
+                    Tuple.mapSecond (\c -> Cmd.batch [ c, cmd ]) <|
                     manageInteractEvent newModel e
 
                 Nothing ->
-                    ( newModel, Cmd.none )
+                    ( newModel, cmd )
 
             ( model, Cmd.none )
 

@@ -13,8 +13,16 @@ if (app.ports.requestMicRecStop) app.ports.requestMicRecStop.subscribe(stopMicRe
 /////////  MINIMAL PROTOTYPE
 
 if (app.ports.newSound) app.ports.newSound.subscribe(soloSound)
+if (app.ports.pointerDownReleaseCapture)
+  app.ports.pointerDownReleaseCapture.subscribe(releaseCapture)
 
 let sound = null
+
+function releaseCapture(e) {
+  console.log(e, e.pointerId, e.target.hasPointerCapture(e.pointerId))
+  if (e.target.hasPointerCapture(e.pointerId))
+    e.target.releasePointerCapture(e.pointerId)
+}
 
 function release(cancel) {
   if (app.ports.pointerUpSub) {

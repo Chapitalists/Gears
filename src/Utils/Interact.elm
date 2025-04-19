@@ -15,6 +15,9 @@ import Utils.Utils exposing (unmaybeMap)
 port pointerUpSub : (D.Value -> msg) -> Sub msg
 
 
+port pointerDownReleaseCapture : D.Value -> Cmd msg
+
+
 interactMinTime : Float
 interactMinTime =
     15
@@ -110,6 +113,7 @@ type BaseEvent item zone
     | ClickHold
     | EndClick Float
     | AbortClick
+    | RawDownEvent item D.Value
     | NOOP
 
 
@@ -137,6 +141,9 @@ map f ( i, m ) =
 
         AbortClick ->
             AbortClick
+
+        RawDownEvent a v ->
+            RawDownEvent (f a) v
 
         NOOP ->
             NOOP
@@ -173,7 +180,7 @@ type alias DragInfo zone =
 update :
     Msg item zone
     -> State item zone
-    -> ( State item zone, Maybe (Event item zone) )
+    -> ( State item zone, Maybe (Event item zone), Cmd msg )
 update ( id, msg ) (S touches) =
     let
         mayTouch =
@@ -191,7 +198,11 @@ update ( id, msg ) (S touches) =
             , Maybe.map
                 (\e -> { action = e.action, item = e.item, touchId = id })
                 mayE
+            , Cmd.none
             )
+
+        returnCmd cmd ( a, b, _ ) =
+            ( a, b, cmd )
 
         mayUpdate =
             return << unmaybeMap mayTouch ( Nothing, Nothing )
@@ -327,8 +338,14 @@ update ( id, msg ) (S touches) =
                     )
                 )
 
+        RawDownEvent item v ->
+            returnCmd (pointerDownReleaseCapture v) <|
+                unmaybeMap (downRawToMsg item v)
+                    (return ( Nothing, Nothing ))
+                    (\m -> update m (S touches))
+
         NOOP ->
-            ( S touches, Nothing )
+            ( S touches, Nothing, Cmd.none )
 
 
 sub : State item zone -> Sub (Msg item zone)
@@ -397,24 +414,29 @@ dragTargetEvents item =
 
 draggableEvents : item -> List (Html.Attribute (Msg item zone))
 draggableEvents item =
-    [ onPointerDown <|
-        \{ e, time } ->
-            let
-                _ =
-                    Debug.log "down" ( e.pointerId, time )
+    [ onPointerDown (\v -> ( -1, RawDownEvent item v ))
+    , Html.Attributes.attribute "class" "draggable"
+    ]
+
+
+downRawToMsg : item -> D.Value -> Maybe (Msg item zone)
+downRawToMsg item v =
+    D.decodeValue decodeWithTime v
+        |> Result.toMaybe
+        |> Maybe.map
+            (\{ e, time } ->
+                let
+                    _ =
+                        Debug.log "down" ( e.pointerId, time )
             in
             ( e.pointerId
             , StartClick item
                 (vecFromTuple e.pointer.offsetPos)
                 (vecFromTuple e.pointer.clientPos)
-                e.pointer.keys
-                time
+                    e.pointer.keys
+                    time
+                )
             )
-    , Html.Attributes.attribute "class" "draggable"
-    , Html.Attributes.attribute "onPointerDown" "lala"
-
-    --"event.target.setPointerCapture(event.pointerId)"
-    ]
 
 
 type alias TimedEvent =
@@ -472,9 +494,18 @@ customOn event msg =
     Html.Events.custom event decoder
 
 
-onPointerDown : (TimedEvent -> msg) -> Html.Attribute msg
-onPointerDown =
-    customOn "pointerdown"
+onPointerDown : (D.Value -> msg) -> Html.Attribute msg
+onPointerDown msg =
+    Html.Events.custom "pointerdown" <|
+        D.map
+            (\m ->
+                { message = m
+                , stopPropagation = True
+                , preventDefault = True
+                }
+            )
+        <|
+            D.map msg D.value
 
 
 
