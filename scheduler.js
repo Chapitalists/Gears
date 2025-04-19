@@ -386,7 +386,6 @@ let scheduler = {
       // pupil instances always have pause for their destruction
       let pupilPPT = pupil.playPauseTimes
         , lastPPT = pupilPPT[pupilPPT.length - 1]
-      console.log("pause", lastPPT)
       if (safeFloat(pauseState.date) < safeFloat(lastPPT.date)) {
         lastPPT.date = pauseState.date
         lastPPT.done = false
@@ -407,7 +406,6 @@ let scheduler = {
         let pupilPPT = pupil.playPauseTimes
           , lastPPT = pupilPPT[pupilPPT.length - 1]
           , timeLeft = (1 - lastPPT.percent) * pupil.length
-        console.log("unpause", lastPPT)
         pupil.playPauseTimes.push({date: t, play: true})
         pupil.playPauseTimes.push({date: t + timeLeft, play: false})
         pupil.expireTime = t + timeLeft
@@ -667,8 +665,8 @@ let scheduler = {
             lastState.percent + (now - lastState.date) / model.length :
             lastState.percent)
       } else console.error("lastState was not done in draw :", lastState, "time is", now, "model", model)
-console.log(model.view.parent, percent, model.view.seen, model)
-      if (model.view.parent && safeFloat(percent) > 0 && !model.view.seen) {console.log("yes!")
+
+      if (model.view.parent && safeFloat(percent) > 0 && !model.view.seen) {
         model.view.parent.appendChild(model.view.node)
         model.view.seen = true
       }

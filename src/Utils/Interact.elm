@@ -258,7 +258,7 @@ update ( id, msg ) (S touches) =
                                     zone
 
                         moveAmount =
-                            Debug.log "startDiff" <| Vec.distance click.startPos pos
+                            Vec.distance click.startPos pos
                     in
                     if moveAmount < movePixelThreshold then
                         ( Just
@@ -355,14 +355,14 @@ sub (S touches) =
             (\id { state } subs ->
                 case state of
                     Clicking ->
-                    (Time.every holdTime <| always ( id, ClickHold ))
-                        :: subs
+                        (Time.every holdTime <| always ( id, ClickHold ))
+                            :: subs
 
-                _ ->
-                    subs
-        )
-        []
-        touches
+                    _ ->
+                        subs
+            )
+            []
+            touches
         |> Sub.batch
 
 
@@ -380,10 +380,6 @@ dragSpaceEvents zone =
     --    Just _ ->
     [ Pointer.onMove <|
         \{ pointer, pointerId } ->
-            let
-                _ =
-                    Debug.log "move" pointerId
-            in
             ( pointerId
             , ClickMove zone
                 (vecFromTuple pointer.offsetPos)
@@ -425,14 +421,10 @@ downRawToMsg item v =
         |> Result.toMaybe
         |> Maybe.map
             (\{ e, time } ->
-                let
-                    _ =
-                        Debug.log "down" ( e.pointerId, time )
-            in
-            ( e.pointerId
-            , StartClick item
-                (vecFromTuple e.pointer.offsetPos)
-                (vecFromTuple e.pointer.clientPos)
+                ( e.pointerId
+                , StartClick item
+                    (vecFromTuple e.pointer.offsetPos)
+                    (vecFromTuple e.pointer.clientPos)
                     e.pointer.keys
                     time
                 )

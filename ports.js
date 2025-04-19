@@ -19,7 +19,6 @@ if (app.ports.pointerDownReleaseCapture)
 let sound = null
 
 function releaseCapture(e) {
-  console.log(e, e.pointerId, e.target.hasPointerCapture(e.pointerId))
   if (e.target.hasPointerCapture(e.pointerId))
     e.target.releasePointerCapture(e.pointerId)
 }

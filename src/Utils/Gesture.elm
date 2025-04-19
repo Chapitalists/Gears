@@ -77,9 +77,9 @@ update (Model model) (Msg msg) =
         ( state, mayEvent, cmd ) =
             Interact.update msg model.interact
 
-        return ( mayId, out ) =
+        return ( mayId, ev ) =
             { gesture = Model { interact = state, touchId = mayId }
-            , event = out
+            , event = ev
             , cmd = cmd
             , interactEvent = mayEvent
             }
@@ -105,10 +105,6 @@ update (Model model) (Msg msg) =
         Just event ->
             case ( model.touchId, event.action, event.item ) of
                 ( Nothing, Holded pos, Item ) ->
-                    let
-                        _ =
-                            Debug.log "hold" pos
-                    in
                     return ( Just event.touchId, Nothing )
 
                 ( Just id, Dragged info zone _, _ ) ->
