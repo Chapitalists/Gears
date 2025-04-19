@@ -41,6 +41,7 @@ toggleListElement el l =
 type alias WheelStyle =
     { selected : Bool
     , named : Maybe String
+    , thin : Bool
     }
 
 
@@ -48,6 +49,7 @@ defaultStyle : WheelStyle
 defaultStyle =
     { selected = False
     , named = Nothing
+    , thin = False
     }
 
 
@@ -96,7 +98,13 @@ drawWheel dur mayColor style uid attrs els rotEls =
                         , SA.cy <| Num 0
                         , SA.r <| Num (dur / 2)
                         , SA.stroke Color.black
-                        , SA.strokeWidth <| Num strokeWidth
+                        , SA.strokeWidth <|
+                            Num <|
+                                if style.thin then
+                                    strokeWidth / 2
+
+                                else
+                                    strokeWidth
                         , SA.fill <| unmaybeMap mayColor FillNone Fill
                         ]
                         []
