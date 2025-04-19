@@ -59,6 +59,12 @@ function testPlay(model) {
   scheduler.playPause([model])
 }
 
+if (app.ports.testStop) app.ports.testStop.subscribe(testStop)
+
+function testStop() {
+  scheduler.stop()
+}
+
 //////////////////
 
 const buffers = {}

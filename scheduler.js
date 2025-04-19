@@ -89,6 +89,8 @@ let scheduler = {
 
     for (let model of this.modelsToDraw) {
       model.view.moveTo(0)
+      if (model.view.seen)
+        model.view.parent.removeChild(model.view.node)
     }
 
     ctx.suspend()

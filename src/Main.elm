@@ -49,6 +49,9 @@ port soundOk : (D.Value -> msg) -> Sub msg
 port testPlay : E.Value -> Cmd msg
 
 
+port testStop : () -> Cmd msg
+
+
 
 -- TODO refactor existing Debug.log with "key" value
 -- TODO check msg or Msg in types, if unused, maybe replace by x
@@ -83,6 +86,7 @@ type alias Model =
     , soundCard : SoundCard
     , state : State
     , tools : Tools
+    , engine : Bool
     , gesture : Gesture
     }
 
@@ -159,6 +163,7 @@ init screen url _ =
       , soundCard = SoundCard.init
       , state = Prologue <| AutoGear (vec2 0 0) initDur (initDur * 2)
       , tools = Tools [] [] 0
+      , engine = False
       , gesture = Gesture.init
       }
     , Cmd.none
@@ -631,9 +636,7 @@ manageInteractEvent model event =
         Wheel w _ ->
             case ( event.item, event.action ) of
                 ( Gesture.Item, Clicked _ ) ->
-                    ( { model | sel = toggleListElement id model.sel }
-                    , testPlay <| playWheel id w
-                    )
+                    Just <| toEngine model model.engine w
 
                 _ ->
                     Nothing
@@ -699,6 +702,19 @@ playWheel w =
                       )
                     ]
                 )
+        )
+
+
+toEngine : Model -> Bool -> Wheel -> ( Model, Cmd msg )
+toEngine model stop w =
+    if stop then
+        ( { model | engine = False }
+        , testStop ()
+        )
+
+    else
+        ( { model | engine = True }
+        , testPlay <| playWheel w
         )
 
 
