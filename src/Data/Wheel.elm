@@ -1,12 +1,23 @@
-module Data.Wheel exposing (Wheel, default, fromSoundAndInterval, getEngined, getPos, pupilID, view)
+module Data.Wheel exposing
+    ( IntervalOrPupil(..)
+    , Wheel
+    , default
+    , fromSoundAndInterval
+    , getEngined
+    , getInterval
+    , getIntervalTranslate
+    , getPos
+    , getPupil
+    , getPupilTranslate
+    , pupilID
+    , scaleInterval
+    , scalePupilDuration
+    , view
+    )
 
-import Color exposing (Color)
-import Data.Content as Content exposing (Bead, Content, Mobile)
+import Data.Content exposing (Bead, Content, Mobile)
 import Data.Pupil as Pupil exposing (Pupil)
 import Html.Attributes
-import Json.Decode as D
-import Json.Decode.Field as Field
-import Json.Encode as E
 import Math.Vector2 exposing (..)
 import Sound exposing (Sound)
 import TypedSvg as S
@@ -23,6 +34,11 @@ type Wheel
 pupilID : String
 pupilID =
     "pupil"
+
+
+type IntervalOrPupil
+    = Interval
+    | Pupil
 
 
 
@@ -85,8 +101,53 @@ getContent (Model model) =
 
 
 getPos : Wheel -> Vec2
-getPos (Model w) =
-    w.pos
+getPos (Model model) =
+    model.pos
+
+
+getInterval : Wheel -> Float
+getInterval (Model model) =
+    model.interval
+
+
+scaleInterval : Float -> Wheel -> Wheel
+scaleInterval scale (Model model) =
+    Model
+        { model | interval = model.interval * scale }
+
+
+scalePupilDuration : Float -> Wheel -> Wheel
+scalePupilDuration scale (Model model) =
+    Model
+        { model | pupil = Maybe.map (Pupil.scaleDuration scale) model.pupil }
+
+
+getPupil : Wheel -> Maybe Pupil
+getPupil (Model model) =
+    model.pupil
+
+
+getIntervalTranslate : Wheel -> ( Float, Float )
+getIntervalTranslate (Model model) =
+    ( 0, -model.interval / 2 )
+
+
+getPupilTranslate : Wheel -> Pupil -> ( Float, Float )
+getPupilTranslate (Model model) p =
+    let
+        pupilLength =
+            Pupil.getDuration p
+
+        pupilAngle =
+            model.launchPercent * 2 * pi - pi / 2
+
+        pupilX =
+            pupilLength / 2 * cos pupilAngle
+
+        pupilY =
+            pupilLength / 2 * sin pupilAngle
+    in
+    ( pupilX, pupilY )
 
 
 setPupil : Maybe Pupil -> Wheel -> Wheel
@@ -271,23 +332,11 @@ view (Model model) style attrs uid maySymbol =
 
                 Just p ->
                     let
-                        pupilLength =
-                            Pupil.getLength p
-
-                        pupilAngle =
-                            model.launchPercent * 2 * pi - pi / 2
-
-                        pupilX =
-                            pupilLength / 2 * cos pupilAngle
-
-                        pupilY =
-                            pupilLength / 2 * sin pupilAngle
-
-                        pupilTranslate =
-                            SA.transform [ Translate pupilX pupilY ]
+                        ( pupilX, pupilY ) =
+                            getPupilTranslate (Model model) p
                     in
                     [ S.g
-                        [ pupilTranslate
+                        [ SA.transform [ Translate pupilX pupilY ]
 
                         --, Html.Attributes.id <| uid ++ "-animate-pupil"
                         --, SA.transform [ Rotate 0 -pupilX -pupilY ]
@@ -301,9 +350,12 @@ view (Model model) style attrs uid maySymbol =
                         ]
                     ]
 
+        ( intervalX, intervalY ) =
+            getIntervalTranslate (Model model)
+
         interval =
             S.g
-                [ SA.transform [ Translate 0 -(model.interval / 2) ] ]
+                [ SA.transform [ Translate intervalX intervalY ] ]
                 [ drawWheel
                     model.interval
                     Nothing

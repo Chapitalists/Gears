@@ -1,9 +1,11 @@
 module Data.Pupil exposing
     ( Pupil
     , fromSound
+    , getColor
     , getContent
     , getDuration
     , getEngined
+    , scaleDuration
     , view
     )
 
@@ -76,6 +78,17 @@ getDuration (Model model) =
     model.duration
 
 
+scaleDuration : Float -> Pupil -> Pupil
+scaleDuration scale (Model model) =
+    Model
+        { model | duration = model.duration * scale }
+
+
+getColor : Pupil -> Maybe Color.Color
+getColor (Model model) =
+    Just <| Color.hsl model.hue 1 0.5
+
+
 
 -- WARNING temporary simplification
 --case model.content of
@@ -103,10 +116,13 @@ view (Model model) uid attrs =
     let
         length =
             getDuration (Model model)
+
+        mayColor =
+            getColor (Model model)
     in
     drawWheel
         length
-        (Just <| Color.hsl model.hue 1 0.5)
+        mayColor
         defaultStyle
         uid
         attrs
