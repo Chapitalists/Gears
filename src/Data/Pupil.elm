@@ -2,8 +2,8 @@ module Data.Pupil exposing
     ( Pupil
     , fromSound
     , getContent
+    , getDuration
     , getEngined
-    , getLength
     , view
     )
 
@@ -71,9 +71,9 @@ getLoopPercents model =
     Sound.getLoopPercents model.sound
 
 
-getLength : Pupil -> Float
-getLength (Model model) =
-    Sound.length model.sound
+getDuration : Pupil -> Float
+getDuration (Model model) =
+    model.duration
 
 
 
@@ -102,7 +102,7 @@ view :
 view (Model model) uid attrs =
     let
         length =
-            getLength (Model model)
+            getDuration (Model model)
     in
     drawWheel
         length
