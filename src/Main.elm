@@ -491,6 +491,12 @@ viewWheelState model w mayMod =
         opacity =
             SA.opacity <| Opacity 0.2
 
+        pos =
+            Wheel.getPos w
+
+        translate =
+            Translate (getX pos) (getY pos)
+
         modView =
             case mayMod of
                 Just ( scale, Interval ) ->
@@ -505,7 +511,10 @@ viewWheelState model w mayMod =
                         { defaultStyle | thin = True }
                         "mod"
                         [ opacity
-                        , SA.transform [ Translate intervalX intervalY ]
+                        , SA.transform
+                            [ Translate intervalX intervalY
+                            , translate
+                            ]
                         ]
                         []
                         []
@@ -525,7 +534,10 @@ viewWheelState model w mayMod =
                                 { defaultStyle | thin = True }
                                 "mod"
                                 [ opacity
-                                , SA.transform [ Translate pupilX pupilY ]
+                                , SA.transform
+                                    [ Translate pupilX pupilY
+                                    , translate
+                                    ]
                                 ]
                                 []
                                 []
