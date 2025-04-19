@@ -33,11 +33,13 @@ type Msg
 
 type Item
     = Item
+    | NoItem
 
 
 type Zone
     = Vertical
     | Horizontal
+    | Workplane
 
 
 type Event
@@ -61,17 +63,26 @@ init =
         }
 
 
-update : Gesture -> Msg -> ( Gesture, Maybe Event, Cmd msg )
+type alias Return =
+    { gesture : Gesture
+    , event : Maybe Event
+    , interactEvent : Maybe (Interact.Event Item Zone)
+    , cmd : Cmd Msg
+    }
+
+
+update : Gesture -> Msg -> Return
 update (Model model) (Msg msg) =
     let
         ( state, mayEvent, cmd ) =
             Interact.update msg model.interact
 
         return ( mayId, out ) =
-            ( Model { interact = state, touchId = mayId }
-            , out
-            , cmd
-            )
+            { gesture = Model { interact = state, touchId = mayId }
+            , event = out
+            , cmd = cmd
+            , interactEvent = mayEvent
+            }
 
         returnEvent id event out =
             if id /= event.touchId then
@@ -92,15 +103,15 @@ update (Model model) (Msg msg) =
             return ( model.touchId, Nothing )
 
         Just event ->
-            case ( model.touchId, event.action ) of
-                ( Nothing, Holded pos ) ->
+            case ( model.touchId, event.action, event.item ) of
+                ( Nothing, Holded pos, Item ) ->
                     let
                         _ =
                             Debug.log "hold" pos
                     in
                     return ( Just event.touchId, Nothing )
 
-                ( Just id, Dragged info zone _ ) ->
+                ( Just id, Dragged info zone _, _ ) ->
                     returnEvent id event <|
                         case zone of
                             Horizontal ->
@@ -132,9 +143,10 @@ update (Model model) (Msg msg) =
                                     Down diff
 
                 ( Just id, DragEnded bool ) ->
+                ( Just id, DragEnded bool, _ ) ->
                     endEvent id event <| End bool
 
-                ( Just id, HoldEnded _ ) ->
+                ( Just id, HoldEnded _, _ ) ->
                     endEvent id event <| End False
 
                 _ ->
