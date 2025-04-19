@@ -83,7 +83,6 @@ type alias Model =
     , soundCard : SoundCard
     , state : State
     , tools : Tools
-    , interact : Interact.State Interactable Zone
     , gesture : Gesture
     }
 
@@ -160,7 +159,6 @@ init screen url _ =
       , soundCard = SoundCard.init
       , state = Prologue <| AutoGear (vec2 0 0) initDur (initDur * 2)
       , tools = Tools [] [] 0
-      , interact = Interact.init
       , gesture = Gesture.init
       }
     , Cmd.none
@@ -188,7 +186,6 @@ type Msg
     | NOOP
     | SKIP
     | NewPercent Float
-    | InteractMsg (Interact.Msg Interactable Zone)
     | GestureMsg Gesture.Msg
 
 
@@ -323,81 +320,33 @@ update msg model =
         NOOP ->
             ( model, Cmd.none )
 
-        InteractMsg subMsg ->
+        GestureMsg subMsg ->
             let
-                ( state, mayEvent, cmd ) =
-                    Interact.update subMsg model.interact
+                { gesture, event, cmd, interactEvent } =
+                    Gesture.update model.gesture subMsg
 
                 newModel =
-                    { model | interact = state }
+                    { model | gesture = gesture }
+
+                interactResult =
+                    Maybe.andThen
+                        (manageInteractEvent newModel)
+                        interactEvent
+
+                addCmd =
+                    Tuple.mapSecond
+                        (\c ->
+                            Cmd.batch
+                                [ c, Cmd.map GestureMsg cmd ]
+                        )
             in
-            case mayEvent of
-                Just e ->
-                    Tuple.mapSecond (\c -> Cmd.batch [ c, cmd ]) <|
-                        manageInteractEvent newModel e
+            addCmd <|
+                case interactResult of
+                    Just res ->
+                        res
 
-                Nothing ->
-                    ( newModel, cmd )
-
-        GestureMsg subMsg ->
-            case model.state of
-                Wheel w mayMod ->
-                    let
-                        ( gesture, event, cmd ) =
-                            Gesture.update model.gesture subMsg
-
-                        modScale =
-                            Debug.log "scale"
-                                << (^) 2
-                                << (\n -> n / 100)
-                                << Debug.log "diff"
-
-                        state =
-                            case event of
-                                Just (Up d) ->
-                                    Wheel w <|
-                                        Just ( modScale d, Interval )
-
-                                Just (Down d) ->
-                                    Wheel w <|
-                                        Just ( modScale -d, Interval )
-
-                                Just (Left d) ->
-                                    Wheel w <|
-                                        Just ( modScale -d, Pupil )
-
-                                Just (Right d) ->
-                                    Wheel w <|
-                                        Just ( modScale d, Pupil )
-
-                                Just (End validate) ->
-                                    case ( mayMod, validate ) of
-                                        ( Just ( scale, pupOrInt ), True ) ->
-                                            case pupOrInt of
-                                                Interval ->
-                                                    Wheel (Wheel.scaleInterval scale w)
-                                                        Nothing
-
-                                                Pupil ->
-                                                    Wheel
-                                                        (Wheel.scalePupilDuration scale w)
-                                                        Nothing
-
-                                        _ ->
-                                            Wheel w Nothing
-
-                                _ ->
-                                    model.state
-                    in
-                    ( { model
-                        | gesture = gesture
-                        , state = state
-                      }
-                    , cmd
-                    )
-
-                _ ->
-                    ( model, Cmd.none )
+                    Nothing ->
+                        manageGestureEvent newModel event
 
 
 
@@ -405,12 +354,11 @@ update msg model =
 
 
 sub : Model -> Sub Msg
-sub { state, screenSize, interact, gesture } =
+sub { state, screenSize, gesture } =
     ([ BE.onResize (\w h -> GotScreenSize { width = w, height = h })
 
      --, Sub.map DocMsg <| Doc.sub doc
      , Sub.map SoundCardMsg SoundCard.sub
-     , Sub.map InteractMsg <| Interact.sub interact
      , Sub.map GestureMsg <| Gesture.sub gesture
      , soundOk (SoundLoaded << D.decodeValue Sound.decoder)
      ]
@@ -442,9 +390,9 @@ view model =
                 S.svg
                     (List.map (Attr.map WorkplaneMsg)
                         (PanSvg.svgAttributes model.workplane)
-                        ++ List.map (Attr.map InteractMsg)
-                            (Interact.draggableEvents ISurface
-                                ++ Interact.dragSpaceEvents ZSurface
+                        ++ List.map (Attr.map (GestureMsg << Gesture.Msg))
+                            (Interact.draggableEvents Gesture.NoItem
+                                ++ Interact.dragSpaceEvents Gesture.Workplane
                             )
                     )
                 <|
@@ -529,18 +477,11 @@ viewWheelState model w mayMod =
         style =
             { defaultStyle | selected = not <| List.isEmpty model.sel }
 
-        fakeInteract =
-            IWheel ( Coll.startId, [] )
-
-        dragAttrs =
-            Interact.draggableEvents fakeInteract
-
         gestDragAttrs =
             Gesture.attributes
 
         attrs =
             List.map (Attr.map GestureMsg) gestDragAttrs
-                ++ List.map (Attr.map InteractMsg) dragAttrs
 
         opacity =
             SA.opacity <| Opacity 0.2
@@ -599,53 +540,106 @@ viewWheelState model w mayMod =
         ++ modView
 
 
+manageGestureEvent : Model -> Maybe Event -> ( Model, Cmd Msg )
+manageGestureEvent model event =
+    case model.state of
+        Wheel w mayMod ->
+            let
+                modScale =
+                    (^) 2
+                        << (\n -> n / 100)
+
+                state =
+                    case event of
+                        Just (Up d) ->
+                            Wheel w <|
+                                Just ( modScale d, Interval )
+
+                        Just (Down d) ->
+                            Wheel w <|
+                                Just ( modScale -d, Interval )
+
+                        Just (Left d) ->
+                            Wheel w <|
+                                Just ( modScale -d, Pupil )
+
+                        Just (Right d) ->
+                            Wheel w <|
+                                Just ( modScale d, Pupil )
+
+                        Just (End validate) ->
+                            case ( mayMod, validate ) of
+                                ( Just ( scale, pupOrInt ), True ) ->
+                                    case pupOrInt of
+                                        Interval ->
+                                            Wheel (Wheel.scaleInterval scale w)
+                                                Nothing
+
+                                        Pupil ->
+                                            Wheel
+                                                (Wheel.scalePupilDuration scale w)
+                                                Nothing
+
+                                _ ->
+                                    Wheel w Nothing
+
+                        _ ->
+                            model.state
+            in
+            ( { model
+                | state = state
+              }
+            , Cmd.none
+            )
+
+        _ ->
+            ( model, Cmd.none )
+
+
 manageInteractEvent :
     Model
-    -> Interact.Event Interactable Zone
-    -> ( Model, Cmd Msg )
+    -> Interact.Event Gesture.Item Gesture.Zone
+    -> Maybe ( Model, Cmd Msg )
 manageInteractEvent model event =
-    let
-        return =
-            ( model, Cmd.none )
-    in
     case model.state of
         Prologue g ->
             case ( event.item, event.action ) of
-                ( ISurface, Holded pos ) ->
+                ( Gesture.NoItem, Holded pos ) ->
                     let
                         p =
                             PanSvg.mapIn pos model.workplane
                     in
-                    ( { model | state = Creating g p 0 }, Cmd.none )
+                    Just ( { model | state = Creating g p 0 }, Cmd.none )
 
                 _ ->
-                    return
+                    Nothing
 
         Creating g p t ->
             case ( event.item, event.action ) of
-                ( ISurface, HoldEnded d ) ->
-                    ( { model | state = Bubble p d }
-                    , Select.file soundMimeTypes OpenSound
-                    )
+                ( Gesture.NoItem, HoldEnded d ) ->
+                    Just
+                        ( { model | state = Bubble p d }
+                        , Select.file soundMimeTypes OpenSound
+                        )
 
-                ( ISurface, Clicked _ ) ->
-                    ( { model | state = Prologue g }, Cmd.none )
+                ( Gesture.NoItem, Clicked _ ) ->
+                    Just ( { model | state = Prologue g }, Cmd.none )
 
                 _ ->
-                    return
+                    Nothing
 
         Wheel w _ ->
             case ( event.item, event.action ) of
-                ( IWheel id, Clicked _ ) ->
+                ( Gesture.Item, Clicked _ ) ->
                     ( { model | sel = toggleListElement id model.sel }
                     , testPlay <| playWheel id w
                     )
 
                 _ ->
-                    return
+                    Nothing
 
         Bubble _ _ ->
-            return
+            Nothing
 
 
 makeWheel : Vec2 -> Float -> Float -> Sound -> Wheel
@@ -658,8 +652,8 @@ makeWheel pos dur percent sound =
         }
 
 
-playWheel : Identifier -> Wheel -> E.Value
-playWheel ( id, beadList ) w =
+playWheel : Wheel -> E.Value
+playWheel w =
     let
         wheel =
             Wheel.getEngined w
