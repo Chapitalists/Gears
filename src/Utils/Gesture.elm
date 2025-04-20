@@ -47,6 +47,7 @@ type Event
     | Down Float
     | Left Float
     | Right Float
+    | Out
     | End Bool -- validate
 
 
@@ -138,7 +139,9 @@ update (Model model) (Msg msg) =
                                 else
                                     Down diff
 
-                ( Just id, DragEnded bool ) ->
+                            _ ->
+                                Out
+
                 ( Just id, DragEnded bool, _ ) ->
                     endEvent id event <| End bool
 
